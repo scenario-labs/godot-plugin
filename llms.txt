@@ -41,3 +41,4 @@
 ## Docs
 
 - README.md, docs/USER_GUIDE.md, CHANGELOG.md, BUGS.md, ROADMAP.md.
+- docs/design-notes/: dated design notes with a status each (not built yet): steps on any asset (proposal for 0.2 and later), make me a game (open question).
