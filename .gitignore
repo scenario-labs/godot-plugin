@@ -1,0 +1,10 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+# AgentKit run output (results, captures, profiles)
+.agent_out/
+
+# Build output
+dist/
+# macOS
+.DS_Store

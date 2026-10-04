@@ -1,0 +1,51 @@
+[gd_scene format=3]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_7dm0k"]
+
+[sub_resource type="Sky" id="Sky_ig7tw"]
+sky_material = SubResource("ProceduralSkyMaterial_7dm0k")
+
+[sub_resource type="Environment" id="Environment_0xm2m"]
+background_mode = 2
+sky = SubResource("Sky_ig7tw")
+ambient_light_source = 3
+reflected_light_source = 2
+tonemap_mode = 4
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_h2yge"]
+size = Vector2(20, 20)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_1bvp3"]
+size = Vector3(20, 0.2, 20)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_lquwl"]
+albedo_color = Color(0.8, 0.35, 0.2, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_7mycd"]
+
+[node name="Main" type="Node3D" unique_id=135682742]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=140116875]
+environment = SubResource("Environment_0xm2m")
+
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=27394347]
+transform = Transform3D(0.8660254, 0.38302222, -0.32139382, 0, 0.64278764, 0.76604444, 0.5, -0.66341394, 0.5566704, 0, 0, 0)
+shadow_enabled = true
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=487330480]
+transform = Transform3D(1, 0, 0, 0, 0.9396926, 0.34202012, 0, -0.34202012, 0.9396926, 0, 2.5, 6)
+current = true
+
+[node name="Floor" type="StaticBody3D" parent="." unique_id=1701795817]
+
+[node name="Mesh" type="MeshInstance3D" parent="Floor" unique_id=771424050]
+mesh = SubResource("PlaneMesh_h2yge")
+
+[node name="Collision" type="CollisionShape3D" parent="Floor" unique_id=1462449788]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
+shape = SubResource("BoxShape3D_1bvp3")
+
+[node name="RefCube" type="MeshInstance3D" parent="." unique_id=919633745]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+material_override = SubResource("StandardMaterial3D_lquwl")
+mesh = SubResource("BoxMesh_7mycd")
