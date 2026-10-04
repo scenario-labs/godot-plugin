@@ -166,7 +166,8 @@ func call_tool(tool: String, arguments: Dictionary = {}, timeout_s: float = DEFA
 	if not has_credentials():
 		return Errors.fail(Errors.AUTH, "Connect a Scenario API key and secret first.")
 	var submit_call := is_submission(tool, arguments)
-	if submit_call and spending_disabled:
+	# Cancelling can only lower spend, so the switch lets it through.
+	if submit_call and spending_disabled and tool != "job_cancel":
 		return Errors.fail(Errors.LOCAL, "Spending is turned off (SCENARIO_NO_SPEND=1), so nothing was sent.")
 	var attempts := READ_ATTEMPTS if is_retryable(tool, arguments) else 1
 	var result: Dictionary = {}

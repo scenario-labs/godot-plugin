@@ -197,6 +197,12 @@ func test_no_spend_mode_sends_nothing() -> void:
 	assert_eq(fake.requests.size(), 0)
 	fake.replies.append({"fixture": "estimate"})
 	assert_true((await client.estimate("m", {"prompt": "p"}))["ok"], "price checks still work")
+	var sent_before := fake.requests.size()
+	assert_eq((await client.upload_start("a.png", "image/png", "image", 10))["error"]["kind"], Errors.LOCAL)
+	assert_eq(fake.requests.size(), sent_before, "uploads are refused too")
+	fake.replies.append({"result": {"structuredContent": {"job_id": "job_1", "status": "canceled"}, "content": []}})
+	await client.cancel_job("job_1")
+	assert_eq(fake.requests.size(), sent_before + 1, "a cancel still goes out")
 
 
 func test_missing_credentials_sends_nothing() -> void:
