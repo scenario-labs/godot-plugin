@@ -4,13 +4,13 @@ Generate images, 3D models, PBR materials, skyboxes and sound effects with [Scen
 
 ![The Scenario dock: sign in, the image lane after a finished job, the material lane with its settings open](docs/images/dock-0.1.0.png)
 
-**Version 0.1.0.** Tested on Godot 4.7.2 (standard build, macOS). GDScript only, so it also loads in the .NET build. MIT license.
+**Version 0.1.1.** Tested on Godot 4.7.2 (standard build, macOS). GDScript only, so it also loads in the .NET build. MIT license.
 
 ## Install
 
-1. Download `scenario-godot-plugin-0.1.0.zip` from the releases page, or copy `addons/scenario/` from this repository.
+1. Download `scenario-godot-plugin-0.1.1.zip` from the releases page, or copy `addons/scenario/` from this repository.
 2. Unzip it at the root of your Godot project, so you get `res://addons/scenario/plugin.cfg`.
-3. In Godot, open **Project > Project Settings > Plugins** and enable **Scenario**. The Scenario dock opens on the right.
+3. In Godot, open **Project > Project Settings > Plugins** and enable **Scenario**. The Scenario dock opens in its own column, right of the Inspector.
 
 ## Sign in
 

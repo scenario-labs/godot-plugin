@@ -1,10 +1,10 @@
 # Scenario for Godot: user guide
 
-Version 0.1.0. For installation see the [README](../README.md).
+Version 0.1.1. For installation see the [README](../README.md).
 
 ## 1. Connect
 
-1. Enable the plugin (Project > Project Settings > Plugins > Scenario). The **Scenario** dock opens on the right, next to the Inspector.
+1. Enable the plugin (Project > Project Settings > Plugins > Scenario). The **Scenario** dock opens in its own column, right of the Inspector. Like any dock, you can drag its tab elsewhere; Godot remembers the layout per project.
 2. In the Scenario web app ([app.scenario.com](https://app.scenario.com)), create an API key for the project that should pay for the generations. Copy the key (`api_...`) and the secret.
 3. Paste both into the dock and press **Connect**. The dock checks the pair with a free call and then shows the lanes.
 

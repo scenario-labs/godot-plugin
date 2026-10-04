@@ -31,9 +31,17 @@ func _enter_tree() -> void:
 	dock = EditorDock.new()
 	dock.title = "Scenario"
 	dock.layout_key = "scenario"
-	dock.default_slot = EditorDock.DOCK_SLOT_RIGHT_UL
+	# Its own column right of the Inspector: as a 4th tab next to Inspector,
+	# Signals and Groups it hid behind the tab overflow (2026-10-04, first GUI try).
+	dock.default_slot = EditorDock.DOCK_SLOT_RIGHT_UR
 	dock.add_child(ui)
 	add_dock(dock)
+	# First enable in a project: bring the dock to the front even when a saved
+	# layout put it in a tab group.
+	var settings := EditorInterface.get_editor_settings()
+	if not settings.get_project_metadata("scenario", "dock_shown", false):
+		dock.make_visible.call_deferred()
+		settings.set_project_metadata("scenario", "dock_shown", true)
 
 
 func _exit_tree() -> void:

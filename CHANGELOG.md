@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1 (2026-10-04)
+
+- The dock opens in its own column right of the Inspector. As a fourth tab next to Inspector, Signals and Groups it was hidden behind the tab overflow (found in the first hands-on try).
+- On the first enable in a project, the dock is brought to the front even if a saved layout puts it in a tab group.
+
 ## 0.1.0 (2026-10-04)
 
 First version.
