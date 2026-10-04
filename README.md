@@ -63,7 +63,7 @@ Every placement is one undo step (Ctrl+Z, Cmd+Z on macOS).
 
 ## Development
 
-The repository root is a small Godot demo project that hosts the addon and its tests. Requirements: Godot 4.7 on the PATH as `godot`, Python 3, and the godot-expert toolkit used by the test runners.
+The repository root is a small Godot demo project that hosts the addon and its tests. Requirements: Godot 4.7 on the PATH as `godot`, Python 3, and the godot-expert toolkit used by the test runners (`GODOT_EXPERT_SCRIPTS` points to its `scripts/` folder).
 
 ```sh
 make test     # unit tests (GUT, 85) and the headless editor test (69 checks, fake backend, 0 CU)

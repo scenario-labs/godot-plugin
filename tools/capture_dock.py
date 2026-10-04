@@ -4,10 +4,10 @@
 Usage: python3 tools/capture_dock.py
 Opens a small editor window for a few seconds (headless draws nothing).
 """
-import pathlib, sys
+import os, pathlib, sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(pathlib.Path.home() / ".claude/skills/godot-expert/scripts"))
+sys.path.insert(0, os.environ.get("GODOT_EXPERT_SCRIPTS", str(pathlib.Path.home() / ".claude/skills/godot-expert/scripts")))
 import gd_run, gd_review  # noqa: E402
 
 

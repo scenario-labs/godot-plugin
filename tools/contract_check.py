@@ -13,7 +13,7 @@ Run it after a Scenario MCP release or before a plugin release.
 import os, pathlib, sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(pathlib.Path.home() / ".claude/skills/godot-expert/scripts"))
+sys.path.insert(0, os.environ.get("GODOT_EXPERT_SCRIPTS", str(pathlib.Path.home() / ".claude/skills/godot-expert/scripts")))
 import gd_run  # noqa: E402
 
 

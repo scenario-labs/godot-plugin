@@ -9,7 +9,7 @@ project both expect. --verify installs the zip into a blank Godot project in a
 temporary folder, enables the plugin and checks in a headless editor that it
 loads with zero errors and that its dock and controller exist.
 """
-import argparse, configparser, pathlib, sys, tempfile, zipfile
+import argparse, configparser, os, pathlib, sys, tempfile, zipfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 ADDON = ROOT / "addons/scenario"
@@ -43,7 +43,7 @@ def build() -> pathlib.Path:
 
 
 def verify(zip_path: pathlib.Path) -> bool:
-    sys.path.insert(0, str(pathlib.Path.home() / ".claude/skills/godot-expert/scripts"))
+    sys.path.insert(0, os.environ.get("GODOT_EXPERT_SCRIPTS", str(pathlib.Path.home() / ".claude/skills/godot-expert/scripts")))
     import gd_env, gd_run  # noqa: E402
 
     project = pathlib.Path(tempfile.mkdtemp(prefix="scenario-godot-install-")) / "Blank"
