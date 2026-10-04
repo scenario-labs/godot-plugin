@@ -59,6 +59,7 @@ Every placement is one undo step (Ctrl+Z, Cmd+Z on macOS).
 
 - [User guide](docs/USER_GUIDE.md): each lane step by step, references, job states, troubleshooting.
 - [Changelog](CHANGELOG.md), [known issues](BUGS.md), [roadmap](ROADMAP.md).
+- [Design notes](docs/design-notes/README.md): proposals and open questions for 0.2 and later.
 - [llms.txt](llms.txt): a map of the code for coding agents.
 
 ## Development
