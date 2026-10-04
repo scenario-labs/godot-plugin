@@ -11,7 +11,11 @@ var price := 2
 ## asset id -> {"file": tests/assets name, "mime": ..., "type": metadata.type}
 const OUTPUTS := {
 	"image": [{"id": "asset_img001", "file": "image.bin", "mime": "image/png", "type": "inference-txt2img"}],
-	"model3d": [{"id": "asset_glb001", "file": "model.bin", "mime": "model/gltf-binary", "type": "inference-txt23d"}],
+	# Like Rodin: a thumbnail first, then the GLB (2026-10-04 live run).
+	"model3d": [
+		{"id": "asset_glbprv", "file": "image.bin", "mime": "image/png", "type": "inference-txt23d"},
+		{"id": "asset_glb001", "file": "model.bin", "mime": "model/gltf-binary", "type": "inference-txt23d"},
+	],
 	"material": [
 		{"id": "asset_pat000", "file": "patina_base.bin", "mime": "image/png", "type": "inference-txt2img-texture"},
 		{"id": "asset_pat001", "file": "patina_albedo.bin", "mime": "image/png", "type": "texture-albedo"},

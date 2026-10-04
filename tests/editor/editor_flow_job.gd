@@ -34,9 +34,7 @@ func run() -> Dictionary:
 	var scene_path := run_dir + "/flow_scene.tscn"
 	DirAccess.copy_absolute(ProjectSettings.globalize_path("res://main.tscn"), ProjectSettings.globalize_path(scene_path))
 	EditorInterface.get_resource_filesystem().update_file(scene_path)
-	EditorInterface.open_scene_from_path(scene_path)
-	await wait_frames(3)
-	var scene := EditorInterface.get_edited_scene_root()
+	var scene := await open_scratch_scene(scene_path)
 	check("scratch scene open", scene != null and scene.scene_file_path == scene_path)
 	if scene == null:
 		return {"ok": false, "failures": failures}
@@ -94,6 +92,7 @@ func run() -> Dictionary:
 		if child.scene_file_path.ends_with(".glb"):
 			model = child
 	check("model3d: GLB instanced and owned", model != null and model.owner == scene)
+	check("model3d: thumbnail kept as a preview file", results["model3d"]["files"].any(func(f: String) -> bool: return f.ends_with("-preview.png")))
 	var cube: MeshInstance3D = scene.get_node("RefCube")
 	var material := cube.material_override as StandardMaterial3D
 	check("material: StandardMaterial3D applied", material != null and material.albedo_texture != null)
@@ -150,3 +149,19 @@ func run() -> Dictionary:
 static func _first_of(node: Node, type: String) -> Node:
 	var found := node.find_children("*", type, true, false)
 	return found[0] if not found.is_empty() else null
+
+
+## Opens the scene and makes it the active tab (the editor may restore other
+## scenes from its saved layout a few frames later).
+func open_scratch_scene(path: String) -> Node:
+	EditorInterface.get_resource_filesystem().update_file(path)
+	for attempt in 30:
+		EditorInterface.open_scene_from_path(path)
+		await wait_frames(2)
+		var current := EditorInterface.get_edited_scene_root()
+		if current != null and current.scene_file_path == path:
+			await wait_frames(2)
+			current = EditorInterface.get_edited_scene_root()
+			if current != null and current.scene_file_path == path:
+				return current
+	return EditorInterface.get_edited_scene_root()

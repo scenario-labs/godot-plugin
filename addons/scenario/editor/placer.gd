@@ -138,7 +138,13 @@ func _place_image(files: Array, label: String) -> Dictionary:
 
 
 func _place_model(files: Array, label: String) -> Dictionary:
-	var path := _first(files, ["main"])
+	var path := ""
+	for item in files:
+		if str(item["path"]).get_extension().to_lower() in ["glb", "gltf"]:
+			path = item["path"]
+			break
+	if path.is_empty():
+		return _fail("The job returned no GLB or glTF model.")
 	var scene := load(path) as PackedScene
 	if scene == null:
 		return _fail("The 3D model could not be imported: " + path)

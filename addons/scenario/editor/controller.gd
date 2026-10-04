@@ -395,6 +395,8 @@ func import_job(local_id: String) -> Dictionary:
 		if not ext in Files.IMPORTABLE:
 			problem = "Scenario returned a file Godot cannot import (%s)." % str(asset.get("mimeType", "unknown type"))
 			break
+		if lane["importer"] == "model3d" and ext in ["png", "jpg", "webp"]:
+			role = "preview"  # 3D models come with a thumbnail next to the GLB
 		var base := Files.base_path(row["lane"], row["prompt"], asset_id, role, date, output_root)
 		var final_path := base + "." + ext
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(final_path.get_base_dir()))
@@ -413,9 +415,11 @@ func import_job(local_id: String) -> Dictionary:
 		return {"ok": false, "message": problem}
 	_write_provenance(row, assets, files[0]["path"].get_basename() + ".scenario.json")
 	await placer.import_files(row["lane"], files)
-	var placed := placer.place(row["lane"], files, "Scenario" + Files.slug(row["prompt"], 24).capitalize().replace(" ", ""))
+	var placed := placer.place(row["lane"], files, Files.node_name(row["prompt"]))
 	var paths: Array = files.map(func(f: Dictionary) -> String: return f["path"])
-	paths.append_array(placed["resource_paths"])
+	for extra in placed["resource_paths"]:
+		if not extra in paths:
+			paths.append(extra)
 	ledger.mark_imported(local_id, paths, _now())
 	_importing.erase(local_id)
 	notified.emit(placed["message"], "info" if placed["ok"] else "error")

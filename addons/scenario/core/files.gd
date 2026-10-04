@@ -53,6 +53,19 @@ static func slug(text: String, max_length: int = 40) -> String:
 	return out if not out.is_empty() else "scenario"
 
 
+## Node name from the prompt: "Scenario" + up to three meaningful words.
+## "a wooden treasure chest, game prop" -> "ScenarioWoodenTreasureChest".
+static func node_name(prompt: String) -> String:
+	var words: PackedStringArray = []
+	for word in slug(prompt, 80).split("-", false):
+		if word in ["a", "an", "the", "of", "with", "and", "in", "on"]:
+			continue
+		words.append(word.capitalize())
+		if words.size() == 3:
+			break
+	return "Scenario" + "".join(words)
+
+
 ## "<root>/<lane>/<date>-<slug>-<asset tail>[-<role>]" without extension.
 static func base_path(lane: String, prompt: String, asset_id: String, role: String, date: String, root: String = ROOT) -> String:
 	var tail := asset_id.trim_prefix("asset_").right(6).to_lower()
