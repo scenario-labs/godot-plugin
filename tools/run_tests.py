@@ -12,6 +12,7 @@ sys.path.insert(0, str(pathlib.Path.home() / ".claude/skills/godot-expert/script
 import gd_run  # noqa: E402
 
 SUITES = {"unit": "res://tests/unit", "editor": "res://tests/editor"}
+EDITOR_JOBS = ["res://tests/editor/editor_flow_job.gd"]
 
 
 def main() -> int:
@@ -24,6 +25,17 @@ def main() -> int:
     failed = False
     for name in names:
         if not (ROOT / SUITES[name].replace("res://", "")).exists():
+            continue
+        if name == "editor":
+            for job in EDITOR_JOBS:
+                r = gd_run.run_script(str(ROOT), job, editor=True, timeout=300)
+                res = r.get("result") or {}
+                ok = bool(r.get("ok")) and bool(res.get("ok"))
+                failed |= not ok
+                print(f"editor {job.split('/')[-1]}: {'PASS' if ok else 'FAIL'} checks={res.get('checks')} "
+                      f"failures={res.get('failures')} paid_calls={res.get('paid_calls')} log={r.get('log_path')}")
+                if not ok:
+                    print("  error:", r.get("error"), (r.get("script_errors") or r.get("parse_errors") or r.get("engine_errors") or [])[:6])
             continue
         r = gd_run.run_tests(str(ROOT), framework="gut", dirs=(SUITES[name],))
         s = r.get("summary") or {}
