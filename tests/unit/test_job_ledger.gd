@@ -154,3 +154,9 @@ func test_unreadable_ledger_is_set_aside() -> void:
 	var ledger := _ledger()
 	assert_eq(ledger.jobs.size(), 0)
 	assert_true(FileAccess.file_exists(path + ".unreadable"))
+
+
+func test_intent_keeps_an_explicit_prompt_label() -> void:
+	var ledger := _ledger()
+	var local_id := ledger.add_intent("sound", "model_elevenlabs-sound-effects-v2", {"text": "coin"}, "fp", 1.0, T0, "coin")
+	assert_eq(ledger.find(local_id)["prompt"], "coin")

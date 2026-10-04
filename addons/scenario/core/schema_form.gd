@@ -34,6 +34,26 @@ static func fields_from_schema(schema: Dictionary, restrict: Dictionary = {}) ->
 	return ordered
 
 
+## GDScript's bool() throws on null and on strings; schema values can be either.
+static func truthy(value: Variant) -> bool:
+	if value is bool:
+		return value
+	if value is int or value is float:
+		return value != 0
+	if value is String:
+		return value.strip_edges().to_lower() in ["true", "1", "yes"]
+	return false
+
+
+## Name of the prompt field ("prompt", or "text" for ElevenLabs), "" when the
+## model takes no text (image-to-3D).
+static func prompt_name(fields: Array) -> String:
+	for field in fields:
+		if field["type"] == "prompt":
+			return field["name"]
+	return ""
+
+
 static func _field(p: Dictionary) -> Dictionary:
 	var name := str(p["name"])
 	var raw_type := str(p.get("type", "string"))
@@ -42,7 +62,7 @@ static func _field(p: Dictionary) -> Dictionary:
 		"name": name,
 		"label": humanize(name),
 		"description": str(p.get("description", "")),
-		"required": bool(p.get("required", false)),
+		"required": truthy(p.get("required")),
 		"default": p.get("default"),
 		"min": p.get("min"),
 		"max": p.get("max"),
@@ -51,12 +71,12 @@ static func _field(p: Dictionary) -> Dictionary:
 		"kind": str(p.get("kind", "")),
 		"max_items": int(p.get("max_length", 0)) if raw_type.ends_with("array") else 0,
 		"max_length": int(p.get("max_length", 0)) if raw_type == "string" else 0,
-		"cost_impact": bool(p.get("cost_impact", false)),
+		"cost_impact": truthy(p.get("cost_impact")),
 		"type": "text",
 	}
 	match raw_type:
 		"string":
-			if bool(p.get("prompt", false)) or name == "prompt":
+			if truthy(p.get("prompt")) or name == "prompt":
 				field["type"] = "prompt"
 			elif not options.is_empty():
 				field["type"] = "enum"
@@ -131,7 +151,7 @@ static func validate(fields: Array, values: Dictionary) -> PackedStringArray:
 	for field in fields:
 		var value: Variant = values.get(field["name"])
 		if field["required"] and _is_empty(value):
-			problems.append("%s is required." % field["label"])
+			problems.append("%s: required." % field["label"])
 			continue
 		if _is_empty(value):
 			continue
@@ -170,7 +190,7 @@ static func payload(fields: Array, values: Dictionary) -> Dictionary:
 			"number":
 				out[name] = float(value)
 			"boolean":
-				out[name] = bool(value)
+				out[name] = truthy(value)
 			"files", "multi":
 				out[name] = Array(value) if value is Array or value is PackedStringArray else [value]
 			"prompt", "text":

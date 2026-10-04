@@ -5,7 +5,8 @@ extends RefCounted
 ## Defaults chosen on 2026-10-04 with Scenario's `recommend` (quality priority)
 ## and the newest models; the dock also lists live recommendations. Presets
 ## are applied on top of the schema defaults; "restrict" limits a field to
-## values Godot can import.
+## values Godot can import. "recommend": false hides "More" where a general
+## model for the capability would not fit the importer (PBR maps, 360 skies).
 
 const LANES := [
 	{
@@ -32,7 +33,7 @@ const LANES := [
 		],
 	},
 	{
-		"id": "material", "title": "Material", "capability": "txt2img", "importer": "material",
+		"id": "material", "title": "Material", "capability": "txt2img", "importer": "material", "recommend": false,
 		"hint": "Tileable PBR material, set on the selected MeshInstance3D.",
 		"models": [
 			{"id": "model_patina-material", "name": "PATINA Material", "note": "albedo, normal, roughness, metallic, height"},
@@ -40,7 +41,7 @@ const LANES := [
 		],
 	},
 	{
-		"id": "skybox", "title": "Skybox", "capability": "txt2img", "importer": "skybox",
+		"id": "skybox", "title": "Skybox", "capability": "txt2img", "importer": "skybox", "recommend": false,
 		"hint": "360 panorama, applied as the sky of the scene's WorldEnvironment.",
 		"models": [
 			{"id": "model_scenario-skybox-gpt", "name": "Scenario Skybox GPT", "note": "best quality"},

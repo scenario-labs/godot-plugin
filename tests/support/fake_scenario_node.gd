@@ -36,6 +36,8 @@ const MODEL_LANE := {
 }
 
 var paid_calls: Array = []
+var uploads := 0
+var puts: Array = []
 var estimates := 0
 var tool_log: Array = []
 var _jobs := {}
@@ -73,6 +75,17 @@ func post(_url: String, _headers: PackedStringArray, body: String, _timeout_s: f
 			return _reply(payload["id"], _tool({"asset": {"id": args["asset_id"], "mimeType": output["mime"], "metadata": {"type": output["type"]}}}))
 		"asset_download":
 			return _reply(payload["id"], _tool({"url": "https://cdn.cloud.scenario.com/test/" + str(args["asset_id"])}))
+		"upload_asset":
+			uploads += 1
+			return _reply(payload["id"], _tool({"upload_id": "up_%d" % uploads, "part_size": 5242880, "parts": [
+				{"part_number": 1, "upload_url": "https://bucket.s3-accelerate.amazonaws.com/up_%d" % uploads, "content_length": args["file_size"]}]}))
+		"upload_asset_complete":
+			return _reply(payload["id"], _tool({"asset_id": "asset_upl%03d" % uploads, "status": "imported"}))
+		"recommend":
+			# Shape of a real reply, 2026-10-04 (txt2img, "a wooden treasure chest").
+			return _reply(payload["id"], _tool({"specialty": {"model_id": "model_TiL9mAQVWbaC9ythxHsLKzwK", "name": "Boxes & Crates 2.0"},
+				"ranked": [{"model_id": "model_openai-gpt-image-2-5-sunburst", "name": "GPT Image 2.5 Sunburst", "rank": 1, "cost_summary": "11 CU per asset"}],
+				"next_step": {"type": "ask_user"}}))
 	return _reply(payload["id"], {"content": [{"type": "text", "text": "unknown tool " + tool}], "isError": true})
 
 
@@ -88,7 +101,8 @@ func download(url: String, dest_path: String, _timeout_s: float = 600.0) -> Dict
 	return {"ok": true, "path": dest_path, "error": ""}
 
 
-func put_bytes(_url: String, _bytes: PackedByteArray, _timeout_s: float = 300.0) -> Dictionary:
+func put_bytes(url: String, bytes: PackedByteArray, _timeout_s: float = 300.0) -> Dictionary:
+	puts.append({"url": url, "size": bytes.size()})
 	return {"ok": true}
 
 
@@ -110,6 +124,11 @@ func _schema(model_id: String) -> Dictionary:
 		fixture = "schema_flare"
 	elif model_id == "model_patina-material":
 		fixture = "schema_patina"
+	if model_id == "model_elevenlabs-sound-effects-v2":
+		return {"model_id": model_id, "parameters": [
+			{"name": "text", "type": "string", "required": true, "prompt": true},
+			{"name": "loop", "type": "boolean"},
+		]}
 	if not fixture.is_empty():
 		var text := FileAccess.get_file_as_string(FIXTURES + fixture + ".sse")
 		for line in text.split("\n"):

@@ -71,13 +71,14 @@ func save() -> bool:
 	return DirAccess.rename_absolute(tmp, path) == OK
 
 
+## prompt: the text that names the files and the node; defaults to parameters.prompt.
 func add_intent(lane: String, model_id: String, parameters: Dictionary, fingerprint: String,
-		quoted_cu: float, now: float) -> String:
+		quoted_cu: float, now: float, prompt: String = "") -> String:
 	_counter += 1
 	var local_id := "local_%d_%d" % [int(now * 1000.0), _counter]
 	var row := {
 		"local_id": local_id, "job_id": "", "state": SUBMITTING, "lane": lane, "model_id": model_id,
-		"prompt": str(parameters.get("prompt", "")), "parameters": parameters, "fingerprint": fingerprint,
+		"prompt": prompt if not prompt.is_empty() else str(parameters.get("prompt", "")), "parameters": parameters, "fingerprint": fingerprint,
 		"quoted_cu": quoted_cu, "charged_cu": null, "asset_ids": [], "files": [], "imported": false,
 		"error": "", "created_at": now, "updated_at": now,
 	}

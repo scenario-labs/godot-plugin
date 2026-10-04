@@ -11,3 +11,4 @@ dist/
 
 # Editor test output
 tests/tmp_output/
+__pycache__/

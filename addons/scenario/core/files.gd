@@ -49,7 +49,7 @@ static func slug(text: String, max_length: int = 40) -> String:
 			dash = true
 		if out.length() >= max_length:
 			break
-	out = out.trim_suffix("-")
+	out = out.left(max_length).trim_suffix("-")
 	return out if not out.is_empty() else "scenario"
 
 
@@ -58,9 +58,11 @@ static func slug(text: String, max_length: int = 40) -> String:
 static func node_name(prompt: String) -> String:
 	var words: PackedStringArray = []
 	for word in slug(prompt, 80).split("-", false):
-		if word in ["a", "an", "the", "of", "with", "and", "in", "on"]:
+		# "scenario" too: slug() falls back to it for an empty prompt.
+		if word in ["a", "an", "the", "of", "with", "and", "in", "on", "scenario"]:
 			continue
-		words.append(word.capitalize())
+		# Not capitalize(): it turns "model3d" into "Model 3d".
+		words.append(word.left(1).to_upper() + word.substr(1))
 		if words.size() == 3:
 			break
 	return "Scenario" + "".join(words)

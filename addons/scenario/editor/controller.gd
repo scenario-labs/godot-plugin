@@ -152,7 +152,7 @@ func lane_models() -> Array:
 
 
 func select_model(id: String) -> void:
-	var keep_prompt: Variant = values.get("prompt")
+	var keep_prompt := prompt_text()
 	model_id = id
 	fields = []
 	values = {}
@@ -175,10 +175,16 @@ func select_model(id: String) -> void:
 	model_loading = false
 	fields = Form.fields_from_schema(schema, Lanes.RESTRICT)
 	values = Form.initial_values(fields, Lanes.presets(id))
-	if keep_prompt != null and _has_field("prompt"):
-		values["prompt"] = keep_prompt
+	if not keep_prompt.is_empty() and not Form.prompt_name(fields).is_empty():
+		values[Form.prompt_name(fields)] = keep_prompt
 	changed.emit()
 	schedule_estimate()
+
+
+## The text of the model's prompt field, whatever it is called ("" if none).
+func prompt_text() -> String:
+	var name := Form.prompt_name(fields)
+	return str(values.get(name, "")) if not name.is_empty() else ""
 
 
 func set_value(name: String, value: Variant) -> void:
@@ -270,7 +276,8 @@ func generate(confirmed: bool = false) -> Dictionary:
 		return {"needs_confirm": float(quote["cu"])}
 	quote = quotes.consume(fp, _now())
 	var request := payload()
-	var local_id := ledger.add_intent(lane_id, model_id, request, fp, float(quote["cu"]), _now())
+	var label := prompt_text() if not prompt_text().is_empty() else _model_name(model_id)
+	var local_id := ledger.add_intent(lane_id, model_id, request, fp, float(quote["cu"]), _now(), label)
 	submitting = true
 	_set_price(PRICE_IDLE, -1.0, "Sending...")
 	changed.emit()
@@ -505,7 +512,9 @@ func clear_field(field_name: String) -> void:
 
 func load_recommendations() -> void:
 	var lane := Lanes.lane(lane_id)
-	var prompt := str(values.get("prompt", lane["hint"]))
+	if not lane.get("recommend", true):
+		return
+	var prompt := prompt_text() if not prompt_text().is_empty() else str(lane["hint"])
 	var result: Dictionary = await client.recommend(lane["capability"], prompt, 8)
 	if not result["ok"]:
 		notified.emit(result["error"]["message"], "error")

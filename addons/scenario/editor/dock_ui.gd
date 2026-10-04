@@ -22,6 +22,7 @@ var _lane_buttons := {}
 var _lane_hint: Label
 var _model_option: OptionButton
 var _model_note: Label
+var _more_button: Button
 var _fields_box: VBoxContainer
 var _settings: FoldableContainer
 var _settings_box: VBoxContainer
@@ -109,6 +110,7 @@ func _build() -> void:
 	more.tooltip_text = "Ask Scenario which models fit this prompt best."
 	more.pressed.connect(controller.load_recommendations)
 	model_row.add_child(more)
+	_more_button = more
 	_main_box.add_child(model_row)
 	_model_note = _dim_label("")
 	_main_box.add_child(_model_note)
@@ -126,7 +128,7 @@ func _build() -> void:
 	_problem_label.add_theme_color_override("font_color", Color(1.0, 0.55, 0.45))
 	_main_box.add_child(_problem_label)
 	_generate_button = Button.new()
-	_generate_button.custom_minimum_size.y = 34
+	_generate_button.custom_minimum_size.y = _px(34)
 	_generate_button.pressed.connect(_on_generate)
 	_main_box.add_child(_generate_button)
 
@@ -176,6 +178,7 @@ func _refresh() -> void:
 	for id in _lane_buttons:
 		_lane_buttons[id].set_pressed_no_signal(id == controller.lane_id)
 	_lane_hint.text = Lanes.lane(controller.lane_id)["hint"]
+	_more_button.visible = Lanes.lane(controller.lane_id).get("recommend", true)
 	_refresh_models()
 	var form_key := "%s|%d" % [controller.model_id, controller.fields.size()]
 	if form_key != _built_for:
@@ -245,6 +248,7 @@ func _job_row(row: Dictionary) -> Control:
 	var title := Label.new()
 	title.text = "%s  %s" % [_short_model(row["model_id"]), str(row["prompt"]).left(48)]
 	title.clip_text = true
+	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	title.size_flags_horizontal = SIZE_EXPAND_FILL
 	title.tooltip_text = str(row["prompt"])
 	top.add_child(title)
@@ -282,7 +286,9 @@ func _build_fields() -> void:
 		child.queue_free()
 	_field_widgets.clear()
 	for field in controller.fields:
-		var main: bool = field["type"] in ["prompt", "file", "files"] or field["required"]
+		# A mask only refines an input image: it waits in Settings unless required.
+		var is_mask := str(field["name"]).to_lower().contains("mask")
+		var main: bool = (field["type"] in ["prompt", "file", "files"] and not is_mask) or field["required"]
 		var target := _fields_box if main else _settings_box
 		var label := Label.new()
 		label.text = field["label"] + (" *" if field["required"] else "") + ("  (affects price)" if field["cost_impact"] else "")
@@ -301,7 +307,7 @@ func _widget_for(field: Dictionary) -> Control:
 	match field["type"]:
 		"prompt":
 			var text := TextEdit.new()
-			text.custom_minimum_size.y = 72
+			text.custom_minimum_size.y = _px(72)
 			text.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 			text.placeholder_text = "Describe what you want..."
 			text.text_changed.connect(func() -> void: controller.set_value(name, text.text))
@@ -345,6 +351,7 @@ func _widget_for(field: Dictionary) -> Control:
 			status.name = "Status"
 			status.size_flags_horizontal = SIZE_EXPAND_FILL
 			status.clip_text = true
+			status.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 			row.add_child(status)
 			row.add_child(_action("File...", _pick_file.bind(name, str(field["kind"]))))
 			if str(field["kind"]) in ["image", ""]:
@@ -376,7 +383,7 @@ func _sync_field_values() -> void:
 				if index != -1 and widget.selected != index:
 					widget.select(index)
 			"boolean":
-				widget.set_pressed_no_signal(bool(value))
+				widget.set_pressed_no_signal(Form.truthy(value))
 			"number", "integer":
 				if widget is SpinBox and value != null and widget.value != float(value):
 					widget.set_value_no_signal(float(value))
@@ -483,7 +490,7 @@ func _wrap_label(text: String) -> Label:
 	var label := Label.new()
 	label.text = text
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.custom_minimum_size.x = 120
+	label.custom_minimum_size.x = _px(120)
 	return label
 
 
@@ -535,3 +542,8 @@ static func _short_model(id: String) -> String:
 			if model["id"] == id:
 				return model["name"]
 	return id.trim_prefix("model_")
+
+
+## Pixels scaled to the editor's display scale (2x on Retina by default).
+static func _px(value: float) -> float:
+	return value * EditorInterface.get_editor_scale()

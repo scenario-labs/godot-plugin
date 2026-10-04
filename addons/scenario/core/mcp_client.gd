@@ -200,7 +200,7 @@ func _call_once(tool: String, arguments: Dictionary, timeout_s: float, submit_ca
 	var result: Dictionary = rpc["value"]
 	var structured: Variant = result.get("structuredContent")
 	var content: Variant = result.get("content", [])
-	if bool(result.get("isError", false)):
+	if result.get("isError") == true:
 		var detail := _first_text(content)
 		if structured is Dictionary and not structured.is_empty():
 			detail = JSON.stringify(structured)

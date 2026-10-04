@@ -117,6 +117,38 @@ func run() -> Dictionary:
 	history.redo()
 	check("redo puts it back", _first_of(scene, "AudioStreamPlayer3D") != null)
 
+	# References: a file upload goes start, one PUT to S3, complete; no CU.
+	await controller.select_lane("image")
+	var reference := run_dir + "/reference.png"
+	DirAccess.copy_absolute(ProjectSettings.globalize_path("res://tests/assets/image.bin"), ProjectSettings.globalize_path(reference))
+	await controller.attach_file("referenceImages", reference)
+	check("upload: asset id in the form", controller.values.get("referenceImages") == ["asset_upl001"])
+	check("upload: one PUT to S3 with the file bytes", fake.puts.size() == 1 and fake.puts[0]["url"].contains(".amazonaws.com/")
+		and fake.puts[0]["size"] == FileAccess.get_file_as_bytes(reference).size())
+	controller.clear_field("referenceImages")
+	check("upload: cleared", not controller.values.has("referenceImages"))
+	# "More": the specialist first, then the ranked models, after the lane's own.
+	await controller.load_recommendations()
+	var ids: Array = controller.lane_models().map(func(m: Dictionary) -> String: return m["id"])
+	check("recommendations added to the picker", ids.has("model_TiL9mAQVWbaC9ythxHsLKzwK") and ids.has("model_openai-gpt-image-2-5-sunburst")
+		and ids[0] == "model_openai-gpt-image-2-5-flare")
+	await wait_frames(1)
+	check("dock shows More on the image lane", ui._more_button.visible)
+	await controller.select_lane("material")
+	await wait_frames(1)
+	check("dock hides More on the material lane", not ui._more_button.visible)
+	var asked_before := fake.tool_log.count("recommend")
+	await controller.load_recommendations()
+	check("no recommendations asked for materials", fake.tool_log.count("recommend") == asked_before)
+
+	# A model whose prompt field is called "text" keeps the prompt.
+	await controller.select_lane("sound")
+	controller.set_value("prompt", "coin pickup")
+	await controller.select_model("model_elevenlabs-sound-effects-v2")
+	check("prompt carried into ElevenLabs' text field", controller.values.get("text") == "coin pickup" and controller.prompt_text() == "coin pickup")
+	await wait_frames(1)
+	check("dock shows ElevenLabs' text as the prompt box", ui._field_widgets.get("text") is TextEdit)
+
 	# Confirmation threshold: above it nothing is sent until confirmed.
 	await controller.select_lane("image")
 	controller.set_value("prompt", "expensive")

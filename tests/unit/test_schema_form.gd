@@ -65,7 +65,7 @@ func test_initial_values_use_defaults_then_presets() -> void:
 func test_validate_required_and_ranges() -> void:
 	var fields := Form.fields_from_schema(_schema("schema_patina"))
 	var problems := Form.validate(fields, {"width": 4096})
-	assert_true(problems.has("Prompt is required."))
+	assert_true(problems.has("Prompt: required."))
 	assert_true(problems.has("Width must be at most 2048."))
 	assert_eq(Form.validate(fields, {"prompt": "moss", "width": 512}).size(), 0)
 	assert_eq(Form.validate(fields, {"prompt": "   "}).size(), 1, "blank prompt counts as missing")
@@ -112,3 +112,33 @@ func test_humanize() -> void:
 	assert_eq(Form.humanize("TAPose"), "Tapose")
 	assert_eq(Form.humanize("audio_format"), "Audio format")
 	assert_eq(Form.humanize("prompt"), "Prompt")
+
+
+func test_prompt_name_follows_the_prompt_flag() -> void:
+	# ElevenLabs Sound Effects 2 calls its prompt "text" (schema of 2026-10-04).
+	var eleven := Form.fields_from_schema({"parameters": [
+		{"name": "text", "type": "string", "required": true, "prompt": true},
+		{"name": "loop", "type": "boolean"},
+	]})
+	assert_eq(Form.prompt_name(eleven), "text")
+	assert_eq(Form.prompt_name(Form.fields_from_schema(_schema("schema_flare"))), "prompt")
+	# Hunyuan 3D image-to-3D: an image, no text.
+	var hunyuan := Form.fields_from_schema({"parameters": [{"name": "image", "type": "file", "required": true, "kind": "image"}]})
+	assert_eq(Form.prompt_name(hunyuan), "")
+
+
+func test_truthy_accepts_what_schemas_send() -> void:
+	assert_true(Form.truthy(true))
+	assert_true(Form.truthy(1))
+	assert_true(Form.truthy(" True "))
+	assert_false(Form.truthy(null))
+	assert_false(Form.truthy("false"))
+	assert_false(Form.truthy(0.0))
+	assert_false(Form.truthy({}))
+	# A boolean field with no default does not break the form or the payload.
+	var fields := Form.fields_from_schema({"parameters": [{"name": "prompt", "type": "string", "required": true},
+		{"name": "loop", "type": "boolean", "required": null}]})
+	var values := Form.initial_values(fields, {})
+	values["prompt"] = "coin"
+	values["loop"] = "true"
+	assert_eq(Form.payload(fields, values).get("loop"), true)
