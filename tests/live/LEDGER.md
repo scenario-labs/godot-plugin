@@ -4,7 +4,7 @@ Paid runs of tests/live/live_acceptance_job.gd. Cap: 1500 CU.
 
 | Date | Lane | Model | Quoted CU | Charged CU | Placed | Job | Note |
 |---|---|---|---|---|---|---|---|
-| 2026-10-04 | material | patina-material | 6 | 6 | n/a | job_sGiTu6uUyYPkVFKbq53v7hZF | design probe (output shapes), MCP called directly |
+| 2026-10-04 | material | patina-material | 6 | 6 | n/a | job_sGiTu6uUyYPkVFKbq53v7hZF | design probe (output shapes), Scenario MCP called directly |
 | 2026-10-04 | skybox | scenario-skybox-gpt | 2 | 2 | n/a | job_7FcS5ApkKPRnq7Lys86szedJ | design probe |
 | 2026-10-04 | sound | sonilo-v1-1-text-to-sound-effects | 1 | 1 | n/a | job_kFU451i7qbEmRJZYPZndsvqC | design probe; asked wav, got mp3 |
 | 2026-10-04 | image | openai-gpt-image-2-5-flare | 2 | 2 | n/a | job_p5vt3fNzLmR2dVKA4KxeGMFo | design probe |
