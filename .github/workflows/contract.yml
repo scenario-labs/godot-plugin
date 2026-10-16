@@ -1,0 +1,84 @@
+name: contract
+
+# Weekly free check that Scenario still answers the way the plugin expects:
+# every model in lanes.gd loads and prices, recommendations come back, and
+# Generate is refused with SCENARIO_NO_SPEND=1, which the tool always sets, so
+# no run can spend. Separate from PR CI: it reads the test credentials, which
+# pull requests from forks do not get (the check then skips with a warning).
+# GitHub can disable schedules after 60 days of repository inactivity.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "addons/scenario/core/**"
+      - "tests/live/contract_check_job.gd"
+      - "tools/contract_check.py"
+      - ".github/workflows/contract.yml"
+
+permissions:
+  contents: read
+
+# Serialize scheduled and manual runs so the failure issue cannot be created twice.
+concurrency:
+  group: contract-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Same pin as ci.yml: bump both together.
+  GODOT_RELEASE: 4.7.2-stable
+  GODOT_SHA512: 9aa00f7a605200940bce3027a567b782f49bd8e940dd06ae9e987bd65aee1b1467edd56ed84fcdcbdd44354bf613bdbb4e5d2913e925850368e150c59ed54c65
+
+jobs:
+  contract:
+    name: contract
+    if: github.repository == 'scenario-labs/godot-plugin'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      skipped: ${{ steps.check.outputs.skipped }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-godot
+        with:
+          version: ${{ env.GODOT_RELEASE }}
+          sha512: ${{ env.GODOT_SHA512 }}
+      - run: make toolkit
+      - name: Price every listed model and check the no-spend switch (0 CU)
+        id: check
+        env:
+          SCENARIO_API_KEY: ${{ secrets.SCENARIO_TEST_API_KEY }}
+          SCENARIO_API_SECRET: ${{ secrets.SCENARIO_TEST_API_SECRET }}
+        run: |
+          if [ -z "$SCENARIO_API_KEY" ] || [ -z "$SCENARIO_API_SECRET" ]; then
+            echo "::warning::SCENARIO_TEST_API_KEY and SCENARIO_TEST_API_SECRET are not set; the contract check did not run"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          python3 tools/contract_check.py
+
+  report:
+    needs: contract
+    # A timed-out runner cannot report itself; a deliberate cancellation is not a failure.
+    if: ${{ always() && !cancelled() && github.event_name != 'pull_request' && needs.contract.result != 'success' && needs.contract.result != 'skipped' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/report-failure
+        with:
+          title: "Scheduled contract check fails"
+          summary: >-
+            The free contract check (tools/contract_check.py, 0 CU) failed: a model in
+            lanes.gd no longer loads or prices, recommendations changed, or the no-spend
+            switch did not hold. The run log lists each model.
+          token: ${{ github.token }}

@@ -1,0 +1,56 @@
+name: dock
+
+# Renders the dock in its three states (fake backend, 0 CU) for pull requests
+# that change the editor UI, and keeps the image as an artifact to compare in
+# review. Informational: software Vulkan under Xvfb, so fonts and colors can
+# differ slightly from a desktop editor.
+
+on:
+  pull_request:
+    paths:
+      - "addons/scenario/plugin.gd"
+      - "addons/scenario/editor/**"
+      - "tests/editor/dock_capture_job.gd"
+      - "tools/capture_dock.py"
+      - ".github/workflows/dock.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dock-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Same pin as ci.yml: bump both together.
+  GODOT_RELEASE: 4.7.2-stable
+  GODOT_SHA512: 9aa00f7a605200940bce3027a567b782f49bd8e940dd06ae9e987bd65aee1b1467edd56ed84fcdcbdd44354bf613bdbb4e5d2913e925850368e150c59ed54c65
+
+jobs:
+  capture:
+    name: dock capture
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-godot
+        with:
+          version: ${{ env.GODOT_RELEASE }}
+          sha512: ${{ env.GODOT_SHA512 }}
+          display: "true"
+      - run: make toolkit
+      - name: Render the dock
+        id: render
+        run: |
+          xvfb-run -a python3 tools/capture_dock.py
+          echo "image=docs/images/dock-$(cd tools && python3 -c 'from build_zip import version; print(version())').png" >> "$GITHUB_OUTPUT"
+      # Only this run's render, not the screenshot committed for an earlier version.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dock-capture
+          path: ${{ steps.render.outputs.image }}
+          if-no-files-found: error
+          retention-days: 14

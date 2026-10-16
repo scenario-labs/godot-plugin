@@ -1,0 +1,87 @@
+name: live
+
+# PAID: tools/live_acceptance.py spends Creative Units on the project of the
+# live test key, one generation per lane, and checks every charge against its
+# quote. Manual only, and gated three ways: the `live-paid` environment (set it
+# up with a required reviewer), credentials that exist only as secrets of that
+# environment, and a budget typed at dispatch, capped below. Each approved run is
+# its own authorization: the tool's 1,500 CU total reads the committed ledger,
+# which CI runs never update, so it does not limit spending across runs. The job
+# summary lists each run's quoted and charged CU per lane, without ids.
+
+on:
+  workflow_dispatch:
+    inputs:
+      budget_cu:
+        description: Most Creative Units this run may spend (1 to 200)
+        required: true
+        default: "50"
+        type: string
+      lanes:
+        description: Comma-separated lanes, for example image,sound (empty means every lane)
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live
+  cancel-in-progress: false
+
+env:
+  # Same pin as ci.yml: bump both together.
+  GODOT_RELEASE: 4.7.2-stable
+  GODOT_SHA512: 9aa00f7a605200940bce3027a567b782f49bd8e940dd06ae9e987bd65aee1b1467edd56ed84fcdcbdd44354bf613bdbb4e5d2913e925850368e150c59ed54c65
+
+jobs:
+  live:
+    name: live acceptance
+    if: github.repository == 'scenario-labs/godot-plugin' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: live-paid
+    steps:
+      - name: Check the budget and lanes before anything else
+        env:
+          BUDGET: ${{ inputs.budget_cu }}
+          LANES: ${{ inputs.lanes }}
+        run: |
+          if ! [[ "$BUDGET" =~ ^[0-9]+$ ]] || [ "$BUDGET" -lt 1 ] || [ "$BUDGET" -gt 200 ]; then
+            echo "::error::budget_cu must be a whole number from 1 to 200"
+            exit 1
+          fi
+          if ! [[ "$LANES" =~ ^[a-z0-9,]*$ ]]; then
+            echo "::error::lanes must be comma-separated lane names"
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-godot
+        with:
+          version: ${{ env.GODOT_RELEASE }}
+          sha512: ${{ env.GODOT_SHA512 }}
+          display: "true"
+      - run: make toolkit
+      - name: Paid live acceptance
+        env:
+          SCENARIO_API_KEY: ${{ secrets.SCENARIO_LIVE_API_KEY }}
+          SCENARIO_API_SECRET: ${{ secrets.SCENARIO_LIVE_API_SECRET }}
+          BUDGET: ${{ inputs.budget_cu }}
+          LANES: ${{ inputs.lanes }}
+        run: |
+          if [ -z "$SCENARIO_API_KEY" ] || [ -z "$SCENARIO_API_SECRET" ]; then
+            echo "::error::SCENARIO_LIVE_API_KEY and SCENARIO_LIVE_API_SECRET must be secrets of the live-paid environment"
+            exit 1
+          fi
+          xvfb-run -a python3 tools/live_acceptance.py --budget "$BUDGET" --lanes "$LANES" --summary "$GITHUB_STEP_SUMMARY"
+      # The ledger rows hold job IDs: they stay in the run, not in an artifact or a commit.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: live-capture
+          path: .agent_out/captures/live.png
+          if-no-files-found: ignore
+          retention-days: 7

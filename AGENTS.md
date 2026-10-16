@@ -32,6 +32,21 @@ CI (`.github/workflows/ci.yml`) runs them on Linux, with `make tools-test`;
 (`tools/live_acceptance.py`) spends Creative Units: never run it without
 explicit authorization for the project and budget.
 
+## Scheduled and manual checks
+
+Informational, never required, and none spends unless noted. A failed
+scheduled run opens or updates one issue per check
+(`.github/actions/report-failure`).
+
+| Workflow | When | What |
+| --- | --- | --- |
+| `contract.yml` | weekly, PRs changing `core/` | `tools/contract_check.py`, 0 CU (test key secrets) |
+| `godot-os.yml` | weekly | tests and zip check on Linux, macOS, Windows, and the newest Godot build |
+| `links.yml` | weekly, docs PRs | links in Markdown and `llms.txt` |
+| `dock.yml` | UI PRs | dock screenshot as an artifact |
+| `scorecard.yml` | weekly, `main` | OpenSSF Scorecard |
+| `live.yml` | manual | PAID `tools/live_acceptance.py`, `live-paid` environment, reviewer approval and a 200 CU cap per run (no total cap in CI) |
+
 ## Rules
 
 - The spending rules in `llms.txt` hold for every change: price check first,

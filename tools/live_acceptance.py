@@ -18,6 +18,7 @@ import gd_run, gd_review  # noqa: E402
 
 LEDGER = ROOT / "tests/live/LEDGER.md"
 CAP_CU = 1500.0  # total budget for this plugin's live tests (spec, section 6)
+LANES = ("image", "model3d", "material", "skybox", "sound")  # the lanes of live_acceptance_job.gd
 
 
 def spent_so_far() -> float:
@@ -34,11 +35,27 @@ def spent_so_far() -> float:
     return total
 
 
+def write_summary(path: str, today: str, runs: list, spent, budget: float) -> None:
+    """Quoted and charged CU per lane, for the CI job summary: no job ids, asset ids or notes."""
+    with open(path, "a") as f:
+        f.write(f"### Live acceptance {today}\n\n| Lane | Model | Quoted CU | Charged CU | Placed |\n|---|---|---|---|---|\n")
+        for run in runs:
+            charged = run.get("charged") if run.get("charged") is not None else 0
+            f.write(f"| {run['lane']} | {run['model'].removeprefix('model_')} | {run.get('quoted')} | {charged} | "
+                    f"{'yes' if run.get('placed') else 'no'} |\n")
+        f.write(f"\nSpent {spent} CU of this run's {budget:g} CU budget.\n")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--budget", type=float, default=200.0)
     parser.add_argument("--lanes", default="", help="comma-separated lanes, e.g. model3d,sound (default: all)")
+    parser.add_argument("--summary", default="", help="also append a CU table without ids to this file ($GITHUB_STEP_SUMMARY)")
     args = parser.parse_args()
+    wanted = args.lanes.split(",") if args.lanes else []
+    if any(lane not in LANES for lane in wanted):
+        print(f"--lanes takes a comma-separated subset of {', '.join(LANES)}, got {args.lanes!r}.")
+        return 2
     if not (os.environ.get("SCENARIO_API_KEY") and os.environ.get("SCENARIO_API_SECRET")):
         print("Set SCENARIO_API_KEY and SCENARIO_API_SECRET.")
         return 2
@@ -68,6 +85,8 @@ def main() -> int:
         print(f"  {run['lane']:9s} {run['model']:45s} quoted={run.get('quoted')} charged={run.get('charged')} {match} "
               f"placed={run.get('placed')} {run.get('note', '')[:120]}")
     print("spent:", res.get("spent_cu"), "ok:", res.get("ok"), "error:", r.get("error"))
+    if args.summary:
+        write_summary(args.summary, today, runs, res.get("spent_cu"), budget)
     if res.get("scene_path"):
         cap = gd_run.capture_scene(str(ROOT), scene=res["scene_path"], out="captures/live.png", size=(1280, 720), frames=16)
         shot = ROOT / ".agent_out/captures/live.png"
