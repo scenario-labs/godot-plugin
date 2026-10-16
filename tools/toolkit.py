@@ -9,7 +9,7 @@ Usage: python3 tools/toolkit.py [fetch|check|sync]
 The other tools look for the toolkit in $GODOT_EXPERT_SCRIPTS, then the pinned copy,
 then the skill installed for an agent (`npx skills add scenario-labs/skills`).
 """
-import os, pathlib, subprocess, sys
+import os, pathlib, subprocess, sys, tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 REPO = "https://github.com/scenario-labs/skills"
@@ -67,11 +67,27 @@ def same_text(a: pathlib.Path, b: pathlib.Path) -> bool:
     return a.read_bytes().replace(b"\r\n", b"\n") == b.read_bytes().replace(b"\r\n", b"\n")
 
 
+def install_agentkit(project: pathlib.Path) -> pathlib.Path:
+    """What the pinned toolkit installs as <project>/addons/agentkit (scripts and VERSION)."""
+    sys.path.insert(0, str(PINNED))
+    import gd_env  # noqa: E402
+
+    return pathlib.Path(gd_env.install_agentkit(str(project)))
+
+
 def agentkit_diff() -> list[str]:
-    kit, ours = PINNED / "agentkit", ROOT / "addons/agentkit"
-    theirs = {p.relative_to(kit).as_posix() for p in kit.rglob("*.gd")}
-    mine = {p.relative_to(ours).as_posix() for p in ours.rglob("*.gd")}
-    return sorted((theirs ^ mine) | {n for n in theirs & mine if not same_text(kit / n, ours / n)})
+    """Files that differ between addons/agentkit and a fresh install of the pinned AgentKit.
+
+    Every file counts except the .uid files Godot generates for each project.
+    """
+    def files(folder: pathlib.Path) -> set[str]:
+        return {p.relative_to(folder).as_posix() for p in folder.rglob("*") if p.is_file() and p.suffix != ".uid"}
+
+    ours = ROOT / "addons/agentkit"
+    with tempfile.TemporaryDirectory() as tmp:
+        kit = install_agentkit(pathlib.Path(tmp))
+        theirs, mine = files(kit), files(ours)
+        return sorted((theirs ^ mine) | {n for n in theirs & mine if not same_text(kit / n, ours / n)})
 
 
 def main() -> int:
@@ -90,10 +106,7 @@ def main() -> int:
         print(f"addons/agentkit matches the toolkit at {REF[:12]}")
         return 0
     if which == "sync":
-        sys.path.insert(0, str(PINNED))
-        import gd_env  # noqa: E402
-
-        gd_env.install_agentkit(str(ROOT))
+        install_agentkit(ROOT)
         left = agentkit_diff()
         print(f"addons/agentkit synced from the toolkit at {REF[:12]}"
               + (f"; no longer in the toolkit, delete them: {', '.join(left)}" if left else ""))
