@@ -52,6 +52,8 @@ explicit authorization for the project and budget.
   header and the changelog line. Titles follow Conventional Commits with a scope
   from `commitlint.config.mjs`; the `pr-title` check enforces it.
 - Fill `.github/pull_request_template.md`; tick only what you ran.
+- `project.yml` adds each pull request, once ready for review, to the shared
+  Plugins project (organization project 31) as "👀 In review".
 
 ## Releases
 
