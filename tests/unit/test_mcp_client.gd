@@ -38,6 +38,8 @@ func test_basic_auth_protocol_and_session_headers() -> void:
 	assert_eq(_header(call, "MCP-Protocol-Version"), "2025-03-26")
 	assert_eq(_header(call, "Mcp-Session-Id"), "sess-1")
 	assert_eq(_header(call, "Accept"), "application/json, text/event-stream")
+	var agent := RegEx.create_from_string("^ScenarioGodot/" + Client.VERSION.replace(".", "\\.") + " \\(Godot \\d+\\.\\d+\\.\\d+-[a-z0-9]+; [A-Za-z]+\\)$")
+	assert_not_null(agent.search(_header(call, "User-Agent")), _header(call, "User-Agent"))
 
 
 func test_initializes_once_for_many_calls() -> void:
