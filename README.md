@@ -64,13 +64,17 @@ Every placement is one undo step (Ctrl+Z, Cmd+Z on macOS).
 
 ## Development
 
-The repository root is a small Godot demo project that hosts the addon and its tests. Requirements: Godot 4.7 on the PATH as `godot`, Python 3, and the godot-expert toolkit used by the test runners (`GODOT_EXPERT_SCRIPTS` points to its `scripts/` folder).
+The repository root is a small Godot demo project that hosts the addon and its tests. Requirements: Godot 4.7 (`$GODOT`, or `godot` on the PATH), Python 3, and the scenario-godot-expert toolkit the test runners drive Godot with: `make toolkit` fetches the commit pinned in `tools/toolkit.py` (`GODOT_EXPERT_SCRIPTS` overrides it).
 
 ```sh
+make toolkit  # the pinned toolkit into .toolkit/ (git), checked against addons/agentkit
 make test     # unit tests (GUT, 85) and the headless editor test (69 checks, fake backend, 0 CU)
 make zip      # dist/scenario-godot-plugin-<version>.zip, then a clean install into a blank project
 make dock     # re-render docs/images/dock-<version>.png (fake backend, opens a small window)
+make lint     # gdlint and ruff (uv), the same as CI
 ```
+
+CI runs the toolkit check, the tests, the zip check and the linters on every pull request. PR titles follow Conventional Commits, checked by `commitlint.config.mjs` (`pnpm install`, then `pnpm exec commitlint`); see [AGENTS.md](AGENTS.md).
 
 With `SCENARIO_API_KEY` and `SCENARIO_API_SECRET` set:
 

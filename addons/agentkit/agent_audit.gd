@@ -1,5 +1,5 @@
 extends RefCounted
-## AgentKit audits (godot-expert 0.1, Godot 4.7.2). Each method takes the job and returns a Dictionary
+## AgentKit audits (scenario-godot-expert 0.1, Godot 4.7.2). Each method takes the job and returns a Dictionary
 ## with "ok", the data, and "flags" (strings an agent should read before trusting the project).
 ##
 ##   gd_run.audit(project, "project")

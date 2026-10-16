@@ -1,0 +1,29 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# GDScript and Godot resources: tabs, as the Godot editor writes them.
+[*.{gd,tscn,tres,cfg,godot}]
+indent_style = tab
+
+[*.py]
+indent_style = space
+indent_size = 4
+
+[*.{yml,yaml,json,mjs}]
+indent_style = space
+indent_size = 2
+
+[Makefile]
+indent_style = tab
+
+[*.md]
+trim_trailing_whitespace = false
+
+[tests/fixtures/**]
+insert_final_newline = unset
+trim_trailing_whitespace = false

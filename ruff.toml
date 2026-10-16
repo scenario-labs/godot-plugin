@@ -1,0 +1,5 @@
+# Ruff for tools/, the only Python here; see `make lint`. The classic default
+# rules, except that the house style imports several modules on one line.
+[lint]
+select = ["E4", "E7", "E9", "F"]
+ignore = ["E401"]

@@ -1,0 +1,89 @@
+name: setup-godot
+description: Download an official Godot 4 editor from godotengine/godot-builds, verify its SHA-512, cache it, and expose it as $GODOT and `godot` on PATH
+inputs:
+  version:
+    description: Release tag in godotengine/godot-builds, for example 4.7.2-stable or 4.8-beta1
+    required: true
+  sha512:
+    description: SHA-512 of this runner's archive; empty checks the archive against the release's SHA512-SUMS.txt instead
+    required: false
+    default: ""
+  display:
+    description: On Linux, also install Xvfb and a software Vulkan driver for windowed runs such as captures
+    required: false
+    default: "false"
+outputs:
+  godot:
+    description: Path of the Godot editor binary
+    value: ${{ steps.install.outputs.godot }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/godot-cache
+        key: godot-${{ runner.os }}-${{ inputs.version }}-${{ inputs.sha512 }}
+    - id: install
+      shell: bash
+      env:
+        RELEASE: ${{ inputs.version }}
+        SHA512: ${{ inputs.sha512 }}
+        WITH_DISPLAY: ${{ inputs.display }}
+      run: |
+        set -euo pipefail
+        case "$RUNNER_OS" in
+          Linux) asset="Godot_v${RELEASE}_linux.x86_64.zip" ;;
+          macOS) asset="Godot_v${RELEASE}_macos.universal.zip" ;;
+          Windows) asset="Godot_v${RELEASE}_win64.exe.zip" ;;
+          *) echo "::error::No Godot build for $RUNNER_OS"; exit 1 ;;
+        esac
+        base="https://github.com/godotengine/godot-builds/releases/download/${RELEASE}"
+        cache="$HOME/godot-cache"
+        mkdir -p "$cache"
+        [ -f "$cache/$asset" ] || curl -fsSL --retry 3 -o "$cache/$asset" "$base/$asset"
+        # A cached archive is verified again: the cache is a convenience, not a trust anchor.
+        if [ -n "$SHA512" ]; then
+          printf '%s  %s\n' "$SHA512" "$asset" > "$cache/want.txt"
+        else
+          curl -fsSL --retry 3 -o "$cache/sums.txt" "$base/SHA512-SUMS.txt"
+          grep " ${asset}\$" "$cache/sums.txt" > "$cache/want.txt"
+        fi
+        if command -v sha512sum > /dev/null; then check=(sha512sum -c); else check=(shasum -a 512 -c); fi
+        (cd "$cache" && "${check[@]}" want.txt)
+
+        dir="$RUNNER_TEMP/godot"
+        if [ "$RUNNER_OS" = Windows ]; then dir="$(cygpath -u "$RUNNER_TEMP")/godot"; fi
+        rm -rf "$dir"
+        mkdir -p "$dir"
+        case "$RUNNER_OS" in
+          Linux)
+            unzip -q "$cache/$asset" -d "$dir"
+            ln -s "$dir/Godot_v${RELEASE}_linux.x86_64" "$dir/godot"
+            godot="$dir/godot"
+            console="$godot"
+            if [ "$WITH_DISPLAY" = true ]; then
+              sudo apt-get update -qq
+              sudo apt-get install -y -qq xvfb mesa-vulkan-drivers > /dev/null
+            fi
+            ;;
+          macOS)
+            ditto -x -k "$cache/$asset" "$dir"
+            godot="$dir/Godot.app/Contents/MacOS/Godot"
+            console="$godot"
+            # A wrapper, not a symlink: the binary finds its bundle from its own path.
+            printf '#!/bin/sh\nexec "%s" "$@"\n' "$godot" > "$dir/godot"
+            chmod +x "$dir/godot"
+            ;;
+          Windows)
+            # The layout winget installs: godot and godot_console on PATH.
+            unzip -q "$cache/$asset" -d "$dir"
+            cp "$dir/Godot_v${RELEASE}_win64.exe" "$dir/godot.exe"
+            cp "$dir/Godot_v${RELEASE}_win64_console.exe" "$dir/godot_console.exe"
+            godot="$(cygpath -w "$dir/godot.exe")"
+            console="$dir/godot_console.exe"
+            ;;
+        esac
+        if [ "$RUNNER_OS" = Windows ]; then cygpath -w "$dir" >> "$GITHUB_PATH"; else echo "$dir" >> "$GITHUB_PATH"; fi
+        echo "GODOT=$godot" >> "$GITHUB_ENV"
+        echo "godot=$godot" >> "$GITHUB_OUTPUT"
+        "$console" --headless --version

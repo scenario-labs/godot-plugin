@@ -1,0 +1,18 @@
+# Code owners: requested reviewers for release files, repository automation,
+# licence and security texts. Paths are root-anchored; the last match wins.
+# A team can be added once it has write access to this repository.
+
+# Release version and changelog files
+/CHANGELOG.md                       @hervenivon
+/addons/scenario/plugin.cfg         @hervenivon
+
+# Release machinery and repository automation
+/.github/workflows/                 @hervenivon
+/.github/actions/                   @hervenivon
+/.github/dependabot.yml             @hervenivon
+/.github/CODEOWNERS                 @hervenivon
+/tools/toolkit.py                   @hervenivon
+
+# Licence texts
+/LICENSE                            @hervenivon
+/addons/scenario/LICENSE            @hervenivon

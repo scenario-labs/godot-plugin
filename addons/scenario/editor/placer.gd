@@ -156,7 +156,7 @@ func _place_model(files: Array, label: String) -> Dictionary:
 	return _ok("Model added as %s." % instance.name, [path])
 
 
-func _place_material(files: Array, label: String) -> Dictionary:
+func _place_material(files: Array, _label: String) -> Dictionary:
 	var material := StandardMaterial3D.new()
 	var albedo := _first(files, ["albedo", "base", "main"])
 	if albedo.is_empty():
@@ -208,7 +208,7 @@ func _place_material(files: Array, label: String) -> Dictionary:
 	return _ok("Material applied to %d mesh(es)." % targets.size(), [material_path])
 
 
-func _place_skybox(files: Array, label: String) -> Dictionary:
+func _place_skybox(files: Array, _label: String) -> Dictionary:
 	var path := _first(files, ["panorama", "main"])
 	var texture := load(path) as Texture2D
 	if texture == null:
@@ -302,8 +302,8 @@ func _parent_for(root: Node, node: Node) -> Node:
 
 func _selected_of(classes: Array) -> Node:
 	for node in EditorInterface.get_selection().get_selected_nodes():
-		for class_name_ in classes:
-			if node.is_class(class_name_):
+		for cls in classes:
+			if node.is_class(cls):
 				return node
 	return null
 

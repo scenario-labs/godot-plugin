@@ -1,5 +1,5 @@
 extends RefCounted
-## AgentKit profiling (godot-expert 0.1, Godot 4.7.2): per-frame timings and Performance monitors to CSV.
+## AgentKit profiling (scenario-godot-expert 0.1, Godot 4.7.2): per-frame timings and Performance monitors to CSV.
 ##
 ##   gd_run.profile_scene(project, "res://main.tscn", seconds=5)                       # windowed, root viewport
 ##   gd_run.profile_scene(project, "res://main.tscn", seconds=5, size=(1920, 1080))    # GPU cost at 1080p
@@ -12,7 +12,7 @@ extends RefCounted
 ## process_wall_ms (last column): wall time from the first to the last node _process of the frame,
 ## measured by two sentinel nodes at process_priority -1e6 and +1e6 (previous frame's value, one
 ## frame of lag). process_ms and physics_ms are the TIME_* Performance monitors: they refresh about
-## once per second (the same value on every row, observed 4.7.2 by godot-performance-export) and read 0
+## once per second (the same value on every row, observed 4.7.2 by scenario-godot-performance-export) and read 0
 ## under --fixed-fps, so they are not per-frame values. Judge per-frame script cost on process_wall_ms.
 ## Headless: no frame is drawn, so render columns stay 0, and frame_ms is paced at about 6.9 ms by
 ## the low-processor sleep (low_processor_usage_mode_sleep_usec 6900), not the game's cost.
