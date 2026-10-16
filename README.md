@@ -18,7 +18,7 @@
   <a href="#lanes">Lanes</a> ·
   <a href="#spending-rules">Spending rules</a> ·
   <a href="docs/USER_GUIDE.md">User guide</a> ·
-  <a href="https://scenario-labs.github.io/godot-plugin/">Website</a> ·
+  <a href="https://godot.scenario.com/">Website</a> ·
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
@@ -33,7 +33,7 @@ Generate images, 3D models, PBR materials, skyboxes and sound effects with [Scen
 
 ## Install
 
-1. Download `scenario-godot-plugin-0.1.1.zip` from the [releases page](https://github.com/scenario-labs/godot-plugin/releases), or copy `addons/scenario/` from this repository. <!-- x-release-please-version -->
+1. Download `scenario-godot-plugin-0.1.1.zip` from [godot.scenario.com](https://godot.scenario.com/), or copy `addons/scenario/` from this repository. <!-- x-release-please-version -->
 2. Unzip it at the root of your Godot project, so you get `res://addons/scenario/plugin.cfg`.
 3. In Godot, open **Project > Project Settings > Plugins** and enable **Scenario**. The Scenario dock opens in its own column, right of the Inspector.
 
@@ -82,7 +82,7 @@ Every placement is one undo step (Ctrl+Z, Cmd+Z on macOS).
 
 ## Documentation
 
-- [User guide](docs/USER_GUIDE.md): each lane step by step, references, job states, troubleshooting. Also published as a [website](https://scenario-labs.github.io/godot-plugin/).
+- [User guide](docs/USER_GUIDE.md): each lane step by step, references, job states, troubleshooting. Also published as a [website](https://godot.scenario.com/).
 - [Changelog](CHANGELOG.md), [known issues](BUGS.md), [roadmap](ROADMAP.md).
 - [Design notes](docs/design-notes/README.md): proposals and open questions for 0.2 and later.
 - [llms.txt](llms.txt): a map of the code for coding agents.
