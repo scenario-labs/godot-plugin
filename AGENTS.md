@@ -60,13 +60,45 @@ scheduled run opens or updates one issue per check
 - `.agents/skills/` holds skills shared by every Scenario repository
   (`skills-lock.json`); change them upstream. `.claude/skills/` links to them.
 - No em dashes, in code, docs, commit messages and PR titles.
+- This repository is public: no credentials, session IDs, personal paths,
+  account or project records, or spend anecdotes in code, docs, commits or PRs.
+  The exception is `tests/live/LEDGER.md`: `tools/live_acceptance.py` records
+  each authorized paid run there (job ID, CU) and reads it back for the cap.
+- Keep doc edits in a feature PR to the prose the change makes wrong, in the
+  fewest words that state current behavior. Test runs, platforms and review
+  notes belong in the PR body, not in docs.
 
 ## Commits and pull requests
 
 - Branch from `main`; PRs are squash-merged, so the PR title becomes the commit
   header and the changelog line. Titles follow Conventional Commits with a scope
-  from `commitlint.config.mjs`; the `pr-title` check enforces it.
+  from `commitlint.config.mjs`; the `pr-title` check enforces it. Pick the type
+  from the final diff: `fix` only for behavior users of the released plugin or
+  the website saw; a correction to tooling, CI or infrastructure they do not run
+  is `chore` (or `ci`, `build`, `docs`), and its issue is a Task, not a Bug.
 - Fill `.github/pull_request_template.md`; tick only what you ran.
+- Write PR descriptions, commit bodies and review replies briefly: what changed
+  and why, the checks you ran (one line each), and any action needed after merge
+  or known gap. Omit what the diff, CI or the template already shows; explain an
+  unticked check only when the change needed it. Branch commit bodies are
+  optional, a sentence or two. Pass multiline bodies from a file
+  (`--body-file`, `-F`).
+- `Closes #n` only for complete issue scope, `Refs #n` otherwise, saying what
+  remains. Do not keep a reviewable PR in draft for untested edge cases: track
+  them in the issue and link it.
+- Screenshots of a visible change go in the PR description, never in a commit.
+  GitHub has no command-line upload, so an agent saves them, numbered, in
+  `.agent_out/pr-screenshots/<branch>/`, leaves a `[drop <file>]` placeholder
+  per image in the description, and gives the person the folder's absolute
+  path.
+- After investigating a review comment, human or bot, reply in its thread with
+  the pushed fix and evidence, or why no change is needed (`/pr-handle-comments`).
+- Give every new issue the type its title implies: Bug for `fix`, Feature for
+  `feat`, otherwise Task (`gh issue create --type <Type>`, gh 2.94 or later).
+- Name the contributing agent in the PR and keep its co-author trailer on
+  commits and in the squash message. Codex writes
+  `Co-authored-by: Codex <model> <effort> <tier> <noreply@openai.com>` with the
+  session's actual settings, leaving out unknown fields.
 - `project.yml` adds each pull request, once ready for review, to the shared
   Plugins project (organization project 31) as "👀 In review".
 
