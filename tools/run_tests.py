@@ -13,7 +13,7 @@ toolkit.use()
 import gd_run  # noqa: E402
 
 SUITES = {"unit": "res://tests/unit", "editor": "res://tests/editor"}
-EDITOR_JOBS = ["res://tests/editor/editor_flow_job.gd"]
+EDITOR_JOBS = ["res://tests/editor/editor_flow_job.gd", "res://tests/editor/scan_race_job.gd"]
 
 
 def main() -> int:
