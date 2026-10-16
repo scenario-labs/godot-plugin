@@ -34,11 +34,13 @@ site:
 	rm -rf dist/site
 	uv run --no-project --with markdown==3.10.3 python tools/build_site.py --output dist/site
 
-# The download-counting proxy (tools/site_proxy): type-checked as Vercel builds it, then tested. Requires pnpm install.
+# The download-counting proxy (tools/site_proxy), type-checked as Vercel builds it, and the guide search
+# (docs/site/handbook-search.js), type-checked; then both tested. Requires pnpm install.
 site-test:
 	mkdir -p .no-types
 	node_modules/.bin/tsc --noEmit --strict --target es2022 --lib es2022,dom --module nodenext --moduleResolution nodenext --typeRoots .no-types tools/site_proxy/middleware.ts
-	node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/site/middleware.test.ts
+	node_modules/.bin/tsc --noEmit --strict --target es2022 --lib es2022,dom,dom.iterable --module nodenext --moduleResolution nodenext --allowJs --checkJs --typeRoots .no-types docs/site/handbook-search.js
+	node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/site/middleware.test.ts tests/site/handbook-search.test.ts
 
 # Paid: spends Creative Units on the test key's project. Opt-in only.
 live:
