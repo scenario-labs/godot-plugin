@@ -1,5 +1,13 @@
 name: smoke
 
+# GitHub shows workflow_dispatch inputs nowhere on the approval page, so the
+# title names what the `smoke` reviewer approves: the budget, the lanes, the
+# commit and who asked, as the website's E2E and admin smoke runs do.
+run-name: >-
+  ${{ format('Smoke: up to {0} CU, {1}, {2} at {3} (by {4})',
+  inputs.budget_cu, inputs.lanes != '' && format('lanes {0}', inputs.lanes) || 'every lane',
+  github.ref_name, github.sha, github.actor) }}
+
 # PAID: tools/smoke.py spends Creative Units on the project of the key, one
 # generation per lane, and checks every charge against its quote. Manual only,
 # and gated by the `smoke` environment (a required reviewer, main only) and a
