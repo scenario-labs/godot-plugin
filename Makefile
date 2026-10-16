@@ -1,6 +1,6 @@
 # Scenario Godot Plugin. Requires Godot 4.7 (`godot` on PATH, or $GODOT), python3,
 # and the scenario-godot-expert toolkit: `make toolkit` fetches the pinned copy.
-.PHONY: test unit editor zip archive dock live toolkit lint agents tools-test
+.PHONY: test unit editor zip archive dock site site-test live toolkit lint agents tools-test
 
 test:
 	python3 tools/run_tests.py all
@@ -28,6 +28,17 @@ archive:
 # Dock screenshot for the docs (fake backend, 0 CU; opens a small window).
 dock:
 	python3 tools/capture_dock.py
+
+# The website (docs/USER_GUIDE.md as one page) into dist/site; requires uv. CI publishes it with the release zip.
+site:
+	rm -rf dist/site
+	uv run --no-project --with markdown==3.10.3 python tools/build_site.py --output dist/site
+
+# The download-counting proxy (tools/site_proxy): type-checked as Vercel builds it, then tested. Requires pnpm install.
+site-test:
+	mkdir -p .no-types
+	node_modules/.bin/tsc --noEmit --strict --target es2022 --lib es2022,dom --module nodenext --moduleResolution nodenext --typeRoots .no-types tools/site_proxy/middleware.ts
+	node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/site/middleware.test.ts
 
 # Paid: spends Creative Units on the test key's project. Opt-in only.
 live:

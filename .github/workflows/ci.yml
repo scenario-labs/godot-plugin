@@ -80,6 +80,26 @@ jobs:
           persist-credentials: false
       - name: Tests of the Python tools (release draft recovery)
         run: make tools-test
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: The website builds
+        run: make site
+
+  site:
+    name: site
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Install TypeScript from the lockfile
+        run: pnpm install --frozen-lockfile
+      - name: Type-check and test the download-counting proxy
+        run: make site-test
 
   agents:
     name: agents
@@ -98,7 +118,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [godot, lint, tools, agents]
+    needs: [godot, lint, tools, site, agents]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

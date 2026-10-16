@@ -172,6 +172,9 @@ importers:
       '@commitlint/config-conventional':
         specifier: ^21.2.3
         version: 21.2.3
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
 
 packages:
 

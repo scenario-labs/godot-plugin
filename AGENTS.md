@@ -84,3 +84,13 @@ the draft, and `publish-changelog.yml` posts the notes to scenario.com.
 - The source archive (GitHub downloads, the Godot Asset Library) holds
   `addons/scenario/` alone; `.gitattributes` allowlists it and `make archive`
   checks it.
+
+## Website and download counts
+
+`pages.yml` publishes `docs/USER_GUIDE.md` as one page (`tools/build_site.py`,
+`docs/site/template.html`; `make site` builds it into `dist/site`) to GitHub
+Pages, with the latest release zip once its checksum and build provenance
+verify. `tools/site_proxy/` is a Vercel project in front of Pages that counts
+zip downloads in PostHog (anonymous; `plugin: "godot"`, the Godot version and OS
+from the editor's User-Agent). `make site-test` type-checks and tests it. The
+page content comes from the guide: change the guide, not the site.
