@@ -32,12 +32,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Tracked files only, without the vendored GUT addon, and without
-      # .claude/CLAUDE.md, a link to AGENTS.md whose relative links resolve from .claude/.
+      # Tracked files only, without the vendored GUT addon; without
+      # .claude/CLAUDE.md, a link to AGENTS.md whose relative links resolve from
+      # .claude/; and without CHANGELOG.md, which release-please writes: its
+      # compare links name a tag that exists only once the release is
+      # published, and its issue links redirect to pull requests (as in
+      # blender-plugin's tools/link_inventory.py).
       - name: Select the files to check
         run: |
           mkdir -p "$RUNNER_TEMP/links"
-          git ls-files '*.md' llms.txt | grep -v -E '^(addons/gut/|\.claude/)' > "$RUNNER_TEMP/links/inputs.txt"
+          git ls-files '*.md' llms.txt | grep -v -E '^(addons/gut/|\.claude/|CHANGELOG\.md$)' > "$RUNNER_TEMP/links/inputs.txt"
           cat "$RUNNER_TEMP/links/inputs.txt"
       - uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
