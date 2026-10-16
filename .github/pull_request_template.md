@@ -39,7 +39,7 @@ GitHub merging this list into the checklist. -->
 
 ## Rules
 
-- [ ] The spending rules in `llms.txt` still hold (price check first, single-use quotes, paid calls sent once, `SCENARIO_NO_SPEND`).
+- [ ] The spending rules in `AGENTS.md` still hold (price check first, single-use quotes, paid calls sent once, `SCENARIO_NO_SPEND`).
 - [ ] No unrelated manual version or changelog edits; documentation matches the resulting behavior.
 
 ## Authorship and licensing
