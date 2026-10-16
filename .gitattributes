@@ -1,2 +1,16 @@
 # Normalize EOL for all files that Git considers text files.
 * text=auto eol=lf
+
+# Recorded payloads and images are bytes, never text.
+*.bin binary
+*.png binary
+*.zip binary
+
+# The source archive (GitHub's "Source code" downloads, and what the Godot Asset
+# Library installs from a GitHub repository) holds the addon alone, like the
+# release zip: everything at the root is left out except addons/scenario/.
+# CI checks the archive.
+/* export-ignore
+/addons -export-ignore
+/addons/* export-ignore
+/addons/scenario -export-ignore

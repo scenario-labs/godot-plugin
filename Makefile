@@ -1,6 +1,6 @@
 # Scenario Godot Plugin. Requires Godot 4.7 (`godot` on PATH, or $GODOT), python3,
 # and the scenario-godot-expert toolkit: `make toolkit` fetches the pinned copy.
-.PHONY: test unit editor zip dock live toolkit lint agents
+.PHONY: test unit editor zip archive dock live toolkit lint agents tools-test
 
 test:
 	python3 tools/run_tests.py all
@@ -15,6 +15,16 @@ editor:
 zip:
 	python3 tools/build_zip.py --verify
 
+# The source archive (GitHub downloads, the Godot Asset Library) holds exactly the committed files of
+# addons/scenario, plugin.cfg included: see .gitattributes.
+archive:
+	@t="$$(mktemp -d)"; \
+	git ls-tree -r --name-only HEAD addons/scenario | sort > "$$t/want"; \
+	git archive HEAD | tar -t | grep -v '/$$' | sort > "$$t/got"; \
+	if grep -qx addons/scenario/plugin.cfg "$$t/got" && diff -u "$$t/want" "$$t/got"; then \
+		echo "source archive: the $$(wc -l < "$$t/got" | tr -d ' ') files of addons/scenario"; rm -rf "$$t"; \
+	else echo "The source archive must hold exactly the committed files of addons/scenario (- missing, + extra)."; rm -rf "$$t"; exit 1; fi
+
 # Dock screenshot for the docs (fake backend, 0 CU; opens a small window).
 dock:
 	python3 tools/capture_dock.py
@@ -27,6 +37,10 @@ live:
 toolkit:
 	python3 tools/toolkit.py fetch
 	python3 tools/toolkit.py check
+
+# Tests of the Python tools themselves (release draft recovery).
+tools-test:
+	python3 -m unittest discover -s tools
 
 # GDScript and Python lint, the same versions as CI. Requires uv.
 lint:

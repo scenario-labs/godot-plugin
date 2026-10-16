@@ -37,6 +37,8 @@ jobs:
         run: make test
       - name: Release zip, then a clean install into a blank project
         run: make zip
+      - name: The source archive holds addons/scenario alone (the Asset Library installs from it)
+        run: make archive
       # Godot writes a .uid or .import file next to any new script or asset it
       # imports: one missing from the commit shows up here, as does test output
       # written outside the ignored folders.
@@ -68,6 +70,17 @@ jobs:
       - name: gdlint on addons/scenario and tests, ruff on tools
         run: make lint
 
+  tools:
+    name: tools
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Tests of the Python tools (release draft recovery)
+        run: make tools-test
+
   agents:
     name: agents
     runs-on: ubuntu-24.04
@@ -85,7 +98,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [godot, lint, agents]
+    needs: [godot, lint, tools, agents]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
