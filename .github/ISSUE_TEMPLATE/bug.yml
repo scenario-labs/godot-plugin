@@ -1,0 +1,100 @@
+name: Bug report
+description: The dock, a generation or an import into the scene behaves wrong
+type: Bug
+projects: ["scenario-labs/31"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This issue is public and permanent. Before you submit, remove your API key and secret, signed asset URLs, e-mail addresses, local paths with your username, and any prompt or artwork you do not want published. Team and project ids identify your account: leave them out.
+
+        Would rather not post in public? Send the same fields to support@scenario.com. Account, billing, credit and security problems always go there or to in-app support at https://app.scenario.com.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened
+      description: One or two sentences. The symptom, not the suspected cause.
+    validations:
+      required: true
+  - type: dropdown
+    id: lane
+    attributes:
+      label: Lane
+      options:
+        - Image
+        - 3D
+        - Material
+        - Skybox
+        - Sound
+        - Sign in, settings or the dock itself
+        - Install or update
+        - Documentation
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps. Name the model, the settings you changed and what was selected in the scene.
+      placeholder: |
+        1. Select a MeshInstance3D, open the Material lane, keep PATINA defaults
+        2. Type "<prompt>", press Generate
+        3. Look at the mesh after the job finishes
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: The verbatim error text from the dock or the Output panel. Paste text, not a screenshot, so it is searchable.
+    validations:
+      required: true
+  - type: input
+    id: godot_version
+    attributes:
+      label: Godot version
+      description: From Help > About Godot, and say if it is the .NET build.
+      placeholder: 4.7.2 standard
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+  - type: input
+    id: plugin_version
+    attributes:
+      label: Plugin version
+      description: The version in addons/scenario/plugin.cfg, or the release zip name.
+      placeholder: 0.1.1
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: "Only ids you can share publicly: the job id and model from the .scenario.json next to the result, and the UTC time. No signed asset URLs, they are credentials."
+      placeholder: |
+        job id: ...
+        model: ...
+        when: <UTC date and time>
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched open and closed issues, and BUGS.md, for a duplicate.
+          required: true
+        - label: This report contains no keys, tokens, signed asset URLs or personal data.
+          required: true
