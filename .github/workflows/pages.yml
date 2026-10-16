@@ -14,8 +14,13 @@ on:
       - "addons/scenario/plugin.cfg"
       - "tools/build_site.py"
       - ".github/workflows/pages.yml"
-  release:
-    types: [published]
+  # After each release-please run on main, whose publish job releases the zip.
+  # Not the release event: its ref is the tag, and the github-pages
+  # environment only accepts deployments from main.
+  workflow_run:
+    workflows: [release-please]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 permissions: {}
@@ -27,7 +32,9 @@ concurrency:
 
 jobs:
   publish:
-    if: github.repository == 'scenario-labs/godot-plugin'
+    if: >-
+      github.repository == 'scenario-labs/godot-plugin' &&
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment:
