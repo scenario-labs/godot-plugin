@@ -80,8 +80,8 @@ make archive   # the source archive holds addons/scenario alone
 
 CI (`.github/workflows/ci.yml`) runs them on Linux, with `make tools-test`;
 `ci-ok` requires every job. `tools/contract_check.py` is free but needs
-`SCENARIO_API_KEY` and `SCENARIO_API_SECRET`. `make live`
-(`tools/live_acceptance.py`) spends Creative Units: never run it without
+`SCENARIO_API_KEY` and `SCENARIO_API_SECRET`. `make smoke`
+(`tools/smoke.py`) spends Creative Units: never run it without
 explicit authorization for the project and budget.
 
 ## Scheduled and manual checks
@@ -97,7 +97,7 @@ scheduled run opens or updates one Task issue per check
 | `links.yml` | weekly, docs PRs | links in Markdown (except the generated `CHANGELOG.md`) |
 | `dock.yml` | UI PRs | dock screenshot as an artifact |
 | `scorecard.yml` | weekly, `main` | OpenSSF Scorecard |
-| `live.yml` | manual | PAID `tools/live_acceptance.py`, `live-paid` environment, reviewer approval and a 200 CU cap per run (no total cap in CI) |
+| `smoke.yml` | manual | PAID `tools/smoke.py`, `smoke` environment with its own `SCENARIO_TEST_*` secrets, reviewer approval and a 200 CU cap per run (no total cap in CI) |
 
 ## Rules
 
@@ -112,7 +112,7 @@ scheduled run opens or updates one Task issue per check
 - No em dashes, in code, docs, commit messages and PR titles.
 - This repository is public: no credentials, session IDs, personal paths,
   account or project records, or spend anecdotes in code, docs, commits or PRs.
-  The exception is `tests/live/LEDGER.md`: `tools/live_acceptance.py` records
+  The exception is `tests/smoke/LEDGER.md`: `tools/smoke.py` records
   each authorized paid run there (job ID, CU) and reads it back for the cap.
 - Keep doc edits in a feature PR to the prose the change makes wrong, in the
   fewest words that state current behavior. Test runs, platforms and review

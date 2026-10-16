@@ -25,7 +25,7 @@ agents both follow.
 `make toolkit`, then `make test` (unit tests and the headless editor test
 against a fake backend, 0 CU), `make zip` for packaging changes and `make lint`.
 AGENTS.md lists every check CI runs. Live checks against Scenario need a test
-key; the paid one (`make live`) spends Creative Units and needs authorization
+key; the paid one (`make smoke`) spends Creative Units and needs authorization
 for the project and budget first.
 
 ## Commits and pull requests
