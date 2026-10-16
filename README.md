@@ -83,7 +83,7 @@ Every placement is one undo step (Ctrl+Z, Cmd+Z on macOS).
 ## Documentation
 
 - [User guide](docs/USER_GUIDE.md): each lane step by step, references, job states, troubleshooting. Also published as a [website](https://godot.scenario.com/).
-- [Changelog](CHANGELOG.md), [known issues](BUGS.md), [roadmap](ROADMAP.md).
+- [Changelog](CHANGELOG.md), [known issues](BUGS.md), [roadmap](https://github.com/scenario-labs/godot-plugin/milestones) and [issues](https://github.com/scenario-labs/godot-plugin/issues).
 - [Design notes](docs/design-notes/README.md): proposals and open questions for 0.2 and later.
 - [AGENTS.md](AGENTS.md): the code map and the rules, for contributors and coding agents.
 
