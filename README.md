@@ -1,14 +1,38 @@
-# Scenario for Godot
+<p align="center">
+  <a href="https://www.scenario.com/"><img src="docs/images/scenario-logo.png" height="84" alt="Scenario"></a>
+</p>
+<h1 align="center">Scenario for Godot</h1>
+<p align="center">
+  <a href="https://github.com/scenario-labs/godot-plugin/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/scenario-labs/godot-plugin"></a>
+  <a href="https://github.com/scenario-labs/godot-plugin/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/scenario-labs/godot-plugin/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="License MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
+  <img alt="Godot 4.7" src="https://img.shields.io/badge/Godot-4.7-478CBF?logo=godotengine&logoColor=white">
+  <img alt="GDScript only" src="https://img.shields.io/badge/GDScript-only-355570">
+  <a href="https://docs.scenario.com"><img alt="API documentation" src="https://img.shields.io/badge/documentation-api-black.svg"></a>
+  <a href="https://help.scenario.com"><img alt="App documentation" src="https://img.shields.io/badge/documentation-app-black.svg"></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/scenario-labs/godot-plugin"><img alt="OpenSSF Scorecard" src="https://img.shields.io/ossf-scorecard/github.com/scenario-labs/godot-plugin?label=openssf+scorecard&style=flat"></a>
+</p>
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#sign-in">Sign in</a> ·
+  <a href="#lanes">Lanes</a> ·
+  <a href="#spending-rules">Spending rules</a> ·
+  <a href="docs/USER_GUIDE.md">User guide</a> ·
+  <a href="https://scenario-labs.github.io/godot-plugin/">Website</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
+</p>
 
 Generate images, 3D models, PBR materials, skyboxes and sound effects with [Scenario](https://scenario.com) from a dock inside the Godot editor. You see the exact price in Creative Units (CU) before you spend, and the result lands in the open scene as a native Godot asset.
 
-![The Scenario dock: sign in, the image lane after a finished job, the material lane with its settings open](docs/images/dock-0.1.0.png)
+<p align="center">
+  <img src="docs/images/dock-0.1.0.png" alt="The Scenario dock: sign in, the image lane after a finished job, the material lane with its settings open">
+</p>
 
-**Version 0.1.1.** Tested on Godot 4.7.2 (standard build, macOS). GDScript only, so it also loads in the .NET build. MIT license.
+> **Version 0.1.1.** Tested on Godot 4.7.2 (standard build, macOS). GDScript only, so it also loads in the .NET build. MIT license.
 
 ## Install
 
-1. Download `scenario-godot-plugin-0.1.1.zip` from the releases page, or copy `addons/scenario/` from this repository.
+1. Download `scenario-godot-plugin-0.1.1.zip` from the [releases page](https://github.com/scenario-labs/godot-plugin/releases), or copy `addons/scenario/` from this repository.
 2. Unzip it at the root of your Godot project, so you get `res://addons/scenario/plugin.cfg`.
 3. In Godot, open **Project > Project Settings > Plugins** and enable **Scenario**. The Scenario dock opens in its own column, right of the Inspector.
 
@@ -57,7 +81,7 @@ Every placement is one undo step (Ctrl+Z, Cmd+Z on macOS).
 
 ## Documentation
 
-- [User guide](docs/USER_GUIDE.md): each lane step by step, references, job states, troubleshooting.
+- [User guide](docs/USER_GUIDE.md): each lane step by step, references, job states, troubleshooting. Also published as a [website](https://scenario-labs.github.io/godot-plugin/).
 - [Changelog](CHANGELOG.md), [known issues](BUGS.md), [roadmap](ROADMAP.md).
 - [Design notes](docs/design-notes/README.md): proposals and open questions for 0.2 and later.
 - [llms.txt](llms.txt): a map of the code for coding agents.
@@ -83,6 +107,19 @@ python3 tools/contract_check.py      # free: every listed model loads and prices
 python3 tools/live_acceptance.py     # PAID: one run per lane, ledger in tests/live/LEDGER.md
 ```
 
+## Support
+
+[SUPPORT.md](SUPPORT.md) says where to look and whom to ask: the [issue chooser](https://github.com/scenario-labs/godot-plugin/issues/new/choose) for bugs and change requests, support@scenario.com or Scenario's in-app support for account, billing and API-key questions. Never post your API key or secret in a public issue. Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+
+Contributions are welcome: read [CONTRIBUTING.md](CONTRIBUTING.md) and follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Sibling integrations
+
+- [Scenario for Blender](https://github.com/scenario-labs/blender-plugin) (GPL-3.0-or-later).
+- [Scenario for Unity](https://github.com/scenario-labs/Scenario-Unity) (MIT).
+- [Scenario skills for agents](https://github.com/scenario-labs/skills) (MIT).
+- The [Scenario MCP server](https://mcp.scenario.com) brings Scenario tools to coding agents outside the editor.
+
 ## License
 
-MIT, see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE). "Scenario" and the Scenario logo belong to Scenario Inc. Godot is a trademark of the Godot Foundation; this plugin is not affiliated with or endorsed by it.
