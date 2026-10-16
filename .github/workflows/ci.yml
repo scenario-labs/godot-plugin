@@ -113,8 +113,8 @@ jobs:
       - name: Shared agent skills are valid and linked for Claude Code
         run: make agents
 
-  # The one check the main ruleset requires from this workflow, so jobs can be
-  # added or renamed without touching the ruleset. Do not rename it.
+  # The one check the main rulesets require from this workflow, so jobs can be
+  # added or renamed without touching the rulesets. Do not rename it.
   ci-ok:
     name: ci-ok
     if: always()

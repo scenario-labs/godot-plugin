@@ -7,9 +7,9 @@ permissions:
   contents: read
 
 jobs:
-  # Advisory: branch commits are discarded by the squash merge, so this job is
-  # never a required check. It lints every commit the PR adds on top of its base
-  # branch with the same commitlint.config.mjs as the pr-title job in pr-name.yml.
+  # A required check in the main rulesets, with pr-title and ci-ok. It lints
+  # every commit the PR adds on top of its base branch with the same
+  # commitlint.config.mjs as the pr-title job in pr-name.yml. Do not rename it.
   commits:
     runs-on: ubuntu-latest
     steps:
