@@ -6,7 +6,7 @@ name: project
 # repository adds its pull requests from here.
 #
 # GITHUB_TOKEN cannot write organization projects: the release GitHub App's
-# token does, with its "Organization projects: Read and write" permission.
+# token does, with "Organization projects: Read and write" and pull request read.
 # pull_request_target runs from the base branch, so pull requests from forks are
 # added too; this workflow never checks out or runs their code.
 
@@ -44,7 +44,10 @@ jobs:
           client-id: ${{ secrets.GH_ACTIONS_TOKEN_RETRIEVER_PUBLIC_REPO_CLIENT_ID }}
           private-key: ${{ secrets.GH_ACTIONS_TOKEN_RETRIEVER_PUBLIC_REPO_PRIVATE_KEY }}
           owner: ${{ env.PROJECT_OWNER }}
+          repositories: ${{ github.event.repository.name }}
+          # item-add reads the pull request from its URL, so the token needs that too.
           permission-organization-projects: write
+          permission-pull-requests: read
 
       - name: Add the pull request and set its status
         env:
