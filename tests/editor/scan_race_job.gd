@@ -26,6 +26,7 @@ func run() -> Dictionary:
 	await Placer.new().import_files("image", [{"path": path, "role": "main"}])
 	var seconds := (Time.get_ticks_msec() - started) / 1000.0
 	var imported := Placer.is_imported(path)
-	var ok := imported and seconds < 20.0
+	# Without a scan in progress the race is not exercised: that is a failure, not a pass.
+	var ok := was_scanning and imported and seconds < 20.0
 	return {"ok": ok, "checks": 1, "failures": [] if ok else ["import while the editor scans"], "paid_calls": 0,
 			"was_scanning": was_scanning, "imported": imported, "seconds": seconds}

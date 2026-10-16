@@ -49,12 +49,13 @@ func import_files(lane: String, files: Array) -> void:
 	fs.scan()
 	# scan() starts on a later frame and imports new files itself; wait for the results.
 	# The editor drops a scan() made while it is already scanning, and that scan may
-	# have walked past the new folder: ask again whenever it is idle without them.
+	# have walked past the new folder: ask again whenever it is idle (neither scanning
+	# nor importing) without them.
 	var deadline := Time.get_ticks_msec() + 60000
 	var rescan_at := Time.get_ticks_msec() + 1000
 	while Time.get_ticks_msec() < deadline:
 		await tree.process_frame
-		if fs.is_scanning():
+		if fs.is_scanning() or fs.is_importing():
 			continue
 		var done := true
 		for path in paths:
