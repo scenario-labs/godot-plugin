@@ -47,7 +47,7 @@ export default {
         "ui", // editor/dock_ui.gd and the dock's look
         "tests", // test harness only; a test for a product area keeps the product scope
         "tools", // tools/ and the Makefile
-        "docs", // README.md, docs/, llms.txt
+        "docs", // README.md, docs/
         "ci", // .github/workflows, .github/actions, rulesets
         "deps", // pins: Godot, the toolkit, AgentKit, GUT, actions, npm
         "release", // release-please config and manifest, version fields, CHANGELOG plumbing

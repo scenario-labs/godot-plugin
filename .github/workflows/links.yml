@@ -1,14 +1,13 @@
 name: links
 
-# Checks the links in the repository's Markdown and llms.txt: blocking on pull
-# requests that change them, and weekly against link rot, where a failure opens
+# Checks the links in the repository's Markdown: blocking on pull requests
+# that change them, and weekly against link rot, where a failure opens
 # or updates one issue. GitHub can disable schedules after 60 days of inactivity.
 
 on:
   pull_request:
     paths:
       - "**/*.md"
-      - "llms.txt"
       - ".lycheeignore"
       - ".github/workflows/links.yml"
   schedule:
@@ -41,7 +40,7 @@ jobs:
       - name: Select the files to check
         run: |
           mkdir -p "$RUNNER_TEMP/links"
-          git ls-files '*.md' llms.txt | grep -v -E '^(addons/gut/|\.claude/|CHANGELOG\.md$)' > "$RUNNER_TEMP/links/inputs.txt"
+          git ls-files '*.md' | grep -v -E '^(addons/gut/|\.claude/|CHANGELOG\.md$)' > "$RUNNER_TEMP/links/inputs.txt"
           cat "$RUNNER_TEMP/links/inputs.txt"
       - uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
@@ -75,6 +74,6 @@ jobs:
         with:
           title: "Scheduled link check fails"
           summary: >-
-            A link in the Markdown docs or llms.txt is broken. The links-report
+            A link in the Markdown docs is broken. The links-report
             artifact of the run lists each failing URL.
           token: ${{ github.token }}

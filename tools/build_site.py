@@ -9,7 +9,7 @@ build provenance). Without it the page links to the GitHub releases instead.
 The page has the look of the Blender plugin's site: docs/site/template.html with
 docs/site/site.css and the guide search docs/site/handbook-search.js inlined.
 
-Writes index.html, images/, llms.txt and, with a release, download/<zip>,
+Writes index.html, images/ and, with a release, download/<zip>,
 download/SHA256SUMS and download/latest.json.
 """
 import argparse, configparser, hashlib, html, json, pathlib, re, shutil, sys
@@ -90,7 +90,6 @@ def build(output: pathlib.Path, release: pathlib.Path | None) -> None:
 
     docks = sorted((ROOT / "docs/images").glob("dock-*.png"), key=lambda p: [int(n) for n in re.findall(r"\d+", p.stem)])
     shutil.copytree(ROOT / "docs/images", output / "images")
-    shutil.copy2(ROOT / "llms.txt", output / "llms.txt")
     slots = {
         "description": html.escape(plugin["description"].strip('"')),
         "version": html.escape(version),

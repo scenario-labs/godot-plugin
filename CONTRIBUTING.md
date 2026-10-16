@@ -1,15 +1,15 @@
 # Contributing to Scenario for Godot
 
-Thanks for helping. This guide covers what a pull request needs; the commands
-and rules themselves live in [AGENTS.md](AGENTS.md), which humans and coding
-agents both follow, and the code map in [llms.txt](llms.txt).
+Thanks for helping. This guide covers what a pull request needs; the commands,
+rules and code map live in [AGENTS.md](AGENTS.md), which humans and coding
+agents both follow.
 
 ## Before you start
 
 - For anything larger than a small fix, open a change request first
   ([issue chooser](https://github.com/scenario-labs/godot-plugin/issues/new/choose))
   so the approach can be agreed before you write it.
-- Read the spending rules in `llms.txt`: price check first, single-use quotes,
+- Read the spending rules in `AGENTS.md`: price check first, single-use quotes,
   paid calls sent once, `SCENARIO_NO_SPEND=1` honored. Every change keeps them.
 
 ## Set up

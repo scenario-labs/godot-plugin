@@ -1,15 +1,67 @@
 # godot-plugin: agent instructions
 
 Root `AGENTS.md` is the repository rulebook; `.claude/CLAUDE.md` links here.
-Read [llms.txt](llms.txt) first: it maps the code and lists the rules any change
-must keep. [README.md](README.md) describes the plugin for users.
+[README.md](README.md) describes the plugin for users.
 
 ## What this repository is
 
-A Godot 4.7 editor plugin, GDScript only, in `addons/scenario/`. The repository
-root is a small demo project that hosts the addon and its tests. `addons/gut/`
-(GUT) and `addons/agentkit/` (from the toolkit below) serve the tests only: the
-release zip holds `addons/scenario/` alone.
+A Godot 4.7 editor plugin, GDScript only, in `addons/scenario/`. It generates
+images, 3D models, PBR materials, skyboxes and sound effects through the
+Scenario MCP server (`https://mcp.scenario.com/mcp`: JSON-RPC 2.0 over HTTP,
+SSE replies, Basic auth with an API key and secret) and places them in the open
+scene. The repository root is a small demo project that hosts the addon and its
+tests. `addons/gut/` (GUT) and `addons/agentkit/` (from the toolkit below) serve
+the tests only: the release zip holds `addons/scenario/` alone.
+
+## Code map
+
+In `addons/scenario/`:
+
+- `plugin.gd`: the `EditorPlugin`; editor settings `scenario/confirm_above_cu`
+  and `scenario/auto_import`; creates the controller and the dock.
+- `core/` (no editor API, unit-tested):
+  - `mcp_client.gd`: Scenario MCP calls, session init and re-init, error kinds,
+    retry policy (reads only), estimate and submit.
+  - `sse.gd`: parses SSE or JSON replies, keeps the message matching the request id.
+  - `quote.gd`: canonical JSON, fingerprint (model + parameters), single-use
+    quote store.
+  - `job_ledger.gd`: durable job list (`res://.godot/scenario/jobs.json`),
+    states, reconciles Unknown rows with `jobs_list`.
+  - `schema_form.gd`: model schema to form fields, validation, payload;
+    `prompt_name()` finds the prompt field by its flag.
+  - `lanes.gd`: the five lanes, their models, presets and restrictions.
+  - `credentials.gd`: environment, macOS Keychain (`security -i` over stdin),
+    or a 0600 file in the editor config folder.
+  - `files.gd`: output names, roles from asset metadata, file type from bytes.
+  - `errors.gd`: error kinds and user messages.
+- `editor/`:
+  - `controller.gd`: state and actions (price, generate, poll, import,
+    references, recommendations); emits `changed`.
+  - `dock_ui.gd`: the dock, built in code, no logic.
+  - `placer.gd`: import with `.import` sidecars, then placement per lane
+    through `EditorUndoRedoManager`.
+  - `http_transport.gd`: `HTTPRequest` wrapper; uploads only to
+    `*.amazonaws.com`, downloads only from Scenario CDN hosts.
+
+Tests: GUT unit tests in `tests/unit/`, the headless editor test
+`tests/editor/editor_flow_job.gd`, both against the fake backend
+`tests/support/fake_scenario_node.gd`.
+
+## Spending rules
+
+Every change keeps them.
+
+1. A price check is `model_run` with `dry_run: true`; if it returns a job id,
+   automatic checks stop.
+2. Generate needs an unused quote whose fingerprint matches the form now; it
+   consumes it.
+3. A paid call (`model_run` without dry_run, `workflow_run`, uploads) is sent
+   once. A transport failure on it marks the job Unknown, which blocks the same
+   fingerprint until reconciled.
+4. The intent row is written to the ledger before the paid request.
+5. `SCENARIO_NO_SPEND=1` refuses paid calls and uploads before any request;
+   `job_cancel` still goes out.
+6. The secret never goes under `res://`.
 
 ## Commands
 
@@ -42,15 +94,13 @@ scheduled run opens or updates one Task issue per check
 | --- | --- | --- |
 | `contract.yml` | weekly, PRs changing `core/` | `tools/contract_check.py`, 0 CU (test key secrets) |
 | `godot-os.yml` | weekly | tests and zip check on Linux, macOS, Windows, and the newest Godot build |
-| `links.yml` | weekly, docs PRs | links in Markdown (except the generated `CHANGELOG.md`) and `llms.txt` |
+| `links.yml` | weekly, docs PRs | links in Markdown (except the generated `CHANGELOG.md`) |
 | `dock.yml` | UI PRs | dock screenshot as an artifact |
 | `scorecard.yml` | weekly, `main` | OpenSSF Scorecard |
 | `live.yml` | manual | PAID `tools/live_acceptance.py`, `live-paid` environment, reviewer approval and a 200 CU cap per run (no total cap in CI) |
 
 ## Rules
 
-- The spending rules in `llms.txt` hold for every change: price check first,
-  single-use quotes, paid calls sent once, `SCENARIO_NO_SPEND=1` honored.
 - Commit the `.uid` file Godot writes next to every new script. CI fails when
   the import or the tests add or change any file in the checkout.
 - Tests write only to ignored folders (`.agent_out/`, `tests/tmp_output/`, `.godot/`).
