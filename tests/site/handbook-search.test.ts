@@ -1,4 +1,6 @@
 // Run from the repository root: node --test tests/site/handbook-search.test.ts (make site-test)
+// From the Blender plugin (GPL-3.0-or-later there); Scenario Inc., the copyright
+// holder of both, publishes this copy under MIT.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 

@@ -1,5 +1,7 @@
 /* The look of the Blender plugin's site (blender.scenario.com), after
-   mcp.scenario.com. tools/build_site.py inlines this file into template.html. */
+   mcp.scenario.com. Copied from there (GPL-3.0-or-later); Scenario Inc., the
+   copyright holder of both, publishes this copy under MIT. tools/build_site.py
+   inlines this file into template.html. */
 :root{
   --bg:#faf8f7; --fg:#252322; --card:#f5f2f0; --surface:#f0edea; --border:#e8e4e0;
   --primary:#a94e36; --primary-hover:#923f2a; --primary-light:#da9078; --primary-soft:#f6e9e4;

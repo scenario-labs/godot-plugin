@@ -1,7 +1,9 @@
 // @ts-check
 // Search the handbook in the page itself: no service, no library, no index file.
-// From the Blender plugin's site. tools/build_site.py inlines this file into
-// template.html; Node loads it for the unit tests in tests/site/.
+// From the Blender plugin's site (GPL-3.0-or-later there); Scenario Inc., the
+// copyright holder of both, publishes this copy under MIT. tools/build_site.py
+// inlines this file into template.html; Node loads it for the unit tests in
+// tests/site/.
 
 /**
  * @typedef {{id: string, title: string, trail: string, text: string}} Section
