@@ -34,8 +34,8 @@ generated files and imports them into the open project. Relevant reports include
   `SCENARIO_NO_SPEND=1` is set.
 - Unsafe downloads or imports of images, glTF/GLB, audio or other generated
   content, including files written outside `res://scenario/`.
-- The repository's CI and release supply chain: the release zip, its
-  `SHA256SUMS` and build provenance.
+- The repository's CI and release supply chain: how the release zip is
+  built and published, and what it contains.
 
 Platform vulnerabilities involving `app.scenario.com`, `api.cloud.scenario.com`
 or `mcp.scenario.com` use the same private channels above, not this repository's
