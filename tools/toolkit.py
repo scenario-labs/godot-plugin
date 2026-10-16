@@ -9,7 +9,7 @@ Usage: python3 tools/toolkit.py [fetch|check|sync]
 The other tools look for the toolkit in $GODOT_EXPERT_SCRIPTS, then the pinned copy,
 then the skill installed for an agent (`npx skills add scenario-labs/skills`).
 """
-import filecmp, os, pathlib, subprocess, sys
+import os, pathlib, subprocess, sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 REPO = "https://github.com/scenario-labs/skills"
@@ -51,6 +51,7 @@ def fetch() -> int:
     if not (CLONE / ".git").is_dir():
         CLONE.mkdir(parents=True, exist_ok=True)
         git("init", "-q")
+        git("config", "core.autocrlf", "false")  # the toolkit as committed, on Windows too
         git("remote", "add", "origin", REPO)
         git("sparse-checkout", "set", SUBDIR)
     if (PINNED / "gd_run.py").is_file() and git("rev-parse", "HEAD") == REF:
@@ -62,11 +63,15 @@ def fetch() -> int:
     return 0
 
 
+def same_text(a: pathlib.Path, b: pathlib.Path) -> bool:
+    return a.read_bytes().replace(b"\r\n", b"\n") == b.read_bytes().replace(b"\r\n", b"\n")
+
+
 def agentkit_diff() -> list[str]:
     kit, ours = PINNED / "agentkit", ROOT / "addons/agentkit"
     theirs = {p.relative_to(kit).as_posix() for p in kit.rglob("*.gd")}
     mine = {p.relative_to(ours).as_posix() for p in ours.rglob("*.gd")}
-    return sorted((theirs ^ mine) | {n for n in theirs & mine if not filecmp.cmp(kit / n, ours / n, shallow=False)})
+    return sorted((theirs ^ mine) | {n for n in theirs & mine if not same_text(kit / n, ours / n)})
 
 
 def main() -> int:
