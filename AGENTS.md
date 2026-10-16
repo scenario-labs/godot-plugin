@@ -179,6 +179,7 @@ both sites together. `tools/site_proxy/` is a Vercel project in front of Pages
 that counts zip downloads in PostHog (anonymous; `plugin: "godot"`, the Godot
 version and OS from the editor's User-Agent); its Vercel Web Analytics counts
 page visits and Download clicks, without cookies, from the script in
-`docs/site/template.html`. `make site-test` type-checks and
+`docs/site/template.html`, served at a path of ours (`vercel.json`) because
+blocker lists block Vercel's own. `make site-test` type-checks and
 tests the proxy and the search. The page content comes from the guide: change
 the guide, not the site.

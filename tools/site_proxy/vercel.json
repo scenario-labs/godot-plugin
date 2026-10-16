@@ -1,4 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rewrites": [{ "source": "/(.*)", "destination": "https://scenario-labs.github.io/godot-plugin/$1" }]
+  "rewrites": [
+    { "source": "/handbook/page.js", "destination": "/_vercel/insights/script.js" },
+    { "source": "/(.*)", "destination": "https://scenario-labs.github.io/godot-plugin/$1" }
+  ]
 }
