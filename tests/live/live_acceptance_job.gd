@@ -73,6 +73,7 @@ func run() -> Dictionary:
 		if spent + controller.price_cu > budget:
 			record["note"] += " skipped: over budget"
 			rows.append(record)
+			ok = false  # a requested lane that did not run leaves the acceptance incomplete
 			continue
 		var sent: Dictionary = await controller.generate(true)
 		var local_id: String = sent.get("local_id", "")

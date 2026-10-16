@@ -43,9 +43,14 @@ jobs:
           display: "true"
       - run: make toolkit
       - name: Render the dock
-        run: xvfb-run -a python3 tools/capture_dock.py
+        id: render
+        run: |
+          xvfb-run -a python3 tools/capture_dock.py
+          echo "image=docs/images/dock-$(cd tools && python3 -c 'from build_zip import version; print(version())').png" >> "$GITHUB_OUTPUT"
+      # Only this run's render, not the screenshot committed for an earlier version.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dock-capture
-          path: docs/images/dock-*.png
+          path: ${{ steps.render.outputs.image }}
+          if-no-files-found: error
           retention-days: 14

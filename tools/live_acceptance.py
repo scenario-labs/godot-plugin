@@ -18,6 +18,7 @@ import gd_run, gd_review  # noqa: E402
 
 LEDGER = ROOT / "tests/live/LEDGER.md"
 CAP_CU = 1500.0  # total budget for this plugin's live tests (spec, section 6)
+LANES = ("image", "model3d", "material", "skybox", "sound")  # the lanes of live_acceptance_job.gd
 
 
 def spent_so_far() -> float:
@@ -39,6 +40,10 @@ def main() -> int:
     parser.add_argument("--budget", type=float, default=200.0)
     parser.add_argument("--lanes", default="", help="comma-separated lanes, e.g. model3d,sound (default: all)")
     args = parser.parse_args()
+    wanted = args.lanes.split(",") if args.lanes else []
+    if any(lane not in LANES for lane in wanted):
+        print(f"--lanes takes a comma-separated subset of {', '.join(LANES)}, got {args.lanes!r}.")
+        return 2
     if not (os.environ.get("SCENARIO_API_KEY") and os.environ.get("SCENARIO_API_SECRET")):
         print("Set SCENARIO_API_KEY and SCENARIO_API_SECRET.")
         return 2
