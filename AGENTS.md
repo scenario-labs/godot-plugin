@@ -93,7 +93,7 @@ scheduled run opens or updates one Task issue per check
 | Workflow | When | What |
 | --- | --- | --- |
 | `contract.yml` | weekly, PRs changing `core/` | `tools/contract_check.py`, 0 CU (test key secrets) |
-| `godot-os.yml` | weekly | tests and zip check on Linux, macOS, Windows, and the newest Godot build |
+| `godot-os.yml` | weekly | tests and zip check on Linux, macOS, Windows, the .NET build (Linux), and the newest Godot build |
 | `links.yml` | weekly, docs PRs | links in Markdown (except the generated `CHANGELOG.md`) |
 | `dock.yml` | UI PRs | dock screenshot as an artifact |
 | `scorecard.yml` | weekly, `main` | OpenSSF Scorecard |

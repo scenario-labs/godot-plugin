@@ -1,9 +1,10 @@
 name: godot-os
 
 # Informational, never a required check: the tests and the zip install check on
-# Linux, macOS and Windows with the pinned Godot, and on Linux with the newest
-# Godot build (stable, beta or dev) to see engine changes coming. Pull requests
-# run it only when they change this workflow or the Godot setup.
+# Linux, macOS and Windows with the pinned Godot, on Linux with its .NET build
+# (the plugin is GDScript only, so it must load there too), and on Linux with
+# the newest Godot build (stable, beta or dev) to see engine changes coming.
+# Pull requests run it only when they change this workflow or the Godot setup.
 # GitHub can disable schedules after 60 days of repository inactivity.
 
 on:
@@ -25,7 +26,7 @@ concurrency:
 
 jobs:
   test:
-    name: godot ${{ matrix.godot }} (${{ matrix.os }})
+    name: godot ${{ matrix.godot }}${{ matrix.flavor == 'dotnet' && ' .NET' || '' }} (${{ matrix.os }})
     if: github.repository == 'scenario-labs/godot-plugin'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -34,9 +35,16 @@ jobs:
       matrix:
         os: [ubuntu-24.04, macos-latest, windows-latest]
         godot: [4.7.2-stable]
+        # A matrix value, so the dotnet entry below adds a leg instead of
+        # changing the standard Linux one.
+        flavor: [standard]
         include:
           - os: ubuntu-24.04
             godot: newest
+            flavor: standard
+          - os: ubuntu-24.04
+            godot: 4.7.2-stable
+            flavor: dotnet
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -62,6 +70,7 @@ jobs:
       - uses: ./.github/actions/setup-godot
         with:
           version: ${{ steps.release.outputs.version }}
+          flavor: ${{ matrix.flavor }}
       - name: Toolkit, tests and the zip install check
         shell: bash
         run: |
@@ -73,7 +82,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
-          name: godot-logs-${{ matrix.os }}-${{ steps.release.outputs.version }}
+          name: godot-logs-${{ matrix.os }}-${{ steps.release.outputs.version }}-${{ matrix.flavor }}
           path: .agent_out/logs/
           if-no-files-found: ignore
           retention-days: 14
