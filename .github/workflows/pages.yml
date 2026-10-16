@@ -1,0 +1,78 @@
+name: pages
+
+# Publishes the website to GitHub Pages: docs/USER_GUIDE.md as one page, and
+# the latest release zip once it has a SHA256SUMS and build provenance from
+# release-please.yml, both verified here. Until then the page links to the
+# GitHub releases. Repository settings must use "GitHub Actions" as the Pages source.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "llms.txt"
+      - "addons/scenario/plugin.cfg"
+      - "tools/build_site.py"
+      - ".github/workflows/pages.yml"
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions: {}
+
+# Hold the lock through discovery, build and deployment, so the newest run wins.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'scenario-labs/godot-plugin'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    permissions:
+      contents: read
+      attestations: read
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - name: Download and verify the latest release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/release"
+          mkdir -p "$dir"
+          tag="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
+          assets="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          if ! grep -qx SHA256SUMS <<<"$assets" || ! grep -qE '^scenario-godot-plugin-[0-9]+\.[0-9]+\.[0-9]+\.zip$' <<<"$assets"; then
+            echo "::notice::$tag has no checksummed zip: the page links to the GitHub releases instead"
+            exit 0
+          fi
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir "$dir" --pattern SHA256SUMS --pattern 'scenario-godot-plugin-*.zip'
+          (cd "$dir" && sha256sum -c SHA256SUMS)
+          # Built by this repository's release workflow from the tagged commit.
+          gh attestation verify "$dir"/scenario-godot-plugin-*.zip --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release-please.yml"
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+      - name: Build the site
+        env:
+          RELEASE_DIR: ${{ steps.release.outputs.dir }}
+        run: |
+          args=(--output "$RUNNER_TEMP/site")
+          if [ -n "$RELEASE_DIR" ]; then args+=(--release "$RELEASE_DIR"); fi
+          uv run --no-project --with markdown==3.10.3 python tools/build_site.py "${args[@]}"
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: ${{ runner.temp }}/site
+      - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+        id: deploy

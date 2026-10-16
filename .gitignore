@@ -15,5 +15,6 @@ __pycache__/
 
 # Pinned scenario-godot-expert toolkit (make toolkit)
 .toolkit/
-# Commit lint tooling (pnpm install)
+# Node tooling (pnpm install): commitlint, TypeScript
 node_modules/
+.no-types/

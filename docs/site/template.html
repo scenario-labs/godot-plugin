@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scenario for Godot</title>
+<meta name="description" content="{{ description }}">
+<link rel="alternate" type="text/plain" href="llms.txt" title="llms.txt">
+<style>
+:root {
+  --bg: #ffffff; --fg: #1c1f24; --muted: #5b6370; --line: #e3e6ea; --panel: #f5f7f9;
+  --accent: #2f6ea6; --accent-fg: #ffffff; --code: #eef1f4;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15181c; --fg: #e6e8eb; --muted: #9aa3ae; --line: #2a2f36; --panel: #1c2026;
+    --accent: #6aa9e0; --accent-fg: #0d1117; --code: #232830;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+a { color: var(--accent); }
+code { overflow-wrap: anywhere; background: var(--code); border-radius: 4px; padding: 0.1em 0.35em; font: 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+header.bar { border-bottom: 1px solid var(--line); }
+header.bar div { max-width: 1080px; margin: 0 auto; padding: 14px 16px; display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; }
+header.bar strong { margin-right: auto; }
+header.bar a { color: var(--muted); text-decoration: none; }
+header.bar a:hover { color: var(--fg); }
+.hero { max-width: 1080px; margin: 0 auto; padding: 48px 16px 24px; display: grid; gap: 32px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; }
+.hero h1 { font-size: 2.4rem; line-height: 1.15; margin: 0 0 12px; }
+.hero p.lead { font-size: 1.15rem; color: var(--muted); margin: 0 0 24px; }
+.hero img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; }
+.download { display: inline-block; background: var(--accent); color: var(--accent-fg); padding: 12px 20px; border-radius: 6px; font-weight: 600; text-decoration: none; }
+.meta { color: var(--muted); font-size: 0.9rem; margin-top: 12px; }
+.install { max-width: 1080px; margin: 0 auto; padding: 8px 16px 32px; }
+.install ol { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 16px 16px 40px; margin: 0; }
+.guide { max-width: 1080px; margin: 0 auto; padding: 0 16px 64px; display: grid; gap: 40px; grid-template-columns: 220px minmax(0, 1fr); }
+.guide nav { position: sticky; top: 16px; align-self: start; font-size: 0.92rem; }
+.guide nav ul { list-style: none; padding: 0; margin: 0; }
+.guide nav li { margin: 6px 0; }
+.guide nav a { color: var(--muted); text-decoration: none; }
+.guide nav a:hover { color: var(--fg); }
+.guide article h2 { margin-top: 2.2em; padding-top: 0.4em; border-top: 1px solid var(--line); }
+.guide article h2:first-child { margin-top: 0; }
+table { border-collapse: collapse; width: 100%; display: block; overflow-x: auto; font-size: 0.94rem; }
+th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+th { background: var(--panel); }
+footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 0.9rem; }
+footer div { max-width: 1080px; margin: 0 auto; padding: 20px 16px; }
+@media (max-width: 800px) {
+  .hero { grid-template-columns: minmax(0, 1fr); padding-top: 32px; }
+  .hero h1 { font-size: 1.9rem; }
+  .guide { grid-template-columns: minmax(0, 1fr); }
+  .guide nav { position: static; }
+  header.bar strong { flex-basis: 100%; }
+}
+</style>
+</head>
+<body>
+<header class="bar"><div>
+  <strong>Scenario for Godot</strong>
+  <a href="#guide">Guide</a>
+  <a href="{{ repo }}/blob/main/CHANGELOG.md">Changelog</a>
+  <a href="{{ repo }}">GitHub</a>
+</div></header>
+<main>
+<section class="hero">
+  <div>
+    <h1>Scenario for Godot</h1>
+    <p class="lead">{{ description }}</p>
+    <a class="download" href="{{ download }}">Download {{ version }}</a>
+    <p class="meta">Godot 4.7 editor plugin · GDScript only · MIT · {{ checksum }}</p>
+  </div>
+  <img src="{{ dock }}" alt="The Scenario dock in the Godot editor: the image lane after a finished job, and the material lane with its settings open" width="1200" height="800">
+</section>
+<section class="install">
+  <h2>Install</h2>
+  <ol>
+    <li>Download the zip and extract it at the root of your Godot project, so that <code>addons/scenario/</code> sits next to <code>project.godot</code>.</li>
+    <li>Enable the plugin in Project &gt; Project Settings &gt; Plugins.</li>
+    <li>Paste a Scenario API key and secret into the <strong>Scenario</strong> dock, then press <strong>Connect</strong>.</li>
+  </ol>
+</section>
+<section class="guide" id="guide">
+  <nav aria-label="User guide">{{ toc }}</nav>
+  <article>{{ content }}</article>
+</section>
+</main>
+<footer><div>Scenario for Godot {{ version }} · <a href="{{ repo }}">Source</a> · <a href="{{ repo }}/issues/new/choose">Report an issue</a> · <a href="https://www.scenario.com/">scenario.com</a></div></footer>
+</body>
+</html>
