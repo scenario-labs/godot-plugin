@@ -62,6 +62,8 @@ scheduled run opens or updates one issue per check
 - No em dashes, in code, docs, commit messages and PR titles.
 - This repository is public: no credentials, session IDs, personal paths,
   account or project records, or spend anecdotes in code, docs, commits or PRs.
+  The exception is `tests/live/LEDGER.md`: `tools/live_acceptance.py` records
+  each authorized paid run there (job ID, CU) and reads it back for the cap.
 - Keep doc edits in a feature PR to the prose the change makes wrong, in the
   fewest words that state current behavior. Test runs, platforms and review
   notes belong in the PR body, not in docs.
