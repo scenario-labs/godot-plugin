@@ -36,7 +36,8 @@
 - `python3 tools/contract_check.py`: free live check of every listed model (schema, price), recommendations and the no-spend switch.
 - `python3 tools/live_acceptance.py`: paid, one run per lane, ledger in `tests/live/LEDGER.md`.
 - `make zip`: release zip and a clean install into a blank project.
-- Test runners use the godot-expert toolkit (`gd_run`); Godot 4.7 must be on the PATH as `godot`.
+- Test runners use the scenario-godot-expert toolkit (`gd_run`) pinned in `tools/toolkit.py` (`make toolkit`); Godot 4.7 comes from `$GODOT` or `godot` on the PATH.
+- `make lint`: gdlint (`gdlintrc`) on addons/scenario and tests, ruff (`ruff.toml`) on tools. CI: `.github/workflows/ci.yml`.
 
 ## Docs
 

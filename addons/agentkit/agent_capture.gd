@@ -1,5 +1,5 @@
 extends RefCounted
-## AgentKit capture (godot-expert 0.1, Godot 4.7.2): render a scene to PNG in a WINDOWED run.
+## AgentKit capture (scenario-godot-expert 0.1, Godot 4.7.2): render a scene to PNG in a WINDOWED run.
 ##
 ## Headless runs draw nothing (Engine.get_frames_drawn() stays 0, verified 4.7.2), and
 ## --write-movie crashes under --headless, so every capture needs a window. gd_run opens a tiny one
@@ -116,7 +116,7 @@ func make_viewport(job, size: Vector2i, transparent: bool) -> SubViewport:
 
 
 ## Logical canvas, drawn area (screen), black-bar margin and scale for a window of `window` pixels.
-## Port of godot-ui's ui_stretch.compute(), which matched the engine on 224 cases (logical size,
+## Port of scenario-godot-ui's ui_stretch.compute(), which matched the engine on 224 cases (logical size,
 ## origin, scale; tests/code/godot-ui); the lead re-checks it against the root window (L21).
 ## Returns {logical: Vector2, screen: Vector2, margin: Vector2, scale, scale_xy: Vector2, render: Vector2i,
 ## factor, mode, aspect}.

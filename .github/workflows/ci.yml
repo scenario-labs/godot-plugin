@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # The Godot the plugin is tested on. Bump both together: the SHA-512 is the
+  # linux.x86_64.zip line of the release's SHA512-SUMS.txt.
+  GODOT_RELEASE: 4.7.2-stable
+  GODOT_SHA512: 9aa00f7a605200940bce3027a567b782f49bd8e940dd06ae9e987bd65aee1b1467edd56ed84fcdcbdd44354bf613bdbb4e5d2913e925850368e150c59ed54c65
+
+jobs:
+  godot:
+    name: godot
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-godot
+        with:
+          version: ${{ env.GODOT_RELEASE }}
+          sha512: ${{ env.GODOT_SHA512 }}
+      - name: Fetch the pinned toolkit; addons/agentkit must match it
+        run: make toolkit
+      - name: Unit tests and the headless editor test (fake backend, 0 CU)
+        run: make test
+      - name: Release zip, then a clean install into a blank project
+        run: make zip
+      # Godot writes a .uid or .import file next to any new script or asset it
+      # imports: one missing from the commit shows up here, as does test output
+      # written outside the ignored folders.
+      - name: The import and the tests leave the checkout unchanged
+        run: |
+          changed="$(git status --porcelain --untracked-files=all)"
+          if [ -n "$changed" ]; then
+            echo "$changed"
+            echo "::error::Commit the files Godot generated, or write test output to an ignored folder"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: godot-logs
+          path: .agent_out/logs/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  lint:
+    name: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - name: gdlint on addons/scenario and tests, ruff on tools
+        run: make lint
+
+  agents:
+    name: agents
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - name: Shared agent skills are valid and linked for Claude Code
+        run: make agents
+
+  # The one check the main ruleset requires from this workflow, so jobs can be
+  # added or renamed without touching the ruleset. Do not rename it.
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [godot, lint, agents]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every CI job to succeed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for result in $RESULTS; do
+            if [ "$result" != success ]; then
+              echo "::error::A CI job did not succeed: $RESULTS"
+              exit 1
+            fi
+          done

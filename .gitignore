@@ -12,3 +12,8 @@ dist/
 # Editor test output
 tests/tmp_output/
 __pycache__/
+
+# Pinned scenario-godot-expert toolkit (make toolkit)
+.toolkit/
+# Commit lint tooling (pnpm install)
+node_modules/

@@ -1,5 +1,5 @@
 extends SceneTree
-## AgentKit job base (godot-expert 0.1, Godot 4.7.2).
+## AgentKit job base (scenario-godot-expert 0.1, Godot 4.7.2).
 ##
 ## Run through gd_run.run_script(), or by hand:
 ##   godot --headless --path <project> --script res://my_job.gd -- --agent-args '{"n": 3}'

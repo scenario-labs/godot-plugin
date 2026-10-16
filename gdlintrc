@@ -1,0 +1,8 @@
+# gdlint (gdtoolkit 4) for addons/scenario and tests/; see `make lint`.
+# Off: the house style keeps long lines, many returns in dispatchers and
+# large test suites. Every other default rule applies.
+disable:
+- max-line-length
+- max-returns
+- max-public-methods
+- class-definitions-order

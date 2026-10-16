@@ -2,13 +2,14 @@
 """Run the plugin's GUT suites headless and print a one-line verdict.
 
 Usage: python3 tools/run_tests.py [unit|editor|all]
-Uses the godot-expert toolkit (gd_run) so the log is scanned for parse and
+Uses the scenario-godot-expert toolkit (gd_run, see toolkit.py) so the log is scanned for parse and
 script errors as well as the GUT totals. Exit code 0 only when every suite passes.
 """
-import os, pathlib, sys
+import pathlib, sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-sys.path.insert(0, os.environ.get("GODOT_EXPERT_SCRIPTS", str(pathlib.Path.home() / ".claude/skills/godot-expert/scripts")))
+import toolkit  # noqa: E402
+toolkit.use()
 import gd_run  # noqa: E402
 
 SUITES = {"unit": "res://tests/unit", "editor": "res://tests/editor"}
