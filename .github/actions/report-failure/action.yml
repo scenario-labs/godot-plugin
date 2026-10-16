@@ -1,5 +1,5 @@
 name: report-failure
-description: Open an issue for a failed scheduled check, or comment on the open one with the same title
+description: Open a Task issue for a failed scheduled check, or comment on the open one with the same title
 inputs:
   title:
     description: Exact issue title; one open issue per title collects every failure
@@ -29,5 +29,7 @@ runs:
           gh issue comment "$number" --body "$body"
           echo "Commented on #$number"
         else
-          gh issue create --title "$TITLE" --body "$body"
+          # The REST call sets the issue type whatever gh version the runner has.
+          gh api "repos/$GH_REPO/issues" -f title="$TITLE" -f body="$body" -f type=Task \
+            --jq '"Opened #\(.number)"'
         fi
