@@ -1,6 +1,6 @@
 # Scenario for Godot: user guide
 
-Version 0.2.0. For installation see the [README](../README.md). <!-- x-release-please-version -->
+Version 0.2.1. For installation see the [README](../README.md). <!-- x-release-please-version -->
 
 ## 1. Connect
 
