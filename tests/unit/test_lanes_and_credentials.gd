@@ -50,9 +50,9 @@ func test_file_store_round_trip_and_permissions() -> void:
 	var loaded := store.load_credentials()
 	assert_eq(loaded, {"api_key": "api_abc", "api_secret": "sec_123", "source": "file"})
 	if OS.get_name() != "Windows":
-		var output: Array = []
-		OS.execute("/usr/bin/stat", ["-f", "%Lp", ProjectSettings.globalize_path(config_path)], output)
-		assert_eq(str(output[0]).strip_edges(), "600")
+		# The permission bits (0777 mask): only the owner reads and writes the file.
+		var mode := FileAccess.get_unix_permissions(ProjectSettings.globalize_path(config_path)) & 0x1FF
+		assert_eq(mode, FileAccess.UNIX_READ_OWNER | FileAccess.UNIX_WRITE_OWNER)
 
 
 func test_environment_wins() -> void:
