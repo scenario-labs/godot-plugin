@@ -3,90 +3,118 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Scenario for Godot</title>
+<title>Scenario for Godot: user guide</title>
 <meta name="description" content="{{ description }}">
 <link rel="alternate" type="text/plain" href="llms.txt" title="llms.txt">
-<style>
-:root {
-  --bg: #ffffff; --fg: #1c1f24; --muted: #5b6370; --line: #e3e6ea; --panel: #f5f7f9;
-  --accent: #2f6ea6; --accent-fg: #ffffff; --code: #eef1f4;
-  color-scheme: light dark;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #15181c; --fg: #e6e8eb; --muted: #9aa3ae; --line: #2a2f36; --panel: #1c2026;
-    --accent: #6aa9e0; --accent-fg: #0d1117; --code: #232830;
-  }
-}
-* { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-a { color: var(--accent); }
-code { overflow-wrap: anywhere; background: var(--code); border-radius: 4px; padding: 0.1em 0.35em; font: 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-header.bar { border-bottom: 1px solid var(--line); }
-header.bar div { max-width: 1080px; margin: 0 auto; padding: 14px 16px; display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; }
-header.bar strong { margin-right: auto; }
-header.bar a { color: var(--muted); text-decoration: none; }
-header.bar a:hover { color: var(--fg); }
-.hero { max-width: 1080px; margin: 0 auto; padding: 48px 16px 24px; display: grid; gap: 32px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; }
-.hero h1 { font-size: 2.4rem; line-height: 1.15; margin: 0 0 12px; }
-.hero p.lead { font-size: 1.15rem; color: var(--muted); margin: 0 0 24px; }
-.hero img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; }
-.download { display: inline-block; background: var(--accent); color: var(--accent-fg); padding: 12px 20px; border-radius: 6px; font-weight: 600; text-decoration: none; }
-.meta { color: var(--muted); font-size: 0.9rem; margin-top: 12px; }
-.install { max-width: 1080px; margin: 0 auto; padding: 8px 16px 32px; }
-.install ol { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 16px 16px 40px; margin: 0; }
-.guide { max-width: 1080px; margin: 0 auto; padding: 0 16px 64px; display: grid; gap: 40px; grid-template-columns: 220px minmax(0, 1fr); }
-.guide nav { position: sticky; top: 16px; align-self: start; font-size: 0.92rem; }
-.guide nav ul { list-style: none; padding: 0; margin: 0; }
-.guide nav li { margin: 6px 0; }
-.guide nav a { color: var(--muted); text-decoration: none; }
-.guide nav a:hover { color: var(--fg); }
-.guide article h2 { margin-top: 2.2em; padding-top: 0.4em; border-top: 1px solid var(--line); }
-.guide article h2:first-child { margin-top: 0; }
-table { border-collapse: collapse; width: 100%; display: block; overflow-x: auto; font-size: 0.94rem; }
-th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
-th { background: var(--panel); }
-footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 0.9rem; }
-footer div { max-width: 1080px; margin: 0 auto; padding: 20px 16px; }
-@media (max-width: 800px) {
-  .hero { grid-template-columns: minmax(0, 1fr); padding-top: 32px; }
-  .hero h1 { font-size: 1.9rem; }
-  .guide { grid-template-columns: minmax(0, 1fr); }
-  .guide nav { position: static; }
-  header.bar strong { flex-basis: 100%; }
-}
-</style>
+<link rel="icon" href="images/favicon-16x16.png" sizes="16x16" type="image/png" media="(prefers-color-scheme: light)">
+<link rel="icon" href="images/favicon-dark-16x16.png" sizes="16x16" type="image/png" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="images/favicon-32x32.png" sizes="32x32" type="image/png" media="(prefers-color-scheme: light)">
+<link rel="icon" href="images/favicon-dark-32x32.png" sizes="32x32" type="image/png" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="images/favicon-196x196.png" sizes="196x196" type="image/png" media="(prefers-color-scheme: light)">
+<link rel="icon" href="images/favicon-dark-196x196.png" sizes="196x196" type="image/png" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="images/apple-touch-icon.png" sizes="152x152">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400..700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>{{ style }}</style>
 </head>
 <body>
-<header class="bar"><div>
-  <strong>Scenario for Godot</strong>
-  <a href="#guide">Guide</a>
-  <a href="{{ repo }}/blob/main/CHANGELOG.md">Changelog</a>
-  <a href="{{ repo }}">GitHub</a>
-</div></header>
-<main>
-<section class="hero">
-  <div>
-    <h1>Scenario for Godot</h1>
-    <p class="lead">{{ description }}</p>
-    <a class="download" href="{{ download }}">Download {{ version }}</a>
-    <p class="meta">Godot 4.7 editor plugin · GDScript only · MIT · {{ checksum }}</p>
+<a class="skip" href="#guide">Skip to guide</a>
+<header class="site-header">
+  <div class="bar">
+    <a class="brand" href="./">
+      <img src="images/scenario-wordmark.svg" alt="Scenario" width="112" height="28">
+      <span class="chip product">Godot</span>
+      <span class="chip version">{{ version }}</span>
+    </a>
+    <div class="search" role="search">
+      <label class="visually-hidden" for="search-input">Search the guide</label>
+      <input id="search-input" type="search" placeholder="Search the guide" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list">
+      <kbd class="search-key" aria-hidden="true">/</kbd>
+      <div class="search-panel" id="search-panel" hidden>
+        <ul id="search-results" role="listbox" aria-label="Matching sections"></ul>
+        <p class="search-status" id="search-status" aria-live="polite"></p>
+      </div>
+    </div>
+    <nav class="site-nav" aria-label="Site">
+      <a class="optional" href="#install">Install</a>
+      <a href="#download">Download</a>
+      <a class="optional" href="{{ repo }}/blob/main/CHANGELOG.md">Changelog</a>
+      <a class="optional" href="{{ repo }}">GitHub</a>
+      <a class="button" href="https://app.scenario.com/">App Login</a>
+    </nav>
   </div>
-  <img src="{{ dock }}" alt="The Scenario dock in the Godot editor: the image lane after a finished job, and the material lane with its settings open" width="1200" height="800">
+</header>
+<div class="page">
+<nav class="toc" aria-label="Contents">
+  <details class="contents" open>
+  <summary class="eyebrow">Contents</summary>
+  <ul>
+  <li><a href="#install">Install</a></li>
+  {{ toc }}
+  </ul>
+  </details>
+</nav>
+<main id="guide">
+<p class="eyebrow">Scenario for Godot · Handbook</p>
+<article class="handbook">
+<h1>Scenario for Godot: <em>user guide</em></h1>
+<p>{{ description }}</p>
+<section class="panel" aria-labelledby="download">
+  <p class="eyebrow" id="download">Latest release</p>
+  <a class="button" href="{{ download }}">Download {{ version }}</a>
+  <dl>
+    <dt>Godot</dt><dd>4.7 editor plugin, GDScript only</dd>
+    <dt>License</dt><dd>MIT</dd>
+    <dt>SHA-256</dt><dd class="hash">{{ checksum }}</dd>
+  </dl>
 </section>
-<section class="install">
-  <h2>Install</h2>
-  <ol>
-    <li>Download the zip and extract it at the root of your Godot project, so that <code>addons/scenario/</code> sits next to <code>project.godot</code>.</li>
-    <li>Enable the plugin in Project &gt; Project Settings &gt; Plugins.</li>
-    <li>Paste a Scenario API key and secret into the <strong>Scenario</strong> dock, then press <strong>Connect</strong>.</li>
-  </ol>
-</section>
-<section class="guide" id="guide">
-  <nav aria-label="User guide">{{ toc }}</nav>
-  <article>{{ content }}</article>
-</section>
+<img src="{{ dock }}" alt="The Scenario dock in the Godot editor: the image lane after a finished job, and the material lane with its settings open" width="1200" height="800">
+<h2 id="install">Install</h2>
+<ol>
+  <li>Download the zip and extract it at the root of your Godot project, so that <code>addons/scenario/</code> sits next to <code>project.godot</code>.</li>
+  <li>Enable the plugin in Project &gt; Project Settings &gt; Plugins.</li>
+  <li>Paste a Scenario API key and secret into the <strong>Scenario</strong> dock, then press <strong>Connect</strong>.</li>
+</ol>
+{{ content }}
+</article>
 </main>
-<footer><div>Scenario for Godot {{ version }} · <a href="{{ repo }}">Source</a> · <a href="{{ repo }}/issues/new/choose">Report an issue</a> · <a href="https://www.scenario.com/">scenario.com</a></div></footer>
+</div>
+<footer class="site-footer">
+  <div class="bar">
+    <img src="images/scenario-wordmark.svg" alt="Scenario" width="92" height="23">
+    <span>Scenario for Godot {{ version }}</span>
+    <a href="{{ repo }}">Source on GitHub</a>
+    <a href="{{ repo }}/blob/main/CHANGELOG.md">Release notes</a>
+    <a href="{{ repo }}/issues/new/choose">Report an issue</a>
+    <a href="{{ repo }}/blob/main/docs/USER_GUIDE.md">Markdown guide</a>
+    <span class="legal">MIT · Scenario is a trademark of Scenario Inc.</span>
+  </div>
+</footer>
+<script>
+(() => {
+  const contents = document.querySelector("details.contents");
+  const narrow = window.matchMedia("(max-width: 960px)");
+  const resize = () => { contents.open = !narrow.matches; };
+  resize();
+  narrow.addEventListener("change", resize);
+  contents.addEventListener("click", event => {
+    if (!narrow.matches && event.target.closest("summary")) event.preventDefault();
+    if (narrow.matches && event.target.closest("a[href^='#']")) contents.open = false;
+  });
+})();
+document.addEventListener("click", async event => {
+  const button = event.target.closest("button[data-copy]");
+  if (!button) return;
+  try {
+    await navigator.clipboard.writeText(button.dataset.copy);
+    button.textContent = "Copied";
+  } catch {
+    button.textContent = "Select and copy";
+  }
+  setTimeout(() => { button.textContent = "Copy"; }, 2000);
+});
+</script>
+<script>{{ search }}</script>
 </body>
 </html>
