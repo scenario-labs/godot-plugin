@@ -12,6 +12,10 @@ inputs:
     description: On Linux, also install Xvfb and a software Vulkan driver for windowed runs such as captures
     required: false
     default: "false"
+  flavor:
+    description: standard, or dotnet for the .NET (mono) editor, Linux only
+    required: false
+    default: standard
 outputs:
   godot:
     description: Path of the Godot editor binary
@@ -22,20 +26,22 @@ runs:
     - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/godot-cache
-        key: godot-${{ runner.os }}-${{ inputs.version }}-${{ inputs.sha512 }}
+        key: godot-${{ runner.os }}-${{ inputs.version }}-${{ inputs.flavor }}-${{ inputs.sha512 }}
     - id: install
       shell: bash
       env:
         RELEASE: ${{ inputs.version }}
         SHA512: ${{ inputs.sha512 }}
         WITH_DISPLAY: ${{ inputs.display }}
+        FLAVOR: ${{ inputs.flavor }}
       run: |
         set -euo pipefail
-        case "$RUNNER_OS" in
-          Linux) asset="Godot_v${RELEASE}_linux.x86_64.zip" ;;
-          macOS) asset="Godot_v${RELEASE}_macos.universal.zip" ;;
-          Windows) asset="Godot_v${RELEASE}_win64.exe.zip" ;;
-          *) echo "::error::No Godot build for $RUNNER_OS"; exit 1 ;;
+        case "$FLAVOR/$RUNNER_OS" in
+          standard/Linux) asset="Godot_v${RELEASE}_linux.x86_64.zip" ;;
+          standard/macOS) asset="Godot_v${RELEASE}_macos.universal.zip" ;;
+          standard/Windows) asset="Godot_v${RELEASE}_win64.exe.zip" ;;
+          dotnet/Linux) asset="Godot_v${RELEASE}_mono_linux_x86_64.zip" ;;
+          *) echo "::error::No $FLAVOR Godot build for $RUNNER_OS"; exit 1 ;;
         esac
         base="https://github.com/godotengine/godot-builds/releases/download/${RELEASE}"
         cache="$HOME/godot-cache"
@@ -58,7 +64,12 @@ runs:
         case "$RUNNER_OS" in
           Linux)
             unzip -q "$cache/$asset" -d "$dir"
-            ln -s "$dir/Godot_v${RELEASE}_linux.x86_64" "$dir/godot"
+            if [ "$FLAVOR" = dotnet ]; then
+              # The binary stays in its folder, next to the GodotSharp assemblies it loads.
+              ln -s "$dir/Godot_v${RELEASE}_mono_linux_x86_64/Godot_v${RELEASE}_mono_linux.x86_64" "$dir/godot"
+            else
+              ln -s "$dir/Godot_v${RELEASE}_linux.x86_64" "$dir/godot"
+            fi
             godot="$dir/godot"
             console="$godot"
             if [ "$WITH_DISPLAY" = true ]; then
