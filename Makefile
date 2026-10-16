@@ -15,11 +15,15 @@ editor:
 zip:
 	python3 tools/build_zip.py --verify
 
-# The source archive (GitHub downloads, the Godot Asset Library) holds addons/scenario alone: see .gitattributes.
+# The source archive (GitHub downloads, the Godot Asset Library) holds exactly the committed files of
+# addons/scenario, plugin.cfg included: see .gitattributes.
 archive:
-	@extra="$$(git archive HEAD | tar -t | grep -v -E '^addons/(scenario/.*)?$$')"; \
-	if [ -n "$$extra" ]; then echo "In the source archive but not in addons/scenario:"; echo "$$extra"; exit 1; fi; \
-	echo "source archive: addons/scenario only"
+	@t="$$(mktemp -d)"; \
+	git ls-tree -r --name-only HEAD addons/scenario | sort > "$$t/want"; \
+	git archive HEAD | tar -t | grep -v '/$$' | sort > "$$t/got"; \
+	if grep -qx addons/scenario/plugin.cfg "$$t/got" && diff -u "$$t/want" "$$t/got"; then \
+		echo "source archive: the $$(wc -l < "$$t/got" | tr -d ' ') files of addons/scenario"; rm -rf "$$t"; \
+	else echo "The source archive must hold exactly the committed files of addons/scenario (- missing, + extra)."; rm -rf "$$t"; exit 1; fi
 
 # Dock screenshot for the docs (fake backend, 0 CU; opens a small window).
 dock:
