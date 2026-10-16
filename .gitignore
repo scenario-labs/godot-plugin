@@ -8,6 +8,8 @@
 dist/
 # macOS
 .DS_Store
+# Local environment for tests
+.env.local
 
 # Editor test output
 tests/tmp_output/
