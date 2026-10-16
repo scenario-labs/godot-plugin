@@ -40,7 +40,7 @@ scheduled run opens or updates one issue per check
 
 | Workflow | When | What |
 | --- | --- | --- |
-| `contract.yml` | weekly | `tools/contract_check.py`, 0 CU (test key secrets) |
+| `contract.yml` | weekly, PRs changing `core/` | `tools/contract_check.py`, 0 CU (test key secrets) |
 | `godot-os.yml` | weekly | tests and zip check on Linux, macOS, Windows, and the newest Godot build |
 | `links.yml` | weekly, docs PRs | links in Markdown and `llms.txt` |
 | `dock.yml` | UI PRs | dock screenshot as an artifact |

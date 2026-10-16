@@ -3,21 +3,28 @@ name: contract
 # Weekly free check that Scenario still answers the way the plugin expects:
 # every model in lanes.gd loads and prices, recommendations come back, and
 # Generate is refused with SCENARIO_NO_SPEND=1, which the tool always sets, so
-# no run can spend. Separate from PR CI: it reads the test credentials.
+# no run can spend. Separate from PR CI: it reads the test credentials, which
+# pull requests from forks do not get (the check then skips with a warning).
 # GitHub can disable schedules after 60 days of repository inactivity.
 
 on:
   schedule:
     - cron: "0 6 * * 1"
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "addons/scenario/core/**"
+      - "tests/live/contract_check_job.gd"
+      - "tools/contract_check.py"
+      - ".github/workflows/contract.yml"
 
 permissions:
   contents: read
 
-# Serialize runs so the failure issue cannot be created twice.
+# Serialize scheduled and manual runs so the failure issue cannot be created twice.
 concurrency:
-  group: contract
-  cancel-in-progress: false
+  group: contract-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # Same pin as ci.yml: bump both together.
@@ -57,7 +64,7 @@ jobs:
   report:
     needs: contract
     # A timed-out runner cannot report itself; a deliberate cancellation is not a failure.
-    if: ${{ always() && !cancelled() && needs.contract.result != 'success' && needs.contract.result != 'skipped' }}
+    if: ${{ always() && !cancelled() && github.event_name != 'pull_request' && needs.contract.result != 'success' && needs.contract.result != 'skipped' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
