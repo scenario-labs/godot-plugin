@@ -17,6 +17,7 @@ One to three sentences: the problem and what changes. Add a before/after only
 for a behavior change. Name any action needed after merge and any known gap.
 Closes #n for complete issue scope; Refs #n otherwise, saying what remains.
 Show a visible change with screenshots of the dock, before/after for UI.
+Agents leave a [drop <file>] placeholder per image; see AGENTS.md.
 -->
 
 ## Validation

@@ -34,9 +34,12 @@ for the project and budget first.
   commit header and the changelog line, so it follows Conventional Commits with
   a scope from `commitlint.config.mjs`, for example
   `fix(editor): keep the selection after placing a material`.
-- Keep one concern per pull request, fill the template, and tick only what you ran.
+- Keep one concern per pull request and fill the template briefly: the checks
+  you ran, any action needed after merge and any known gap. Tick only what you
+  ran.
 - Do not edit versions or `CHANGELOG.md`: release-please does.
-- Show UI changes with before/after screenshots of the dock.
+- Show UI changes with before/after screenshots of the dock, attached to the
+  pull request rather than committed.
 
 ## Coding agents
 
