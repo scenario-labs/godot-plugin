@@ -60,6 +60,13 @@ func has_credentials() -> bool:
 	return not api_key.is_empty() and not api_secret.is_empty()
 
 
+## "ScenarioGodot/0.1.1 (Godot 4.7.2-stable; macOS)": the plugin, engine and OS
+## versions, so Scenario can tell which setups use the plugin. Nothing else.
+static func user_agent() -> String:
+	var engine := Engine.get_version_info()
+	return "ScenarioGodot/%s (Godot %d.%d.%d-%s; %s)" % [VERSION, engine["major"], engine["minor"], engine["patch"], engine["status"], OS.get_name()]
+
+
 static func is_submission(tool: String, arguments: Dictionary) -> bool:
 	if tool == "model_run" or tool == "workflow_run":
 		return not bool(arguments.get("dry_run", false))
@@ -284,7 +291,7 @@ func _post(method: String, params: Dictionary, request_id: Variant, timeout_s: f
 		"Content-Type: application/json",
 		"Accept: application/json, text/event-stream",
 		"MCP-Protocol-Version: " + PROTOCOL_VERSION,
-		"User-Agent: ScenarioGodot/" + VERSION,
+		"User-Agent: " + user_agent(),
 	])
 	var session_used := session_id
 	if not session_used.is_empty():
