@@ -16,6 +16,10 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400..700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>{{ style }}</style>
+<script>
+window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+</script>
+<script defer src="/handbook/page.js"></script>
 </head>
 <body>
 <a class="skip" href="#guide">Skip to guide</a>
@@ -61,7 +65,7 @@
 <p>{{ description }}</p>
 <section class="panel" aria-labelledby="download">
   <p class="eyebrow" id="download">Latest release</p>
-  <a class="button" href="{{ download }}">Download {{ version }}</a>
+  <a class="button" href="{{ download }}" data-track="Download">Download {{ version }}</a>
   <dl>
     <dt>Godot</dt><dd>4.7 editor plugin, GDScript only</dd>
     <dt>License</dt><dd>MIT</dd>
@@ -112,6 +116,10 @@ document.addEventListener("click", async event => {
     button.textContent = "Select and copy";
   }
   setTimeout(() => { button.textContent = "Copy"; }, 2000);
+});
+document.addEventListener("click", event => {
+  const link = event.target.closest("a[data-track]");
+  if (link) window.va("event", { name: link.dataset.track });
 });
 </script>
 <script>{{ search }}</script>

@@ -132,7 +132,20 @@ test("deploys only the middleware and its routing", () => {
 test("forwards to the same GitHub Pages address as vercel.json", () => {
   const settings = JSON.parse(readFileSync("tools/site_proxy/vercel.json", "utf8"));
 
-  assert.equal(settings.rewrites[0].destination, `${ORIGIN}/$1`);
+  assert.equal(settings.rewrites.at(-1).destination, `${ORIGIN}/$1`);
+});
+
+test("serves the analytics script at the page's own path", () => {
+  // Blocker lists (EasyPrivacy) block /_vercel/insights/script.js, not the endpoints it reports to;
+  // vercel.json reaches /_vercel/ paths only through a full URL: a bare path falls through to Pages.
+  const settings = JSON.parse(readFileSync("tools/site_proxy/vercel.json", "utf8"));
+  const page = readFileSync("docs/site/template.html", "utf8");
+  const src = /<script defer src="([^"]+)"><\/script>/.exec(page)?.[1];
+
+  assert.deepEqual(settings.rewrites[0], {
+    source: src,
+    destination: "https://godot.scenario.com/_vercel/insights/script.js",
+  });
 });
 
 test("records a version that is not the published one as unknown", async () => {
