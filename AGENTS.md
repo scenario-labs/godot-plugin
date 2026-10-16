@@ -79,8 +79,9 @@ blank project, attaches the zip, `SHA256SUMS` and a provenance bundle, publishes
 the draft, and `publish-changelog.yml` posts the notes to scenario.com.
 
 - Never edit versions or `CHANGELOG.md` by hand: release-please bumps
-  `plugin.cfg` and `mcp_client.gd` (the `x-release-please` markers) and writes
-  the changelog from the squashed PR titles.
+  `plugin.cfg`, `mcp_client.gd`, `README.md` and `docs/USER_GUIDE.md` (the
+  `x-release-please` markers) and writes the changelog from the squashed PR
+  titles.
 - The source archive (GitHub downloads, the Godot Asset Library) holds
   `addons/scenario/` alone; `.gitattributes` allowlists it and `make archive`
   checks it.
