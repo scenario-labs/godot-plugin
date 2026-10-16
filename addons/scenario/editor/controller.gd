@@ -60,6 +60,7 @@ var recommended := {}
 var uploads := {}
 
 var _estimate_serial := 0
+var _model_serial := 0
 var _debounce: Timer
 var _poll: Timer
 var _polling := false
@@ -153,6 +154,8 @@ func lane_models() -> Array:
 
 func select_model(id: String) -> void:
 	var keep_prompt := prompt_text()
+	_model_serial += 1
+	var serial := _model_serial
 	model_id = id
 	fields = []
 	values = {}
@@ -163,8 +166,8 @@ func select_model(id: String) -> void:
 	var schema: Dictionary = schemas.get(id, {})
 	if schema.is_empty() and is_connected_account():
 		var result: Dictionary = await client.get_schema(id)
-		if id != model_id:
-			return  # the user picked another model meanwhile
+		if serial != _model_serial:
+			return  # a newer pick, of another model or this one again, owns the form now
 		if not result["ok"]:
 			model_loading = false
 			_set_price(PRICE_ERROR, -1.0, result["error"]["message"])
