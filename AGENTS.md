@@ -35,7 +35,7 @@ explicit authorization for the project and budget.
 ## Scheduled and manual checks
 
 Informational, never required, and none spends unless noted. A failed
-scheduled run opens or updates one issue per check
+scheduled run opens or updates one Task issue per check
 (`.github/actions/report-failure`).
 
 | Workflow | When | What |
