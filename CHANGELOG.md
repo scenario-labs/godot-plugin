@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.2.1](https://github.com/scenario-labs/godot-plugin/compare/godot-plugin-v0.2.0...godot-plugin-v0.2.1) (2026-10-16)
+
+
+### Bug Fixes
+
+* **editor:** keep the form when an older schema load finishes last ([#66](https://github.com/scenario-labs/godot-plugin/issues/66)) ([c585676](https://github.com/scenario-labs/godot-plugin/commit/c58567629e8a08da8de97381d4f53f76d1eb4bf6)), closes [#64](https://github.com/scenario-labs/godot-plugin/issues/64)
+
+
+### Documentation
+
+* **agents:** fold llms.txt into AGENTS.md ([#27](https://github.com/scenario-labs/godot-plugin/issues/27)) ([9be0404](https://github.com/scenario-labs/godot-plugin/commit/9be040433eed913af3265929db5badd91b63b8c2))
+* **agents:** keep PR descriptions, commits and doc edits brief, as in the Blender plugin ([#23](https://github.com/scenario-labs/godot-plugin/issues/23)) ([15a4f6e](https://github.com/scenario-labs/godot-plugin/commit/15a4f6edd7a9791269f31a3dd3e0268867f36b6c))
+* move the known issues from BUGS.md to Bug issues ([#63](https://github.com/scenario-labs/godot-plugin/issues/63)) ([b381cc0](https://github.com/scenario-labs/godot-plugin/commit/b381cc0e2fa40cf767c70bff4d3394d5c8869885))
+* move the roadmap from ROADMAP.md to issues and milestones ([#54](https://github.com/scenario-labs/godot-plugin/issues/54)) ([470453d](https://github.com/scenario-labs/godot-plugin/commit/470453d5eb7f44de88437efaa0ace547029d8cc0))
+
+
+### Miscellaneous Chores
+
+* **docs:** count website visits with Vercel Web Analytics ([#57](https://github.com/scenario-labs/godot-plugin/issues/57)) ([d3e48d6](https://github.com/scenario-labs/godot-plugin/commit/d3e48d60f7930b835b2fc825454a509d70f39b00))
+* **repo:** ignore .env.local ([#55](https://github.com/scenario-labs/godot-plugin/issues/55)) ([81a5a0b](https://github.com/scenario-labs/godot-plugin/commit/81a5a0b9bd7d4363f7147694cac411bfa6e39b6f))
+
+
+### Continuous Integration
+
+* **ci:** open scheduled-check failure issues as Tasks ([#24](https://github.com/scenario-labs/godot-plugin/issues/24)) ([123c6b9](https://github.com/scenario-labs/godot-plugin/commit/123c6b915d33e53b94e595ab9e8cf6330e704f19))
+* describe the commits check as required, like ci-ok and pr-title ([#26](https://github.com/scenario-labs/godot-plugin/issues/26)) ([4141587](https://github.com/scenario-labs/godot-plugin/commit/41415879d4fdff4fd55bc9166ffd405da4c6b599))
+* name the paid run smoke and use the test key names, as in blender-plugin ([#56](https://github.com/scenario-labs/godot-plugin/issues/56)) ([4dbc045](https://github.com/scenario-labs/godot-plugin/commit/4dbc0451bd78c0364a40ee12a90808e087b0b462))
+* run the tests and zip check on the Godot .NET build ([#28](https://github.com/scenario-labs/godot-plugin/issues/28)) ([7157a5b](https://github.com/scenario-labs/godot-plugin/commit/7157a5b1f20182c678a101bcb4b3c4d0362062c4))
+* title each smoke run with its budget, lanes, commit and author ([#58](https://github.com/scenario-labs/godot-plugin/issues/58)) ([81b2f0d](https://github.com/scenario-labs/godot-plugin/commit/81b2f0d5e032f671e4a0132d1682ce4115ec8c8a))
+
 ## [0.2.0](https://github.com/scenario-labs/godot-plugin/compare/godot-plugin-v0.1.1...godot-plugin-v0.2.0) (2026-10-16)
 
 
