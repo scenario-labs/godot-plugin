@@ -94,7 +94,7 @@ body:
     attributes:
       label: Before submitting
       options:
-        - label: I searched open and closed issues, and BUGS.md, for a duplicate.
+        - label: I searched open and closed issues for a duplicate.
           required: true
         - label: This report contains no keys, tokens, signed asset URLs or personal data.
           required: true

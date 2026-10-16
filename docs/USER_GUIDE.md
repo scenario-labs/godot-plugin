@@ -83,3 +83,4 @@ Environment variables, read when Godot starts:
 | Material saved but not applied | No mesh was selected: drag the `.tres` onto a mesh. |
 | "Open a scene to place it." | The result was imported but not placed: open a scene, press **Show** on the job and drag the file in. |
 | An import error on a finished job | Press **Import** again; the job stays Done until its files are placed. |
+| "Parameter current_window is null" in the Output panel while the editor starts | Godot's import progress dialog prints it; it is harmless. |

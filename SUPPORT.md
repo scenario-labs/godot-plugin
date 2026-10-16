@@ -11,7 +11,7 @@ page says where to look and whom to ask.
   [Scenario Knowledge Base](https://help.scenario.com).
 - For release changes, read the [changelog](CHANGELOG.md) and the
   [releases](https://github.com/scenario-labs/godot-plugin/releases);
-  [known issues](BUGS.md) lists current limitations.
+  the open [Bug issues](https://github.com/scenario-labs/godot-plugin/issues?q=is%3Aissue%20is%3Aopen%20type%3ABug) list current limitations.
 
 ## Bugs, change requests and questions
 
