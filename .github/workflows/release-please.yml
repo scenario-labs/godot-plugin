@@ -1,0 +1,192 @@
+name: release-please
+
+# Merging the release PR drafts the GitHub release; the zip is then built from
+# the release commit on a pinned Godot, installed into a blank project,
+# checksummed, attested and attached, and only then is the draft published.
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+env:
+  # Same pin as ci.yml: bump both together.
+  GODOT_RELEASE: 4.7.2-stable
+  GODOT_SHA512: 9aa00f7a605200940bce3027a567b782f49bd8e940dd06ae9e987bd65aee1b1467edd56ed84fcdcbdd44354bf613bdbb4e5d2913e925850368e150c59ed54c65
+
+jobs:
+  release-please:
+    # Forks have neither the App credentials nor anything to release.
+    if: github.repository == 'scenario-labs/godot-plugin'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      release_created: ${{ steps.pending.outputs.found == 'true' || steps.release-please.outputs.release_created == 'true' }}
+      tag_name: ${{ steps.pending.outputs.tag_name || steps.release-please.outputs.tag_name }}
+      sha: ${{ steps.pending.outputs.sha || steps.release-please.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The release PR, release commit, tag and release are created with a
+      # GitHub App token, not GITHUB_TOKEN: GitHub never starts a workflow from
+      # an event created by GITHUB_TOKEN, and the release PR must run the same
+      # CI as any other PR while the published release must trigger the
+      # downstream workflows (changelog publish).
+      - name: Retrieve GitHub App token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          client-id: ${{ secrets.GH_ACTIONS_TOKEN_RETRIEVER_PUBLIC_REPO_CLIENT_ID }}
+          private-key: ${{ secrets.GH_ACTIONS_TOKEN_RETRIEVER_PUBLIC_REPO_PRIVATE_KEY }}
+
+      - name: Find an unfinished draft before creating another release
+        id: pending
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+        run: python3 tools/find_release_draft.py
+
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        if: steps.pending.outputs.found != 'true'
+        id: release-please
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          skip-github-pull-request: true
+
+  # The release is created as a draft, so its tag does not exist yet: the zip is
+  # built from the release commit, verified, checksummed, attested and attached
+  # to the draft, and only the publish job below flips it, which is what creates
+  # the tag and fires `release: published`.
+  assets:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      TAG: ${{ needs.release-please.outputs.tag_name }}
+      RELEASE_SHA: ${{ needs.release-please.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release-please.outputs.sha }}
+          persist-credentials: false
+
+      - name: plugin.cfg version must equal the tag
+        run: |
+          set -euo pipefail
+          # The provenance action records the triggering SHA from signed OIDC
+          # claims. Recover by rerunning the original release workflow only.
+          [ "$RELEASE_SHA" = "$GITHUB_SHA" ] || { echo "::error::Re-run the original release workflow so provenance matches the release commit"; exit 1; }
+          [ "$(git rev-parse HEAD)" = "$RELEASE_SHA" ] || { echo "::error::Checkout does not match the release commit"; exit 1; }
+          V="$(cd tools && python3 -c 'from build_zip import version; print(version())')"
+          [ "godot-plugin-v$V" = "$TAG" ] || { echo "::error::plugin.cfg version $V does not match $TAG"; exit 1; }
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+
+      - uses: ./.github/actions/setup-godot
+        with:
+          version: ${{ env.GODOT_RELEASE }}
+          sha512: ${{ env.GODOT_SHA512 }}
+
+      - name: Build the zip, install it into a blank project, then checksum
+        run: |
+          set -euo pipefail
+          make toolkit
+          make zip
+          (cd dist && sha256sum "scenario-godot-plugin-${VERSION}.zip" > SHA256SUMS && cat SHA256SUMS)
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        id: provenance
+        with:
+          subject-path: |
+            dist/scenario-godot-plugin-${{ env.VERSION }}.zip
+            dist/SHA256SUMS
+
+      - name: Retrieve GitHub App token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          client-id: ${{ secrets.GH_ACTIONS_TOKEN_RETRIEVER_PUBLIC_REPO_CLIENT_ID }}
+          private-key: ${{ secrets.GH_ACTIONS_TOKEN_RETRIEVER_PUBLIC_REPO_PRIVATE_KEY }}
+
+      # The attestation's Sigstore bundle lets anyone verify the files without
+      # GitHub's attestation API; OpenSSF Scorecard counts it as a signature.
+      - name: Attach the zip, SHA256SUMS and provenance bundle to the draft release
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          RELEASE="$(gh release view "$TAG" --json isDraft,targetCommitish)"
+          jq -e --arg sha "$RELEASE_SHA" '.isDraft and .targetCommitish == $sha' <<<"$RELEASE" > /dev/null
+          cp "$BUNDLE" "dist/scenario-godot-plugin-${VERSION}.sigstore.json"
+          gh release upload "$TAG" "dist/scenario-godot-plugin-${VERSION}.zip" dist/SHA256SUMS "dist/scenario-godot-plugin-${VERSION}.sigstore.json" --clobber
+
+  # Publishing the draft creates the tag and fires `release: published`, which
+  # publish-changelog.yml consumes. Nothing may be attached after this once
+  # immutable releases are on.
+  publish:
+    needs: [release-please, assets]
+    runs-on: ubuntu-24.04
+    permissions: {}
+    env:
+      TAG: ${{ needs.release-please.outputs.tag_name }}
+    steps:
+      - name: Retrieve GitHub App token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          client-id: ${{ secrets.GH_ACTIONS_TOKEN_RETRIEVER_PUBLIC_REPO_CLIENT_ID }}
+          private-key: ${{ secrets.GH_ACTIONS_TOKEN_RETRIEVER_PUBLIC_REPO_PRIVATE_KEY }}
+
+      - name: Publish the draft (creates the tag and fires release published)
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_SHA: ${{ needs.release-please.outputs.sha }}
+        run: |
+          set -euo pipefail
+          V="${TAG#godot-plugin-v}"
+          RELEASE="$(gh release view "$TAG" --json isDraft,targetCommitish,assets)"
+          jq -e --arg sha "$RELEASE_SHA" --arg zip "scenario-godot-plugin-$V.zip" --arg bundle "scenario-godot-plugin-$V.sigstore.json" '
+            .isDraft and .targetCommitish == $sha and
+            any(.assets[]; .name == "SHA256SUMS") and
+            any(.assets[]; .name == $zip) and
+            any(.assets[]; .name == $bundle)
+          ' <<<"$RELEASE" > /dev/null
+          gh release edit "$TAG" --draft=false
+
+  # Untagged drafts are invisible to release-please's commit-boundary discovery.
+  # Generate the next PR only after publication, or when there was no draft.
+  release-pr:
+    needs: [release-please, publish]
+    if: >-
+      ${{ !cancelled() && needs.release-please.result == 'success' &&
+          (needs.publish.result == 'success' ||
+           (needs.publish.result == 'skipped' && needs.release-please.outputs.release_created != 'true')) }}
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Retrieve GitHub App token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          client-id: ${{ secrets.GH_ACTIONS_TOKEN_RETRIEVER_PUBLIC_REPO_CLIENT_ID }}
+          private-key: ${{ secrets.GH_ACTIONS_TOKEN_RETRIEVER_PUBLIC_REPO_PRIVATE_KEY }}
+
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          skip-github-release: true

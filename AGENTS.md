@@ -23,12 +23,14 @@ make test      # GUT unit tests and the headless editor test (fake backend, 0 CU
 make zip       # release zip, then a clean install into a blank project
 make lint      # gdlint on addons/scenario and tests, ruff on tools (needs uv)
 make agents    # shared agent skills valid and linked (needs uv)
+make archive   # the source archive holds addons/scenario alone
 ```
 
-CI (`.github/workflows/ci.yml`) runs all five on Linux; `ci-ok` requires every
-job. `tools/contract_check.py` is free but needs `SCENARIO_API_KEY` and
-`SCENARIO_API_SECRET`. `make live` (`tools/live_acceptance.py`) spends Creative
-Units: never run it without explicit authorization for the project and budget.
+CI (`.github/workflows/ci.yml`) runs them on Linux, with `make tools-test`;
+`ci-ok` requires every job. `tools/contract_check.py` is free but needs
+`SCENARIO_API_KEY` and `SCENARIO_API_SECRET`. `make live`
+(`tools/live_acceptance.py`) spends Creative Units: never run it without
+explicit authorization for the project and budget.
 
 ## Rules
 
@@ -50,3 +52,18 @@ Units: never run it without explicit authorization for the project and budget.
   header and the changelog line. Titles follow Conventional Commits with a scope
   from `commitlint.config.mjs`; the `pr-title` check enforces it.
 - Fill `.github/pull_request_template.md`; tick only what you ran.
+
+## Releases
+
+release-please keeps a release PR open on `main` (`release-please-config.json`).
+Merging it drafts the GitHub release `godot-plugin-vX.Y.Z`; the workflow then
+builds the zip from the release commit on the pinned Godot, installs it into a
+blank project, attaches the zip, `SHA256SUMS` and a provenance bundle, publishes
+the draft, and `publish-changelog.yml` posts the notes to scenario.com.
+
+- Never edit versions or `CHANGELOG.md` by hand: release-please bumps
+  `plugin.cfg` and `mcp_client.gd` (the `x-release-please` markers) and writes
+  the changelog from the squashed PR titles.
+- The source archive (GitHub downloads, the Godot Asset Library) holds
+  `addons/scenario/` alone; `.gitattributes` allowlists it and `make archive`
+  checks it.
