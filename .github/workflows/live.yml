@@ -4,7 +4,10 @@ name: live
 # live test key, one generation per lane, and checks every charge against its
 # quote. Manual only, and gated three ways: the `live-paid` environment (set it
 # up with a required reviewer), credentials that exist only as secrets of that
-# environment, and a budget typed at dispatch, capped below.
+# environment, and a budget typed at dispatch, capped below. Each approved run is
+# its own authorization: the tool's 1,500 CU total reads the committed ledger,
+# which CI runs never update, so it does not limit spending across runs. The job
+# summary lists each run's quoted and charged CU per lane, without ids.
 
 on:
   workflow_dispatch:
@@ -73,7 +76,7 @@ jobs:
             echo "::error::SCENARIO_LIVE_API_KEY and SCENARIO_LIVE_API_SECRET must be secrets of the live-paid environment"
             exit 1
           fi
-          xvfb-run -a python3 tools/live_acceptance.py --budget "$BUDGET" --lanes "$LANES"
+          xvfb-run -a python3 tools/live_acceptance.py --budget "$BUDGET" --lanes "$LANES" --summary "$GITHUB_STEP_SUMMARY"
       # The ledger rows hold job IDs: they stay in the run, not in an artifact or a commit.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()

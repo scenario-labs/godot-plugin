@@ -45,7 +45,7 @@ scheduled run opens or updates one issue per check
 | `links.yml` | weekly, docs PRs | links in Markdown and `llms.txt` |
 | `dock.yml` | UI PRs | dock screenshot as an artifact |
 | `scorecard.yml` | weekly, `main` | OpenSSF Scorecard |
-| `live.yml` | manual | PAID `tools/live_acceptance.py`, `live-paid` environment, 200 CU cap per run |
+| `live.yml` | manual | PAID `tools/live_acceptance.py`, `live-paid` environment, reviewer approval and a 200 CU cap per run (no total cap in CI) |
 
 ## Rules
 
