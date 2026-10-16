@@ -42,7 +42,7 @@ scheduled run opens or updates one issue per check
 | --- | --- | --- |
 | `contract.yml` | weekly, PRs changing `core/` | `tools/contract_check.py`, 0 CU (test key secrets) |
 | `godot-os.yml` | weekly | tests and zip check on Linux, macOS, Windows, and the newest Godot build |
-| `links.yml` | weekly, docs PRs | links in Markdown and `llms.txt` |
+| `links.yml` | weekly, docs PRs | links in Markdown (except the generated `CHANGELOG.md`) and `llms.txt` |
 | `dock.yml` | UI PRs | dock screenshot as an artifact |
 | `scorecard.yml` | weekly, `main` | OpenSSF Scorecard |
 | `live.yml` | manual | PAID `tools/live_acceptance.py`, `live-paid` environment, reviewer approval and a 200 CU cap per run (no total cap in CI) |
