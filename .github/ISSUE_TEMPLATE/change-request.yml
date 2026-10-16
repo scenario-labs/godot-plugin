@@ -8,7 +8,7 @@ body:
       value: |
         This issue is public and permanent. Leave out API keys and secrets, signed asset URLs, team and project ids, e-mail addresses, and any unreleased project detail.
 
-        Requests for new Scenario models or platform features belong with Scenario support; this tracker is for the Godot plugin. Check ROADMAP.md first.
+        Requests for new Scenario models or platform features belong with Scenario support; this tracker is for the Godot plugin. Check the open issues first.
   - type: textarea
     id: problem
     attributes:
