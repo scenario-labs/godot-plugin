@@ -1,40 +1,14 @@
 # Roadmap
 
-Direction from 0.2: steps on any asset. Start from anything, take the steps you want, stop at the finish level you want. Full proposal and open questions: [design notes](docs/design-notes/README.md).
+Direction: steps on any asset. Start from anything, take the steps you want, stop at the finish level you want. Full proposal and open questions: [design notes](docs/design-notes/README.md).
 
-## 0.2: steps on any asset
+Planned work lives in [issues](https://github.com/scenario-labs/godot-plugin/issues), typed Feature, Task or Bug, in three milestones taken in order:
 
-- Typed steps: image, 2D sheets, 3D model, rigged, animated, material, skybox, sound.
-- "Next" on any selected asset, including your own files, with the price of each step.
-- New steps: rig (humanoid and creature), add a move, retopology, restyle, 8 directions, run cycle sheet, multi-view to 3D.
-- Finish level per run: file, Godot resource, placed node, playable.
-- Asset history in `.scenario.json`, with a new version for every step.
-- Presets: the 3D character path and the 2D character path.
+1. [Steps on any asset](https://github.com/scenario-labs/godot-plugin/milestone/1): typed steps, "Next" on any asset, new steps (rig, moves, retopology, 2D sheets), finish levels, asset history, character presets.
+2. [Make me… and scale](https://github.com/scenario-labs/godot-plugin/milestone/2): "Make me…", batches, round trips with Blender, Aseprite and Krita, a GDScript API, account sign-in, an asset browser.
+3. [Style, teams and games](https://github.com/scenario-labs/godot-plugin/milestone/3): style per project, team models and workflows as steps, coding agents, "Make me a game", more presets, video.
 
-## 0.3: "Make me…" and scale
-
-- "Make me…": a sentence becomes a priced path through the same steps (Scenario LLM).
-- Batches over folders and resources, priced once.
-- Round trip with Blender, Aseprite and Krita: continue from your saved version.
-- GDScript API for tool scripts and CI.
-- Sign-in with a Scenario account (OAuth device flow), team and project selection.
-- Asset library browser: earlier results and team assets as references or starting points.
-
-## 0.4: style, teams and games
-
-- Style per project: references or a team-trained model, applied to every step.
-- Team models and Scenario workflows as steps.
-- Access for coding agents: the same steps and spending rules through a local endpoint.
-- "Make me a game": approach still open ([design note](docs/design-notes/2026-10-04-make-me-a-game.md)); game kits are the leading option.
-- More presets: creature, prop kit, environment, UI kit, audio set.
-- Video steps: frames to video, video lane.
-
-## Platform work (any release)
-
-- Windows and Linux runs; Windows secret storage (DPAPI), Linux Secret Service.
-- Viewport reference verified in a full editor session; 2D viewport capture.
-- Godot Asset Library submission, GitHub releases with the zip.
-- Prompt Spark: rewrite a short prompt into an on-model one before pricing.
+Platform work, such as the Godot Asset Library listing and Windows and Linux support, has no milestone: see the open [Tasks](https://github.com/scenario-labs/godot-plugin/issues?q=is%3Aissue%20is%3Aopen%20type%3ATask) and [Features](https://github.com/scenario-labs/godot-plugin/issues?q=is%3Aissue%20is%3Aopen%20type%3AFeature%20no%3Amilestone). Defects are [Bugs](https://github.com/scenario-labs/godot-plugin/issues?q=is%3Aissue%20is%3Aopen%20type%3ABug), and engine or model quirks stay in [known issues](BUGS.md).
 
 ## Other engines
 
