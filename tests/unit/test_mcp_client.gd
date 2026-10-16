@@ -223,3 +223,10 @@ func test_created_job_id_helper() -> void:
 	assert_eq(Client.created_job_id({"job": {}}), "")
 	assert_eq(Client.created_job_id({"jobId": "j"}), "j")
 	assert_eq(Client.created_job_id("text"), "")
+
+
+func test_version_matches_plugin_cfg() -> void:
+	# The User-Agent and the MCP clientInfo carry this version; release-please bumps both.
+	var cfg := ConfigFile.new()
+	assert_eq(cfg.load("res://addons/scenario/plugin.cfg"), OK)
+	assert_eq(Client.VERSION, cfg.get_value("plugin", "version"))
