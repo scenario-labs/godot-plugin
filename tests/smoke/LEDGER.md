@@ -1,6 +1,6 @@
-# Live acceptance ledger
+# Smoke ledger
 
-Paid runs of tests/live/live_acceptance_job.gd. Cap: 1500 CU.
+Paid runs of tests/smoke/smoke_job.gd. Cap: 1500 CU.
 
 | Date | Lane | Model | Quoted CU | Charged CU | Placed | Job | Note |
 |---|---|---|---|---|---|---|---|

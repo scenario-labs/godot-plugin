@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""PAID live acceptance. Spends Creative Units on the project of the API key.
+"""PAID smoke run. Spends Creative Units on the project of the API key.
 
 Usage:
-  SCENARIO_API_KEY=... SCENARIO_API_SECRET=... python3 tools/live_acceptance.py [--budget 200]
+  SCENARIO_API_KEY=... SCENARIO_API_SECRET=... python3 tools/smoke.py [--budget 200]
 
-Runs tests/live/live_acceptance_job.gd in a headless editor with the real HTTP
+Runs tests/smoke/smoke_job.gd in a headless editor with the real HTTP
 transport, captures the resulting scene in a window, and appends one row per
-run to tests/live/LEDGER.md (quoted vs charged CU). Exit 0 only when every run
+run to tests/smoke/LEDGER.md (quoted vs charged CU). Exit 0 only when every run
 succeeded, was placed, and was charged exactly its quote.
 """
 import argparse, datetime, os, pathlib, sys
@@ -16,9 +16,9 @@ import toolkit  # noqa: E402
 toolkit.use()
 import gd_run, gd_review  # noqa: E402
 
-LEDGER = ROOT / "tests/live/LEDGER.md"
-CAP_CU = 1500.0  # total budget for this plugin's live tests (spec, section 6)
-LANES = ("image", "model3d", "material", "skybox", "sound")  # the lanes of live_acceptance_job.gd
+LEDGER = ROOT / "tests/smoke/LEDGER.md"
+CAP_CU = 1500.0  # total budget for this plugin's smoke runs (spec, section 6)
+LANES = ("image", "model3d", "material", "skybox", "sound")  # the lanes of smoke_job.gd
 
 
 def spent_so_far() -> float:
@@ -38,7 +38,7 @@ def spent_so_far() -> float:
 def write_summary(path: str, today: str, runs: list, spent, budget: float) -> None:
     """Quoted and charged CU per lane, for the CI job summary: no job ids, asset ids or notes."""
     with open(path, "a") as f:
-        f.write(f"### Live acceptance {today}\n\n| Lane | Model | Quoted CU | Charged CU | Placed |\n|---|---|---|---|---|\n")
+        f.write(f"### Smoke run {today}\n\n| Lane | Model | Quoted CU | Charged CU | Placed |\n|---|---|---|---|---|\n")
         for run in runs:
             charged = run.get("charged") if run.get("charged") is not None else 0
             f.write(f"| {run['lane']} | {run['model'].removeprefix('model_')} | {run.get('quoted')} | {charged} | "
@@ -62,16 +62,16 @@ def main() -> int:
     already = spent_so_far()
     budget = min(args.budget, CAP_CU - already)
     if budget <= 0:
-        print(f"Live test cap reached ({already} of {CAP_CU} CU).")
+        print(f"Smoke cap reached ({already} of {CAP_CU} CU).")
         return 3
     print(f"Spent so far {already} CU; this run may spend up to {budget} CU.")
-    r = gd_run.run_script(str(ROOT), "res://tests/live/live_acceptance_job.gd", {"budget_cu": budget, "lanes": args.lanes},
+    r = gd_run.run_script(str(ROOT), "res://tests/smoke/smoke_job.gd", {"budget_cu": budget, "lanes": args.lanes},
                           editor=True, timeout=1800, env={k: os.environ[k] for k in ("SCENARIO_API_KEY", "SCENARIO_API_SECRET")})
     res = r.get("result") or {}
     runs = res.get("runs", [])
     today = datetime.date.today().isoformat()
     if not LEDGER.exists():
-        LEDGER.write_text("# Live acceptance ledger\n\nPaid runs of tests/live/live_acceptance_job.gd. Cap: "
+        LEDGER.write_text("# Smoke ledger\n\nPaid runs of tests/smoke/smoke_job.gd. Cap: "
                           f"{CAP_CU:.0f} CU.\n\n| Date | Lane | Model | Quoted CU | Charged CU | Placed | Job | Note |\n"
                           "|---|---|---|---|---|---|---|---|\n")
     with LEDGER.open("a") as f:
@@ -88,8 +88,8 @@ def main() -> int:
     if args.summary:
         write_summary(args.summary, today, runs, res.get("spent_cu"), budget)
     if res.get("scene_path"):
-        cap = gd_run.capture_scene(str(ROOT), scene=res["scene_path"], out="captures/live.png", size=(1280, 720), frames=16)
-        shot = ROOT / ".agent_out/captures/live.png"
+        cap = gd_run.capture_scene(str(ROOT), scene=res["scene_path"], out="captures/smoke.png", size=(1280, 720), frames=16)
+        shot = ROOT / ".agent_out/captures/smoke.png"
         if cap.get("ok") and shot.exists():
             print("capture:", shot, gd_review.image_checks(str(shot)).get("flags"))
     return 0 if r.get("ok") and res.get("ok") else 1

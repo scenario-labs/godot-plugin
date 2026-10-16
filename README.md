@@ -105,7 +105,7 @@ With `SCENARIO_API_KEY` and `SCENARIO_API_SECRET` set:
 
 ```sh
 python3 tools/contract_check.py      # free: every listed model loads and prices, no-spend switch holds
-python3 tools/live_acceptance.py     # PAID: one run per lane, ledger in tests/live/LEDGER.md
+python3 tools/smoke.py               # PAID: one run per lane, ledger in tests/smoke/LEDGER.md
 ```
 
 ## Support

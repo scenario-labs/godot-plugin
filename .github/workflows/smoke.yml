@@ -1,13 +1,15 @@
-name: live
+name: smoke
 
-# PAID: tools/live_acceptance.py spends Creative Units on the project of the
-# live test key, one generation per lane, and checks every charge against its
-# quote. Manual only, and gated three ways: the `live-paid` environment (set it
-# up with a required reviewer), credentials that exist only as secrets of that
-# environment, and a budget typed at dispatch, capped below. Each approved run is
-# its own authorization: the tool's 1,500 CU total reads the committed ledger,
-# which CI runs never update, so it does not limit spending across runs. The job
-# summary lists each run's quoted and charged CU per lane, without ids.
+# PAID: tools/smoke.py spends Creative Units on the project of the key, one
+# generation per lane, and checks every charge against its quote. Manual only,
+# and gated by the `smoke` environment (a required reviewer, main only) and a
+# budget typed at dispatch, capped below. As in blender-plugin, the paid key is
+# SCENARIO_TEST_API_KEY and SCENARIO_TEST_API_SECRET set as secrets of that
+# environment; without them, the repository secrets of the same names (the free
+# contract check's key) are used. Each approved run is its own authorization:
+# the tool's 1,500 CU total reads the committed ledger, which CI runs never
+# update, so it does not limit spending across runs. The job summary lists each
+# run's quoted and charged CU per lane, without ids.
 
 on:
   workflow_dispatch:
@@ -27,7 +29,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: live
+  group: smoke
   cancel-in-progress: false
 
 env:
@@ -36,12 +38,12 @@ env:
   GODOT_SHA512: 9aa00f7a605200940bce3027a567b782f49bd8e940dd06ae9e987bd65aee1b1467edd56ed84fcdcbdd44354bf613bdbb4e5d2913e925850368e150c59ed54c65
 
 jobs:
-  live:
-    name: live acceptance
+  smoke:
+    name: smoke
     if: github.repository == 'scenario-labs/godot-plugin' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
-    environment: live-paid
+    environment: smoke
     steps:
       - name: Check the budget and lanes before anything else
         env:
@@ -65,23 +67,23 @@ jobs:
           sha512: ${{ env.GODOT_SHA512 }}
           display: "true"
       - run: make toolkit
-      - name: Paid live acceptance
+      - name: Paid smoke run
         env:
-          SCENARIO_API_KEY: ${{ secrets.SCENARIO_LIVE_API_KEY }}
-          SCENARIO_API_SECRET: ${{ secrets.SCENARIO_LIVE_API_SECRET }}
+          SCENARIO_API_KEY: ${{ secrets.SCENARIO_TEST_API_KEY }}
+          SCENARIO_API_SECRET: ${{ secrets.SCENARIO_TEST_API_SECRET }}
           BUDGET: ${{ inputs.budget_cu }}
           LANES: ${{ inputs.lanes }}
         run: |
           if [ -z "$SCENARIO_API_KEY" ] || [ -z "$SCENARIO_API_SECRET" ]; then
-            echo "::error::SCENARIO_LIVE_API_KEY and SCENARIO_LIVE_API_SECRET must be secrets of the live-paid environment"
+            echo "::error::Set SCENARIO_TEST_API_KEY and SCENARIO_TEST_API_SECRET as secrets of the smoke environment"
             exit 1
           fi
-          xvfb-run -a python3 tools/live_acceptance.py --budget "$BUDGET" --lanes "$LANES" --summary "$GITHUB_STEP_SUMMARY"
+          xvfb-run -a python3 tools/smoke.py --budget "$BUDGET" --lanes "$LANES" --summary "$GITHUB_STEP_SUMMARY"
       # The ledger rows hold job IDs: they stay in the run, not in an artifact or a commit.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: live-capture
-          path: .agent_out/captures/live.png
+          name: smoke-capture
+          path: .agent_out/captures/smoke.png
           if-no-files-found: ignore
           retention-days: 7

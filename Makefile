@@ -1,6 +1,6 @@
 # Scenario Godot Plugin. Requires Godot 4.7 (`godot` on PATH, or $GODOT), python3,
 # and the scenario-godot-expert toolkit: `make toolkit` fetches the pinned copy.
-.PHONY: test unit editor zip archive dock site site-test live toolkit lint agents tools-test
+.PHONY: test unit editor zip archive dock site site-test smoke toolkit lint agents tools-test
 
 test:
 	python3 tools/run_tests.py all
@@ -43,8 +43,8 @@ site-test:
 	node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/site/middleware.test.ts tests/site/handbook-search.test.ts
 
 # Paid: spends Creative Units on the test key's project. Opt-in only.
-live:
-	python3 tools/live_acceptance.py
+smoke:
+	python3 tools/smoke.py
 
 # The toolkit commit pinned in tools/toolkit.py, into .toolkit/; addons/agentkit must match it.
 toolkit:

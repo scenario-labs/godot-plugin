@@ -1,9 +1,9 @@
 extends "res://addons/agentkit/agent_job.gd"
-## PAID live acceptance: the real plugin controller and HTTP transport against
+## PAID smoke run: the real plugin controller and HTTP transport against
 ## Scenario. Credentials come from SCENARIO_API_KEY / SCENARIO_API_SECRET.
 ## One cheap run per lane plus a reference upload; fails when any charge
 ## differs from its quote or a result cannot be placed. Run through
-## tools/live_acceptance.py, which enforces the budget and writes the ledger.
+## tools/smoke.py, which enforces the budget and writes the ledger.
 
 const Controller := preload("res://addons/scenario/editor/controller.gd")
 const HttpTransport := preload("res://addons/scenario/editor/http_transport.gd")
@@ -23,9 +23,9 @@ const RUNS := [
 func run() -> Dictionary:
 	await wait_frames(3)
 	var budget := float(arg("budget_cu", 200.0))
-	var run_dir := "res://tests/tmp_output/live-%d" % Time.get_ticks_usec()
+	var run_dir := "res://tests/tmp_output/smoke-%d" % Time.get_ticks_usec()
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(run_dir))
-	var scene_path := run_dir + "/live_scene.tscn"
+	var scene_path := run_dir + "/smoke_scene.tscn"
 	DirAccess.copy_absolute(ProjectSettings.globalize_path("res://main.tscn"), ProjectSettings.globalize_path(scene_path))
 	var scene := await open_scratch_scene(scene_path)
 
