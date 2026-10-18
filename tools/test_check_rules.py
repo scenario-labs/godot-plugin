@@ -42,6 +42,15 @@ class PinTest(unittest.TestCase):
         self.assertEqual(self.check(f"      - uses: actions/checkout@{SHA}"),
                          [".github/workflows/ci.yml:2: add the version after the SHA, as `# vX.Y.Z`"])
 
+    def test_reads_other_yaml_forms(self):
+        self.assertEqual(len(self.check("      - uses : actions/checkout@v7")), 1)
+        self.assertEqual(len(self.check("      - { name: x, uses: actions/checkout@v7 }")), 1)
+        self.assertEqual(len(self.check("      - uses: 'actions/checkout@v7'")), 1)
+        self.assertEqual(self.check(f"      - {{ uses: actions/checkout@{SHA} }} # v7.0.1"), [])
+
+    def test_ignores_keys_that_only_end_in_uses(self):
+        self.assertEqual(self.check("      refuses: actions/checkout@v7"), [])
+
     def test_reads_composite_actions(self):
         self.assertEqual(len(self.check("      uses: actions/cache@v5", path=".github/actions/setup-godot/action.yml")), 1)
 
