@@ -70,7 +70,7 @@ const PRESETS := {
 ## File types each importer can place. A recommended model from outside a
 ## lane's list may return anything; import stops on a file not listed here.
 const ACCEPTS := {
-	"image": ["png", "jpg", "webp"],
+	"image": ["png", "jpg", "webp", "exr", "hdr"],
 	"model3d": ["glb", "gltf", "png", "jpg", "webp"],  # images are previews
 	"material": ["png", "jpg", "webp", "exr"],
 	"skybox": ["png", "jpg", "webp", "exr", "hdr"],

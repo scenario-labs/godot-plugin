@@ -33,6 +33,7 @@ func test_every_lane_is_complete() -> void:
 func test_lanes_accept_only_files_they_can_place() -> void:
 	assert_true(Lanes.accepts("image", "png"))
 	assert_false(Lanes.accepts("image", "glb"))
+	assert_true(Lanes.accepts("image", "exr"), "HDR textures load as Texture2D")
 	assert_true(Lanes.accepts("model3d", "glb"))
 	assert_true(Lanes.accepts("model3d", "png"), "3D previews")
 	assert_true(Lanes.accepts("skybox", "hdr"))
