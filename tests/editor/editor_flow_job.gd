@@ -191,6 +191,19 @@ func run() -> Dictionary:
 	check("image instead of a model: import stops", not flat_placed.get("ok", true)
 		and str(flat_placed.get("message", "")).contains("Fake Image LoRA returned no GLB or glTF model"))
 	check("image instead of a model: preview not kept", not "-no-model-" in " ".join(DirAccess.get_files_at(controller.output_root + "/model3d")))
+	# A PNG then a GLB on the Image lane: the PNG already moved is removed, and so is the GLB download.
+	await controller.select_lane("image")
+	controller.recommended["image"] = [{"id": "model_rodin-hyper3d-v2-5-text-to-3d", "name": "Rodin Gen-2.5 (text)", "note": ""}]
+	await controller.select_model("model_rodin-hyper3d-v2-5-text-to-3d")
+	controller.set_value("prompt", "mixed output")
+	await controller.estimate_now()
+	var mixed: Dictionary = await controller.generate(true)
+	await controller.poll()
+	var mixed_placed: Dictionary = await controller.import_job(mixed.get("local_id", ""))
+	check("mixed output: import stops at the GLB", not mixed_placed.get("ok", true)
+		and str(mixed_placed.get("message", "")).contains("returned a GLB file, which the Image lane cannot place"))
+	check("mixed output: the PNG moved first is removed", not "-mixed-output-" in " ".join(DirAccess.get_files_at(controller.output_root + "/image")))
+	check("mixed output: the GLB download is removed", not FileAccess.file_exists("res://.godot/scenario/downloads/asset_glb001.download"))
 	# Lay the results out side by side and save the scratch scene for a windowed capture.
 	if sprite != null:
 		sprite.position = Vector3(-2.2, 1.0, 0.0)
