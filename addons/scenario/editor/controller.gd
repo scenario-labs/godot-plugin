@@ -421,6 +421,10 @@ func import_job(local_id: String) -> Dictionary:
 		assets.append({"asset_id": asset_id, "role": role, "path": final_path, "mime": asset.get("mimeType", "")})
 	if problem.is_empty() and files.is_empty():
 		problem = "The job finished without output files."
+	if problem.is_empty() and lane["importer"] == "model3d" and files.all(func(f: Dictionary) -> bool: return f["role"] == "preview"):
+		problem = "%s returned no GLB or glTF model, which the 3D lane needs. Pick one of the lane's own models." % _model_name(str(row["model_id"]))
+		for item in files:
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(item["path"]))
 	if not problem.is_empty():
 		_importing.erase(local_id)
 		ledger.set_error(local_id, problem, _now())

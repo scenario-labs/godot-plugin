@@ -179,6 +179,18 @@ func run() -> Dictionary:
 	stray_row = controller.ledger.find(stray.get("local_id", ""))
 	check("wrong output: not marked imported", not stray_row.get("imported", false))
 	check("wrong output: no file kept in the project", not "-wrong-output-" in " ".join(DirAccess.get_files_at(controller.output_root + "/sound")))
+	# On the 3D lane an image is only a preview: without a model, nothing is kept.
+	await controller.select_lane("model3d")
+	controller.recommended["model3d"] = [{"id": "model_fake-image-lora", "name": "Fake Image LoRA", "note": ""}]
+	await controller.select_model("model_fake-image-lora")
+	controller.set_value("prompt", "no model")
+	await controller.estimate_now()
+	var flat: Dictionary = await controller.generate(true)
+	await controller.poll()
+	var flat_placed: Dictionary = await controller.import_job(flat.get("local_id", ""))
+	check("image instead of a model: import stops", not flat_placed.get("ok", true)
+		and str(flat_placed.get("message", "")).contains("Fake Image LoRA returned no GLB or glTF model"))
+	check("image instead of a model: preview not kept", not "-no-model-" in " ".join(DirAccess.get_files_at(controller.output_root + "/model3d")))
 	# Lay the results out side by side and save the scratch scene for a windowed capture.
 	if sprite != null:
 		sprite.position = Vector3(-2.2, 1.0, 0.0)
