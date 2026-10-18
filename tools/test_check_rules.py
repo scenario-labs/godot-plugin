@@ -11,12 +11,12 @@ SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
 
 class EmDashTest(unittest.TestCase):
     def test_reports_the_line(self):
-        self.assertEqual(check_rules.em_dash_problems("README.md", "ok\nnot — ok\n"),
+        self.assertEqual(check_rules.em_dash_problems("README.md", "ok\nnot \u2014 ok\n"),
                          ["README.md:2: em dash; use a comma, a colon, parentheses or two sentences"])
 
     def test_exempts_the_changelog_and_recorded_replies(self):
-        self.assertEqual(check_rules.em_dash_problems("CHANGELOG.md", "—"), [])
-        self.assertEqual(check_rules.em_dash_problems("tests/fixtures/schema.sse", "—"), [])
+        self.assertEqual(check_rules.em_dash_problems("CHANGELOG.md", "\u2014"), [])
+        self.assertEqual(check_rules.em_dash_problems("tests/fixtures/schema.sse", "\u2014"), [])
 
     def test_allows_an_en_dash(self):
         self.assertEqual(check_rules.em_dash_problems("README.md", "1–2"), [])
