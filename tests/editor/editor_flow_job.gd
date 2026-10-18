@@ -162,6 +162,23 @@ func run() -> Dictionary:
 
 	check("six paid calls in total", fake.paid_calls.size() == 6)
 	check("every paid call used wait=false", fake.paid_calls.all(func(a: Dictionary) -> bool: return a.get("wait") == false))
+
+	# A recommended model whose output the lane cannot place (the fake returns a
+	# PNG for any model it does not know): import stops before the file is kept.
+	await controller.select_lane("sound")
+	controller.recommended["sound"] = [{"id": "model_fake-image-lora", "name": "Fake Image LoRA", "note": ""}]
+	await controller.select_model("model_fake-image-lora")
+	controller.set_value("prompt", "wrong output")
+	await controller.estimate_now()
+	var stray: Dictionary = await controller.generate(true)
+	await controller.poll()
+	var stray_row := controller.ledger.find(stray.get("local_id", ""))
+	var stray_placed: Dictionary = await controller.import_job(stray_row.get("local_id", ""))
+	check("wrong output: import stops with the lane named", not stray_placed.get("ok", true)
+		and str(stray_placed.get("message", "")).contains("Fake Image LoRA returned a PNG file, which the Sound lane cannot place"))
+	stray_row = controller.ledger.find(stray.get("local_id", ""))
+	check("wrong output: not marked imported", not stray_row.get("imported", false))
+	check("wrong output: no file kept in the project", not "-wrong-output-" in " ".join(DirAccess.get_files_at(controller.output_root + "/sound")))
 	# Lay the results out side by side and save the scratch scene for a windowed capture.
 	if sprite != null:
 		sprite.position = Vector3(-2.2, 1.0, 0.0)

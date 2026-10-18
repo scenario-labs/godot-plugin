@@ -405,6 +405,10 @@ func import_job(local_id: String) -> Dictionary:
 		if not ext in Files.IMPORTABLE:
 			problem = "Scenario returned a file Godot cannot import (%s)." % str(asset.get("mimeType", "unknown type"))
 			break
+		if not Lanes.accepts(row["lane"], ext):
+			problem = "%s returned a %s file, which the %s lane cannot place. Pick one of the lane's own models." % [
+				_model_name(str(row["model_id"])), ext.to_upper(), lane["title"]]
+			break
 		if lane["importer"] == "model3d" and ext in ["png", "jpg", "webp"]:
 			role = "preview"  # 3D models come with a thumbnail next to the GLB
 		var base := Files.base_path(row["lane"], row["prompt"], asset_id, role, date, output_root)
@@ -555,6 +559,10 @@ func _field(name: String) -> Dictionary:
 func _model_name(id: String) -> String:
 	for lane in Lanes.LANES:
 		for model in lane["models"]:
+			if model["id"] == id:
+				return model["name"]
+	for extras in recommended.values():
+		for model in extras:
 			if model["id"] == id:
 				return model["name"]
 	return id.trim_prefix("model_")
