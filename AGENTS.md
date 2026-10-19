@@ -73,7 +73,7 @@ the commit pinned in `tools/toolkit.py`.
 make toolkit   # the pinned toolkit into .toolkit/; addons/agentkit must match it
 make test      # GUT unit tests and the headless editor test (fake backend, 0 CU)
 make zip       # release zip, then a clean install into a blank project
-make lint      # gdlint on addons/scenario and tests, ruff on tools (needs uv)
+make lint      # gdlint, ruff on tools, no em dashes, actions pinned by SHA (needs uv)
 make agents    # shared agent skills valid and linked (needs uv)
 make archive   # the source archive holds addons/scenario alone
 ```

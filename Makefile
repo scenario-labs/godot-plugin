@@ -55,10 +55,11 @@ toolkit:
 tools-test:
 	python3 -m unittest discover -s tools
 
-# GDScript and Python lint, the same versions as CI. Requires uv.
+# GDScript and Python lint, the same versions as CI, then the house rules. Requires uv.
 lint:
 	uvx --from gdtoolkit==4.5.0 gdlint addons/scenario tests
 	uvx ruff@0.16.10 check tools
+	python3 tools/check_rules.py
 
 # Shared agent skills: valid per the Agent Skills spec, and linked for Claude Code. Requires uv.
 SKILLS_REF := git+https://github.com/agentskills/agentskills.git@69ef37e9424c0a7ea9dd2293b559e43ec8176379\#subdirectory=skills-ref
