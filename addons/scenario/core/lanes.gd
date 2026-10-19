@@ -67,6 +67,16 @@ const PRESETS := {
 	"model_scenario-skybox-flux": {"numOutputs": 1},
 }
 
+## File types each importer can place. A recommended model from outside a
+## lane's list may return anything; import stops on a file not listed here.
+const ACCEPTS := {
+	"image": ["png", "jpg", "webp", "exr", "hdr"],
+	"model3d": ["glb", "gltf", "png", "jpg", "webp"],  # images are previews
+	"material": ["png", "jpg", "webp", "exr"],
+	"skybox": ["png", "jpg", "webp", "exr", "hdr"],
+	"audio": ["wav", "mp3", "ogg"],
+}
+
 ## Field values Godot can import (it has no AAC or FLAC importer).
 const RESTRICT := {
 	"audioFormat": ["wav", "mp3", "ogg"],
@@ -94,3 +104,8 @@ static func default_model(lane_id: String) -> String:
 
 static func presets(model_id: String) -> Dictionary:
 	return PRESETS.get(model_id, {}).duplicate(true)
+
+
+static func accepts(lane_id: String, extension: String) -> bool:
+	var item := lane(lane_id)
+	return not item.is_empty() and extension in ACCEPTS.get(item["importer"], [])

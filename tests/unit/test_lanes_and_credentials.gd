@@ -30,6 +30,20 @@ func test_every_lane_is_complete() -> void:
 	assert_eq(Lanes.lane("nope"), {})
 
 
+func test_lanes_accept_only_files_they_can_place() -> void:
+	assert_true(Lanes.accepts("image", "png"))
+	assert_false(Lanes.accepts("image", "glb"))
+	assert_true(Lanes.accepts("image", "exr"), "HDR textures load as Texture2D")
+	assert_true(Lanes.accepts("model3d", "glb"))
+	assert_true(Lanes.accepts("model3d", "png"), "3D previews")
+	assert_true(Lanes.accepts("skybox", "hdr"))
+	assert_true(Lanes.accepts("sound", "mp3"))
+	assert_false(Lanes.accepts("sound", "png"))
+	assert_false(Lanes.accepts("nope", "png"))
+	for id in Lanes.ids():
+		assert_true(Lanes.ACCEPTS.has(Lanes.lane(id)["importer"]), id)
+
+
 func test_presets_are_copies() -> void:
 	var preset := Lanes.presets("model_rodin-hyper3d-v2-5-text-to-3d")
 	preset["material"] = "None"
