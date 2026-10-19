@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.2](https://github.com/scenario-labs/godot-plugin/compare/godot-plugin-v0.2.1...godot-plugin-v0.2.2) (2026-10-19)
+
+
+### Bug Fixes
+
+* **editor:** stop an import whose file the lane cannot place ([#68](https://github.com/scenario-labs/godot-plugin/issues/68)) ([4f4684f](https://github.com/scenario-labs/godot-plugin/commit/4f4684f9a7a8fafc4515efaf9af037935853481d))
+
+
+### Miscellaneous Chores
+
+* **repo:** ignore Vercel CLI project links ([#71](https://github.com/scenario-labs/godot-plugin/issues/71)) ([ed24f62](https://github.com/scenario-labs/godot-plugin/commit/ed24f6209b7e2ef828d1c98ddcd65546264ddcb4))
+* **tools:** check em dashes and action pins in make lint ([#72](https://github.com/scenario-labs/godot-plugin/issues/72)) ([dd3798a](https://github.com/scenario-labs/godot-plugin/commit/dd3798af8f289ca31bc4a03fa6308d8b24d02465))
+
+
+### Tests
+
+* **tests:** clear earlier runs' output so a repeat make test passes ([#70](https://github.com/scenario-labs/godot-plugin/issues/70)) ([6ac375a](https://github.com/scenario-labs/godot-plugin/commit/6ac375a2576302153df847855f9c0672d8dffb44)), closes [#69](https://github.com/scenario-labs/godot-plugin/issues/69)
+
 ## [0.2.1](https://github.com/scenario-labs/godot-plugin/compare/godot-plugin-v0.2.0...godot-plugin-v0.2.1) (2026-10-16)
 
 
