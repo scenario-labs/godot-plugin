@@ -5,7 +5,7 @@ Usage: python3 tools/run_tests.py [unit|editor|all]
 Uses the scenario-godot-expert toolkit (gd_run, see toolkit.py) so the log is scanned for parse and
 script errors as well as the GUT totals. Exit code 0 only when every suite passes.
 """
-import pathlib, sys
+import pathlib, shutil, sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 import toolkit  # noqa: E402
@@ -19,6 +19,9 @@ EDITOR_JOBS = ["res://tests/editor/editor_flow_job.gd", "res://tests/editor/scan
 def main() -> int:
     which = sys.argv[1] if len(sys.argv) > 1 else "all"
     names = list(SUITES) if which == "all" else [which]
+    # The editor reopens the scratch scenes an earlier run left open; with their files gone it cannot,
+    # and the editor jobs place into the scene they opened.
+    shutil.rmtree(ROOT / "tests" / "tmp_output", ignore_errors=True)
     imp = gd_run.import_project(str(ROOT))
     if not imp.get("ok"):
         print("IMPORT FAILED:", imp.get("error"), imp.get("parse_errors"))
