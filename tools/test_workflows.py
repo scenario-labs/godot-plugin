@@ -36,8 +36,16 @@ def events(text: str) -> set[str]:
 
 def jobs(text: str) -> dict[str, str]:
     body = block(text, "jobs")
-    names = re.findall(r"^  ([\w-]+):[ \t]*$", body, re.MULTILINE)
+    names = []
+    for key, rest in re.findall(r"^  ([^\s#][^:]*):(.*)$", body, re.MULTILINE):
+        if rest.strip() and not rest.strip().startswith("#"):
+            raise AssertionError(f"write job `{key}` as a block")
+        names.append(key)
     return {name: block(body, name, indent=2) for name in names}
+
+
+def runs_on_pull_requests(body: str) -> bool:
+    return not re.search(r"(?m)^    if:.*github\.event_name != 'pull_request'", body)
 
 
 def write_scopes(permissions: str) -> list[str]:
@@ -122,13 +130,20 @@ class WorkflowPolicyTest(unittest.TestCase):
         self.assertEqual({n.strip() for n in needs.group(1).split(",")}, set(ci))
         self.assertRegex(gate, r"(?m)^    if:\s*always\(\)\s*$")
 
-    def test_job_names_are_unique(self):
+    def test_check_names_on_pull_requests_are_unique(self):
+        # A job without `name` is checked under its id, so required checks such as pr-title stay unique.
         seen = {}
         for name, text in self.files.items():
-            for job in re.findall(r"(?m)^    name:\s*(.+)$", text):
-                with self.subTest(job=job):
-                    self.assertNotIn(job, seen, f"{name} and {seen.get(job)}")
-                seen[job] = name
+            if "pull_request" not in events(text):
+                continue
+            for job, body in jobs(text).items():
+                if not runs_on_pull_requests(body):
+                    continue
+                explicit = re.search(r"(?m)^    name:\s*(.+)$", body)
+                check = explicit.group(1).strip() if explicit else job
+                with self.subTest(check=check):
+                    self.assertNotIn(check, seen, f"{name} and {seen.get(check)}")
+                seen[check] = name
 
 
 class ParserTest(unittest.TestCase):
@@ -149,6 +164,9 @@ class ParserTest(unittest.TestCase):
         self.assertEqual(events(text), {"pull_request", "push"})
         self.assertEqual(set(jobs(text)), {"a", "b"})
         self.assertIn("if: always()", jobs(text)["b"])
+        self.assertEqual(set(jobs("jobs:\n  slow: # comment\n    runs-on: x\n")), {"slow"})
+        with self.assertRaises(AssertionError):
+            jobs("jobs:\n  inline: {runs-on: x}\n")
 
 
 if __name__ == "__main__":
