@@ -66,12 +66,15 @@ def top_permissions(text: str) -> str:
 
 
 def local_actions(text: str) -> set[pathlib.Path]:
-    return {ROOT / ref / "action.yml" for ref in re.findall(r"uses:\s*['\"]?(\./\.github/actions/[\w-]+)", text)}
+    refs = re.findall(r"uses:\s*['\"]?(\./\.github/actions/[\w-]+)", text)
+    return {next((ROOT / ref / f for f in ("action.yml", "action.yaml") if (ROOT / ref / f).is_file()), ROOT / ref / "action.yml")
+            for ref in refs}
 
 
 class WorkflowPolicyTest(unittest.TestCase):
     def setUp(self):
-        self.files = {path.name: path.read_text() for path in sorted(WORKFLOWS.glob("*.yml"))}
+        paths = sorted([*WORKFLOWS.glob("*.yml"), *WORKFLOWS.glob("*.yaml")])
+        self.files = {path.name: path.read_text() for path in paths}
         self.assertTrue(self.files)
 
     def test_every_workflow_declares_permissions(self):
