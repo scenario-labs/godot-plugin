@@ -31,7 +31,9 @@ def events(text: str) -> set[str]:
     inline = re.search(r"^on:[ \t]*(\S.*)$", text, re.MULTILINE)
     if inline and not inline.group(1).startswith("#"):
         raise AssertionError("write `on:` as a block")
-    return set(re.findall(r"^  ([\w-]+):", block(text, "on"), re.MULTILINE))
+    body = block(text, "on")
+    # A block list (`- pull_request`) names events too.
+    return set(re.findall(r"^  ([\w-]+):", body, re.MULTILINE)) | set(re.findall(r"^  -\s*([\w-]+)", body, re.MULTILINE))
 
 
 def jobs(text: str) -> dict[str, str]:
@@ -69,7 +71,7 @@ def write_scopes(permissions: str) -> list[str]:
 
 
 def top_permissions(text: str) -> str:
-    inline = re.search(r"^permissions:[ \t]*(\S[^#\n]*)", text, re.MULTILINE)
+    inline = re.search(r"^permissions:[ \t]*([^\s#][^#\n]*)", text, re.MULTILINE)
     return inline.group(1) if inline else block(text, "permissions")
 
 
@@ -154,6 +156,13 @@ class ParserTest(unittest.TestCase):
         self.assertEqual(write_scopes("\n  contents: read\n  issues: write  # report\n"), ["issues"])
         with self.assertRaises(AssertionError):
             write_scopes("\n  contents: maybe\n")
+
+    def test_list_events_are_read(self):
+        self.assertEqual(events("on:\n  - pull_request\n  - push\n"), {"pull_request", "push"})
+
+    def test_comment_after_permissions_reads_the_block(self):
+        self.assertEqual(write_scopes(top_permissions("permissions: # c\n  issues: write\njobs:\n")), ["issues"])
+        self.assertEqual(top_permissions("permissions: read-all # c\n").strip(), "read-all")
 
     def test_inline_on_is_refused(self):
         with self.assertRaises(AssertionError):
