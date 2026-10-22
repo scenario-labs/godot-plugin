@@ -17,9 +17,9 @@ body:
     validations:
       required: true
   - type: dropdown
-    id: lane
+    id: area
     attributes:
-      label: Lane
+      label: Area
       options:
         - Image
         - 3D
@@ -54,6 +54,14 @@ body:
       description: The verbatim error text from the dock or the Output panel. Paste text, not a screenshot, so it is searchable.
     validations:
       required: true
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: How often
+      options:
+        - Every time
+        - Sometimes
+        - Only once so far
   - type: input
     id: godot_version
     attributes:
