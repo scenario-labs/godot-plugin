@@ -17,9 +17,9 @@ body:
     validations:
       required: true
   - type: dropdown
-    id: lane
+    id: area
     attributes:
-      label: Lane
+      label: Area
       options:
         - Image
         - 3D
