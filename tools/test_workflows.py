@@ -106,6 +106,12 @@ class WorkflowPolicyTest(unittest.TestCase):
         self.files = {path.name: path.read_text() for path in paths}
         self.assertTrue(self.files)
 
+    def test_mapping_keys_are_unquoted(self):
+        # The checks below read keys as written; a quoted key such as "permissions": would slip past them.
+        for name, text in self.files.items():
+            with self.subTest(workflow=name):
+                self.assertNotRegex(text, r"""(?m)^\s*(?:-\s+)?(['"])[^'"\n]*\1\s*:(?:\s|$)""")
+
     def test_every_workflow_declares_permissions(self):
         for name, text in self.files.items():
             with self.subTest(workflow=name):
