@@ -55,7 +55,8 @@ def runs_on_pull_requests(body: str) -> bool:
         return True
     expression = guard.group(1).strip()
     expression = re.sub(r"^\$\{\{(.*)\}\}$", r"\1", expression).strip()
-    if "||" in expression:
+    # A comment could hold a fake term, so a guard carrying one does not count.
+    if "||" in expression or re.search(r"\s#", expression):
         return True
     return "github.event_name != 'pull_request'" not in [term.strip() for term in expression.split("&&")]
 
@@ -197,6 +198,7 @@ class ParserTest(unittest.TestCase):
         self.assertTrue(runs_on_pull_requests("    if: github.event_name != 'pull_request' || always()\n"))
         self.assertTrue(runs_on_pull_requests("    if: !(github.event_name != 'pull_request')\n"))
         self.assertTrue(runs_on_pull_requests("    runs-on: x\n"))
+        self.assertTrue(runs_on_pull_requests("    if: always() # && github.event_name != 'pull_request'\n"))
 
     def test_scalar(self):
         self.assertEqual(scalar("lint # explanation"), "lint")
