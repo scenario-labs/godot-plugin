@@ -47,7 +47,24 @@ def jobs(text: str) -> dict[str, str]:
 
 
 def runs_on_pull_requests(body: str) -> bool:
-    return not re.search(r"(?m)^    if:.*github\.event_name != 'pull_request'", body)
+    """False only when the job's `if:` is a plain `&&` chain with the pull request exclusion as one term."""
+    guard = re.search(r"(?m)^    if:\s*(.+)$", body)
+    if guard is None:
+        return True
+    expression = guard.group(1).strip()
+    expression = re.sub(r"^\$\{\{(.*)\}\}$", r"\1", expression).strip()
+    if "||" in expression:
+        return True
+    return "github.event_name != 'pull_request'" not in [term.strip() for term in expression.split("&&")]
+
+
+def scalar(value: str) -> str:
+    """A YAML scalar without its quotes or trailing comment."""
+    value = value.strip()
+    quoted = re.match(r"""^(['"])(.*?)\1""", value)
+    if quoted:
+        return quoted.group(2)
+    return re.split(r"\s#", value, maxsplit=1)[0].strip()
 
 
 def write_scopes(permissions: str) -> list[str]:
@@ -111,7 +128,7 @@ class WorkflowPolicyTest(unittest.TestCase):
                     if "permissions:" not in body or not write_scopes(block(body, "permissions", indent=4)):
                         continue
                     # A job that writes, such as a failure report, must not run for pull requests.
-                    self.assertRegex(body, r"(?m)^    if:.*github\.event_name != 'pull_request'", f"job {job}")
+                    self.assertFalse(runs_on_pull_requests(body), f"job {job}")
 
     def test_secrets_on_pull_requests_only_where_allowed(self):
         for name, text in self.files.items():
@@ -142,7 +159,7 @@ class WorkflowPolicyTest(unittest.TestCase):
                 if not runs_on_pull_requests(body):
                     continue
                 explicit = re.search(r"(?m)^    name:\s*(.+)$", body)
-                check = explicit.group(1).strip() if explicit else job
+                check = scalar(explicit.group(1)) if explicit else job
                 with self.subTest(check=check):
                     self.assertNotIn(check, seen, f"{name} and {seen.get(check)}")
                 seen[check] = name
@@ -163,6 +180,19 @@ class ParserTest(unittest.TestCase):
     def test_comment_after_permissions_reads_the_block(self):
         self.assertEqual(write_scopes(top_permissions("permissions: # c\n  issues: write\njobs:\n")), ["issues"])
         self.assertEqual(top_permissions("permissions: read-all # c\n").strip(), "read-all")
+
+    def test_pull_request_guard(self):
+        excluded = "    if: ${{ always() && github.event_name != 'pull_request' && needs.a.result == 'failure' }}\n"
+        self.assertFalse(runs_on_pull_requests(excluded))
+        self.assertTrue(runs_on_pull_requests("    if: github.event_name != 'pull_request' || always()\n"))
+        self.assertTrue(runs_on_pull_requests("    if: !(github.event_name != 'pull_request')\n"))
+        self.assertTrue(runs_on_pull_requests("    runs-on: x\n"))
+
+    def test_scalar(self):
+        self.assertEqual(scalar("lint # explanation"), "lint")
+        self.assertEqual(scalar('"lint"'), "lint")
+        self.assertEqual(scalar("'lint' # c"), "lint")
+        self.assertEqual(scalar("godot ${{ matrix.godot }}"), "godot ${{ matrix.godot }}")
 
     def test_inline_on_is_refused(self):
         with self.assertRaises(AssertionError):
