@@ -95,6 +95,23 @@ def top_permissions(text: str) -> str:
     return inline.group(1) if inline else block(text, "permissions")
 
 
+def run_scripts(text: str) -> list[str]:
+    """The text of every `run:` step, inline or block."""
+    scripts = []
+    for match in re.finditer(r"(?m)^(\s*)(?:-\s+)?run:[ \t]*(.*)$", text):
+        indent, value = len(match.group(1)), match.group(2)
+        if value.strip() and value.strip()[0] not in "|>":
+            scripts.append(value)
+            continue
+        lines = []
+        for line in text[match.end():].splitlines()[1:]:
+            if line.strip() and len(line) - len(line.lstrip()) <= indent:
+                break
+            lines.append(line)
+        scripts.append("\n".join(lines))
+    return scripts
+
+
 def local_actions(text: str) -> set[pathlib.Path]:
     refs = re.findall(r"uses:\s*['\"]?(\./\.github/actions/[\w-]+)", text)
     return {next((ROOT / ref / f for f in ("action.yml", "action.yaml") if (ROOT / ref / f).is_file()), ROOT / ref / "action.yml")
@@ -107,11 +124,12 @@ class WorkflowPolicyTest(unittest.TestCase):
         self.files = {path.name: path.read_text() for path in paths}
         self.assertTrue(self.files)
 
-    def test_mapping_keys_are_unquoted(self):
-        # The checks below read keys as written; a quoted key such as "permissions": would slip past them.
+    def test_mapping_keys_are_plain(self):
+        # The checks below read keys as written; "permissions": or permissions : would slip past them.
         for name, text in self.files.items():
             with self.subTest(workflow=name):
                 self.assertNotRegex(text, r"""(?m)^\s*(?:-\s+)?(['"])[^'"\n]*\1\s*:(?:\s|$)""")
+                self.assertNotRegex(text, r"(?m)^\s*(?:-\s+)?[\w-]+\s+:(?:\s|$)")
 
     def test_every_workflow_declares_permissions(self):
         for name, text in self.files.items():
@@ -126,6 +144,9 @@ class WorkflowPolicyTest(unittest.TestCase):
                 self.assertIn(name, TARGET_ALLOWED)
                 self.assertNotIn("actions/checkout", text)
                 self.assertNotIn("pull_request.head", text)
+                # Pull request values reach a script only through env:, never spliced into its text.
+                for script in run_scripts(text):
+                    self.assertNotIn("${{", script)
 
     def test_pull_request_workflows_stay_read_only(self):
         for name, text in self.files.items():
@@ -205,6 +226,10 @@ class ParserTest(unittest.TestCase):
         self.assertEqual(scalar('"lint"'), "lint")
         self.assertEqual(scalar("'lint' # c"), "lint")
         self.assertEqual(scalar("godot ${{ matrix.godot }}"), "godot ${{ matrix.godot }}")
+
+    def test_run_scripts(self):
+        text = "    steps:\n      - run: echo ${{ x }}\n      - name: b\n        run: |\n          echo a\n          echo ${{ y }}\n      - run: echo c\n"
+        self.assertEqual(run_scripts(text), ["echo ${{ x }}", "          echo a\n          echo ${{ y }}", "echo c"])
 
     def test_inline_on_is_refused(self):
         with self.assertRaises(AssertionError):
