@@ -5,8 +5,8 @@
     "postinstall": "node -e \"require('fs').writeFileSync('node_modules/.gdignore', '')\""
   },
   "devDependencies": {
-    "@commitlint/cli": "^21.2.3",
-    "@commitlint/config-conventional": "^21.2.3",
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
     "typescript": "^7.0.2"
   }
 }
