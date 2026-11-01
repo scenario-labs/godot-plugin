@@ -74,22 +74,36 @@ jobs:
       # The guide, its images and plugin.cfg come from the newest release, so a guide
       # change merged before its release does not describe a feature users cannot
       # download yet. The template, styles and builder stay on main.
+      # Only a verified release whose tag main contains; otherwise the guide on main.
       - name: Check out the released guide
         id: guide
         env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_DIR: ${{ steps.release.outputs.dir }}
           TAG: ${{ steps.release.outputs.tag }}
         run: |
           set -euo pipefail
+          if [ -z "$RELEASE_DIR" ]; then
+            echo "dir=$GITHUB_WORKSPACE" >> "$GITHUB_OUTPUT"
+            echo "ref=main" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          status="$(gh api "repos/$GITHUB_REPOSITORY/compare/$TAG...main" --jq .status)"
+          if [ "$status" != ahead ] && [ "$status" != identical ]; then
+            echo "::error::$TAG is not on main (compare status: $status)"
+            exit 1
+          fi
           git fetch --depth 1 origin "refs/tags/$TAG:refs/tags/$TAG"
           git worktree add --detach "$RUNNER_TEMP/guide" "$TAG"
           echo "dir=$RUNNER_TEMP/guide" >> "$GITHUB_OUTPUT"
+          echo "ref=$TAG" >> "$GITHUB_OUTPUT"
       - name: Build the site
         env:
           RELEASE_DIR: ${{ steps.release.outputs.dir }}
           GUIDE_DIR: ${{ steps.guide.outputs.dir }}
-          TAG: ${{ steps.release.outputs.tag }}
+          GUIDE_REF: ${{ steps.guide.outputs.ref }}
         run: |
-          args=(--output "$RUNNER_TEMP/site" --guide "$GUIDE_DIR" --ref "$TAG")
+          args=(--output "$RUNNER_TEMP/site" --guide "$GUIDE_DIR" --ref "$GUIDE_REF")
           if [ -n "$RELEASE_DIR" ]; then args+=(--release "$RELEASE_DIR"); fi
           uv run --no-project --with markdown==3.10.3 python tools/build_site.py "${args[@]}"
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0

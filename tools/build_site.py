@@ -65,7 +65,17 @@ def release_files(folder: pathlib.Path) -> dict:
             "path": zip_path, "sums": folder / "SHA256SUMS"}
 
 
+def no_symlinks(guide_root: pathlib.Path) -> None:
+    """The guide's files are published as they are, so none may point outside the checkout."""
+    paths = [guide_root / "docs/USER_GUIDE.md", guide_root / "addons/scenario/plugin.cfg",
+             guide_root / "docs/images", *(guide_root / "docs/images").rglob("*")]
+    links = [p.relative_to(guide_root).as_posix() for p in paths if p.is_symlink()]
+    if links:
+        raise SystemExit(f"symbolic links are not published: {', '.join(links)}")
+
+
 def build(output: pathlib.Path, release: pathlib.Path | None, guide_root: pathlib.Path = ROOT, ref: str = "main") -> None:
+    no_symlinks(guide_root)
     if output.exists() and any(output.iterdir()):
         raise SystemExit(f"{output} is not empty")
     output.mkdir(parents=True, exist_ok=True)
