@@ -89,7 +89,8 @@ class WorkflowPolicyTest(unittest.TestCase):
                 continue
             with self.subTest(workflow=name):
                 self.assertIn(name, TARGET_ALLOWED)
-                self.assertNotIn("pull_request.head", self.texts[name])
+                # Property or index access alike: pull_request.head, pull_request['head'].
+                self.assertNotRegex(self.texts[name], r"pull_request\W{0,3}head")
                 for job_id, job in doc["jobs"].items():
                     # A reusable workflow would escape the action allowlist below.
                     self.assertNotIn("uses", job, f"job {job_id}")
@@ -126,6 +127,13 @@ class WorkflowPolicyTest(unittest.TestCase):
         gate = jobs.pop("ci-ok")
         self.assertEqual(set(gate["needs"]), set(jobs))
         self.assertEqual(gate.get("if"), "always()")
+        # The gate fails when any needed job did not succeed, and nothing may swallow that failure.
+        self.assertNotIn("continue-on-error", gate)
+        [step] = gate["steps"]
+        self.assertNotIn("continue-on-error", step)
+        self.assertEqual(step["env"]["RESULTS"], "${{ join(needs.*.result, ' ') }}")
+        self.assertIn('[ "$result" != success ]', step["run"])
+        self.assertIn("exit 1", step["run"])
 
     def test_check_names_on_pull_requests_are_unique(self):
         # A job without `name` is checked under its id, so required checks such as pr-title stay unique.
