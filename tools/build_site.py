@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """Build the plugin's website: docs/USER_GUIDE.md as one page, plus the latest release zip.
 
-Usage: uv run --no-project --with markdown==3.10.3 python tools/build_site.py --output DIR [--release DIR]
-(make site). --release is a folder holding a release zip and its SHA256SUMS,
-already checked by the caller (.github/workflows/pages.yml verifies both and the
-build provenance). Without it the page links to the GitHub releases instead.
+Usage: uv run --no-project --with markdown==3.10.3 python tools/build_site.py --output
+DIR [--release DIR] [--guide DIR --ref REF] (make site). --release is a folder holding a
+release zip and its SHA256SUMS, already checked by the caller
+(.github/workflows/pages.yml verifies both and the build provenance). Without it the
+page links to the GitHub releases instead. --guide is a checkout of the released commit:
+the guide, its images and plugin.cfg and project.godot come from there, so the page
+describes what users can download, while the template, styles and search come from this
+checkout. --ref is the git ref the guide's links to repository files point at (default
+main).
 
 The page has the look of the Blender plugin's site: docs/site/template.html with
 docs/site/site.css and the guide search docs/site/handbook-search.js inlined.
@@ -32,19 +37,27 @@ def inline(name: str, element: str) -> str:
     return text
 
 
-def plugin_cfg() -> configparser.SectionProxy:
+def plugin_cfg(guide: pathlib.Path) -> configparser.SectionProxy:
     cfg = configparser.ConfigParser()
-    cfg.read(ROOT / "addons/scenario/plugin.cfg")
+    cfg.read(guide / "addons/scenario/plugin.cfg")
     return cfg["plugin"]
 
 
-def repo_links(text: str) -> str:
+def godot_version(guide: pathlib.Path) -> str:
+    """The Godot version the released project targets, from its project.godot features."""
+    found = re.search(r'^config/features=PackedStringArray\("(\d+\.\d+)"', (guide / "project.godot").read_text(), re.M)
+    if not found:
+        raise SystemExit("project.godot names no Godot version in config/features")
+    return found.group(1)
+
+
+def repo_links(text: str, guide: pathlib.Path, ref: str) -> str:
     """Links from the guide to other repository files point at GitHub; images stay local."""
     def target(match: re.Match) -> str:
-        path = (ROOT / "docs" / match.group(1)).resolve().relative_to(ROOT).as_posix()
+        path = (guide / "docs" / match.group(1)).resolve().relative_to(guide.resolve()).as_posix()
         if path.startswith("docs/images/"):
             return f"]({path.removeprefix('docs/')})"
-        return f"]({REPO}/blob/main/{path})"
+        return f"]({REPO}/blob/{ref}/{path})"
     return LINK_RE.sub(target, text)
 
 
@@ -61,17 +74,28 @@ def release_files(folder: pathlib.Path) -> dict:
             "path": zip_path, "sums": folder / "SHA256SUMS"}
 
 
-def build(output: pathlib.Path, release: pathlib.Path | None) -> None:
+def no_symlinks(guide_root: pathlib.Path) -> None:
+    """The guide's files are published as they are, so none may point outside the checkout."""
+    paths = [guide_root / "docs/USER_GUIDE.md", guide_root / "addons/scenario/plugin.cfg", guide_root / "project.godot"]
+    for root in {guide_root, ROOT}:
+        paths += [root / "docs/images", *(root / "docs/images").rglob("*")]
+    links = [p.as_posix() for p in paths if p.is_symlink()]
+    if links:
+        raise SystemExit(f"symbolic links are not published: {', '.join(links)}")
+
+
+def build(output: pathlib.Path, release: pathlib.Path | None, guide_root: pathlib.Path = ROOT, ref: str = "main") -> None:
+    no_symlinks(guide_root)
     if output.exists() and any(output.iterdir()):
         raise SystemExit(f"{output} is not empty")
     output.mkdir(parents=True, exist_ok=True)
     md = markdown.Markdown(extensions=["toc", "tables", "fenced_code", "sane_lists"],
                            extension_configs={"toc": {"toc_depth": "2"}})
-    guide = (ROOT / "docs/USER_GUIDE.md").read_text()
+    guide = (guide_root / "docs/USER_GUIDE.md").read_text()
     # The page has its own title and version line; the guide's first two lines repeat them.
     body = re.sub(r"\A# [^\n]*\n+(Version [^\n]*\n+)?", "", guide)
-    content = md.convert(repo_links(body))
-    plugin = plugin_cfg()
+    content = md.convert(repo_links(body, guide_root, ref))
+    plugin = plugin_cfg(guide_root)
 
     if release:
         found = release_files(release)
@@ -88,11 +112,15 @@ def build(output: pathlib.Path, release: pathlib.Path | None) -> None:
         version, download = plugin["version"].strip('"'), f"{REPO}/releases/latest"
         checksum = f'In the <a href="{download}">GitHub release</a>'
 
-    docks = sorted((ROOT / "docs/images").glob("dock-*.png"), key=lambda p: [int(n) for n in re.findall(r"\d+", p.stem)])
-    shutil.copytree(ROOT / "docs/images", output / "images")
+    docks = sorted((guide_root / "docs/images").glob("dock-*.png"), key=lambda p: [int(n) for n in re.findall(r"\d+", p.stem)])
+    shutil.copytree(guide_root / "docs/images", output / "images")
+    # The template is main's, so the images it names (icons, wordmark) come from main too.
+    for name in set(re.findall(r"images/([\w.-]+)", TEMPLATE.read_text())):
+        shutil.copy2(ROOT / "docs/images" / name, output / "images" / name)
     slots = {
         "description": html.escape(plugin["description"].strip('"')),
         "version": html.escape(version),
+        "godot": godot_version(guide_root),
         "download": html.escape(download),
         "checksum": checksum,
         "dock": f"images/{docks[-1].name}" if docks else "",
@@ -100,6 +128,7 @@ def build(output: pathlib.Path, release: pathlib.Path | None) -> None:
         "toc": "\n".join(f'<li><a href="#{t["id"]}">{t["name"]}</a></li>' for t in md.toc_tokens),
         "content": content,
         "repo": REPO,
+        "ref": html.escape(ref),
         "style": inline("site.css", "style"),
         "search": inline("handbook-search.js", "script"),
     }
@@ -113,8 +142,10 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=pathlib.Path, required=True)
     parser.add_argument("--release", type=pathlib.Path)
+    parser.add_argument("--guide", type=pathlib.Path, default=ROOT)
+    parser.add_argument("--ref", default="main")
     args = parser.parse_args()
-    build(args.output, args.release)
+    build(args.output, args.release, args.guide, args.ref)
     return 0
 
 
