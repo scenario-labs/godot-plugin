@@ -49,16 +49,16 @@ def write_scopes(permissions) -> list[str]:
     return [scope for scope, level in permissions.items() if level == "write"]
 
 
-def runs_on_pull_requests(job: dict) -> bool:
-    """False only when the job's `if:` is a plain `&&` chain with the pull request exclusion as one term."""
+def runs_on_pull_requests(job: dict, triggers=frozenset({"pull_request"})) -> bool:
+    """False only when the job's `if:` is a plain `&&` chain excluding each pull request event the workflow has."""
     guard = job.get("if")
     if not isinstance(guard, str):
         return True
     expression = re.sub(r"^\$\{\{(.*)\}\}$", r"\1", guard.strip(), flags=re.DOTALL).strip()
     if "||" in expression:
         return True
-    terms = [" ".join(term.split()) for term in expression.split("&&")]
-    return "github.event_name != 'pull_request'" not in terms
+    terms = {" ".join(term.split()) for term in expression.split("&&")}
+    return not all(f"github.event_name != '{event}'" in terms for event in PR_EVENTS & set(triggers))
 
 
 def steps(doc: dict) -> list[dict]:
@@ -90,6 +90,9 @@ class WorkflowPolicyTest(unittest.TestCase):
             with self.subTest(workflow=name):
                 self.assertIn(name, TARGET_ALLOWED)
                 self.assertNotIn("pull_request.head", self.texts[name])
+                for job_id, job in doc["jobs"].items():
+                    # A reusable workflow would escape the action allowlist below.
+                    self.assertNotIn("uses", job, f"job {job_id}")
                 for step in steps(doc):
                     if "uses" in step:
                         self.assertIn(step["uses"].split("@")[0], TARGET_ACTIONS)
@@ -105,7 +108,7 @@ class WorkflowPolicyTest(unittest.TestCase):
                 for job_id, job in doc["jobs"].items():
                     if write_scopes(job.get("permissions", {})):
                         # A job that writes, such as a failure report, must not run for pull requests.
-                        self.assertFalse(runs_on_pull_requests(job), f"job {job_id}")
+                        self.assertFalse(runs_on_pull_requests(job, events(doc)), f"job {job_id}")
 
     def test_secrets_on_pull_requests_only_where_allowed(self):
         for name, doc in self.docs.items():
@@ -131,7 +134,7 @@ class WorkflowPolicyTest(unittest.TestCase):
             if not PR_EVENTS & events(doc):
                 continue
             for job_id, job in doc["jobs"].items():
-                if not runs_on_pull_requests(job):
+                if not runs_on_pull_requests(job, events(doc)):
                     continue
                 check = str(job.get("name", job_id))
                 with self.subTest(check=check):
@@ -163,6 +166,12 @@ class ParserTest(unittest.TestCase):
         self.assertTrue(runs_on_pull_requests({"if": "github.event_name != 'pull_request' || always()"}))
         self.assertTrue(runs_on_pull_requests({"if": "!(github.event_name != 'pull_request')"}))
         self.assertTrue(runs_on_pull_requests({}))
+        # On pull_request_target the event name differs, so each pull request trigger needs its own term.
+        target = {"pull_request_target"}
+        self.assertTrue(runs_on_pull_requests({"if": "github.event_name != 'pull_request'"}, target))
+        self.assertFalse(runs_on_pull_requests({"if": "github.event_name != 'pull_request_target'"}, target))
+        both = {"pull_request", "pull_request_target"}
+        self.assertTrue(runs_on_pull_requests({"if": "github.event_name != 'pull_request'"}, both))
         # YAML drops a comment, so a guard written in one is no guard.
         self.assertTrue(runs_on_pull_requests(load("a:\n  if: always() # && github.event_name != 'pull_request'\n")["a"]))
 
