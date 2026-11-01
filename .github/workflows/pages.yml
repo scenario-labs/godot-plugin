@@ -1,9 +1,9 @@
 name: pages
 
-# Publishes the website to GitHub Pages: docs/USER_GUIDE.md as one page, and
-# the latest release zip once it has a SHA256SUMS and build provenance from
-# release-please.yml, both verified here. Until then the page links to the
-# GitHub releases. Repository settings must use "GitHub Actions" as the Pages source.
+# Publishes the website to GitHub Pages: docs/USER_GUIDE.md from the newest
+# release as one page, and the latest release zip once it has a SHA256SUMS and
+# build provenance from release-please.yml, both verified here. Until then the
+# page links to the GitHub releases. Repository settings must use "GitHub Actions" as the Pages source.
 
 on:
   push:
@@ -59,6 +59,7 @@ jobs:
           dir="$RUNNER_TEMP/release"
           mkdir -p "$dir"
           tag="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
           assets="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
           if ! grep -qx SHA256SUMS <<<"$assets" || ! grep -qE '^scenario-godot-plugin-[0-9]+\.[0-9]+\.[0-9]+\.zip$' <<<"$assets"; then
             echo "::notice::$tag has no checksummed zip: the page links to the GitHub releases instead"
@@ -70,11 +71,25 @@ jobs:
           gh attestation verify "$dir"/scenario-godot-plugin-*.zip --repo "$GITHUB_REPOSITORY" \
             --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release-please.yml"
           echo "dir=$dir" >> "$GITHUB_OUTPUT"
+      # The guide, its images and plugin.cfg come from the newest release, so a guide
+      # change merged before its release does not describe a feature users cannot
+      # download yet. The template, styles and builder stay on main.
+      - name: Check out the released guide
+        id: guide
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git fetch --depth 1 origin "refs/tags/$TAG:refs/tags/$TAG"
+          git worktree add --detach "$RUNNER_TEMP/guide" "$TAG"
+          echo "dir=$RUNNER_TEMP/guide" >> "$GITHUB_OUTPUT"
       - name: Build the site
         env:
           RELEASE_DIR: ${{ steps.release.outputs.dir }}
+          GUIDE_DIR: ${{ steps.guide.outputs.dir }}
+          TAG: ${{ steps.release.outputs.tag }}
         run: |
-          args=(--output "$RUNNER_TEMP/site")
+          args=(--output "$RUNNER_TEMP/site" --guide "$GUIDE_DIR" --ref "$TAG")
           if [ -n "$RELEASE_DIR" ]; then args+=(--release "$RELEASE_DIR"); fi
           uv run --no-project --with markdown==3.10.3 python tools/build_site.py "${args[@]}"
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0

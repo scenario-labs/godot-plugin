@@ -170,7 +170,7 @@ the draft, and `publish-changelog.yml` posts the notes to scenario.com.
 
 ## Website and download counts
 
-`pages.yml` publishes `docs/USER_GUIDE.md` as one page (`tools/build_site.py`,
+`pages.yml` publishes `docs/USER_GUIDE.md` from the newest release as one page (`tools/build_site.py`,
 `docs/site/template.html`; `make site` builds it into `dist/site`) to GitHub
 Pages, with the latest release zip once its checksum and build provenance
 verify. The page has the look of the Blender plugin's site: `docs/site/site.css`
