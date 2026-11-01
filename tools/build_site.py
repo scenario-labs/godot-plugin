@@ -67,9 +67,10 @@ def release_files(folder: pathlib.Path) -> dict:
 
 def no_symlinks(guide_root: pathlib.Path) -> None:
     """The guide's files are published as they are, so none may point outside the checkout."""
-    paths = [guide_root / "docs/USER_GUIDE.md", guide_root / "addons/scenario/plugin.cfg",
-             guide_root / "docs/images", *(guide_root / "docs/images").rglob("*")]
-    links = [p.relative_to(guide_root).as_posix() for p in paths if p.is_symlink()]
+    paths = [guide_root / "docs/USER_GUIDE.md", guide_root / "addons/scenario/plugin.cfg"]
+    for root in {guide_root, ROOT}:
+        paths += [root / "docs/images", *(root / "docs/images").rglob("*")]
+    links = [p.as_posix() for p in paths if p.is_symlink()]
     if links:
         raise SystemExit(f"symbolic links are not published: {', '.join(links)}")
 
@@ -104,6 +105,9 @@ def build(output: pathlib.Path, release: pathlib.Path | None, guide_root: pathli
 
     docks = sorted((guide_root / "docs/images").glob("dock-*.png"), key=lambda p: [int(n) for n in re.findall(r"\d+", p.stem)])
     shutil.copytree(guide_root / "docs/images", output / "images")
+    # The template is main's, so the images it names (icons, wordmark) come from main too.
+    for name in set(re.findall(r"images/([\w.-]+)", TEMPLATE.read_text())):
+        shutil.copy2(ROOT / "docs/images" / name, output / "images" / name)
     slots = {
         "description": html.escape(plugin["description"].strip('"')),
         "version": html.escape(version),
