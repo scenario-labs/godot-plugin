@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """Build the plugin's website: docs/USER_GUIDE.md as one page, plus the latest release zip.
 
-Usage: uv run --no-project --with markdown==3.10.3 python tools/build_site.py --output DIR
-[--release DIR] [--guide DIR --ref REF] (make site). --release is a folder holding a
-release zip and its SHA256SUMS, already checked by the caller (.github/workflows/pages.yml
-verifies both and the build provenance). Without it the page links to the GitHub releases
-instead. --guide is a checkout of the released commit: the guide, its images and
-plugin.cfg come from there, so the page describes what users can download, while the
-template, styles and search come from this checkout. --ref is the git ref the guide's
-links to repository files point at (default main).
+Usage: uv run --no-project --with markdown==3.10.3 python tools/build_site.py --output
+DIR [--release DIR] [--guide DIR --ref REF] (make site). --release is a folder holding a
+release zip and its SHA256SUMS, already checked by the caller
+(.github/workflows/pages.yml verifies both and the build provenance). Without it the
+page links to the GitHub releases instead. --guide is a checkout of the released commit:
+the guide, its images and plugin.cfg and project.godot come from there, so the page
+describes what users can download, while the template, styles and search come from this
+checkout. --ref is the git ref the guide's links to repository files point at (default
+main).
 
 The page has the look of the Blender plugin's site: docs/site/template.html with
 docs/site/site.css and the guide search docs/site/handbook-search.js inlined.
@@ -42,6 +43,14 @@ def plugin_cfg(guide: pathlib.Path) -> configparser.SectionProxy:
     return cfg["plugin"]
 
 
+def godot_version(guide: pathlib.Path) -> str:
+    """The Godot version the released project targets, from its project.godot features."""
+    found = re.search(r'^config/features=PackedStringArray\("(\d+\.\d+)"', (guide / "project.godot").read_text(), re.M)
+    if not found:
+        raise SystemExit("project.godot names no Godot version in config/features")
+    return found.group(1)
+
+
 def repo_links(text: str, guide: pathlib.Path, ref: str) -> str:
     """Links from the guide to other repository files point at GitHub; images stay local."""
     def target(match: re.Match) -> str:
@@ -67,7 +76,7 @@ def release_files(folder: pathlib.Path) -> dict:
 
 def no_symlinks(guide_root: pathlib.Path) -> None:
     """The guide's files are published as they are, so none may point outside the checkout."""
-    paths = [guide_root / "docs/USER_GUIDE.md", guide_root / "addons/scenario/plugin.cfg"]
+    paths = [guide_root / "docs/USER_GUIDE.md", guide_root / "addons/scenario/plugin.cfg", guide_root / "project.godot"]
     for root in {guide_root, ROOT}:
         paths += [root / "docs/images", *(root / "docs/images").rglob("*")]
     links = [p.as_posix() for p in paths if p.is_symlink()]
@@ -111,6 +120,7 @@ def build(output: pathlib.Path, release: pathlib.Path | None, guide_root: pathli
     slots = {
         "description": html.escape(plugin["description"].strip('"')),
         "version": html.escape(version),
+        "godot": godot_version(guide_root),
         "download": html.escape(download),
         "checksum": checksum,
         "dock": f"images/{docks[-1].name}" if docks else "",
