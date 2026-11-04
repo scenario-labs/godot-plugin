@@ -3,14 +3,16 @@
 Run: make tools-test, which provides PyYAML. The workflows are read with a YAML parser,
 so quoting, spacing and indentation cannot hide a key from these checks.
 """
-import pathlib, re, unittest
+import hashlib, pathlib, re, unittest
 
 import yaml
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 WORKFLOWS = ROOT / ".github" / "workflows"
-# Adds pull requests to the Plugins project; it never checks out or runs their code.
-TARGET_ALLOWED = {"project.yml"}
+# Adds pull requests to the Plugins project; it never checks out or runs their code. The file
+# is pinned whole, version pins aside: a change to it fails here until the hash is updated
+# in the same reviewed diff, since no list of banned commands can keep PR code out.
+TARGET_ALLOWED = {"project.yml": "d2b51f53828ac03af71451bd630f20d2ec8c37b22273b424e8291cd4472c9bc7"}
 # The only actions a pull_request_target workflow may use: no local action, no checkout.
 TARGET_ACTIONS = {"actions/create-github-app-token"}
 # The free contract check runs on pull requests that change core/; forks get no secrets.
@@ -61,6 +63,11 @@ def runs_on_pull_requests(job: dict, triggers=frozenset({"pull_request"})) -> bo
     return not all(f"github.event_name != '{event}'" in terms for event in PR_EVENTS & set(triggers))
 
 
+def pinned_hash(text: str) -> str:
+    """SHA-256 of a workflow with its action version pins blanked, so Dependabot bumps keep it."""
+    return hashlib.sha256(re.sub(r"(uses:\s*[\w./-]+)@\S+(\s*#.*)?", r"\1@pinned", text).encode()).hexdigest()
+
+
 def steps(doc: dict) -> list[dict]:
     return [step for job in doc["jobs"].values() for step in job.get("steps", [])]
 
@@ -89,6 +96,7 @@ class WorkflowPolicyTest(unittest.TestCase):
                 continue
             with self.subTest(workflow=name):
                 self.assertIn(name, TARGET_ALLOWED)
+                self.assertEqual(pinned_hash(self.texts[name]), TARGET_ALLOWED[name], "review the change, then update the hash")
                 # Property or index access alike: pull_request.head, pull_request['head'].
                 self.assertNotRegex(self.texts[name], r"pull_request\W{0,3}head")
                 for job_id, job in doc["jobs"].items():
