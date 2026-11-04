@@ -132,13 +132,16 @@ class WorkflowPolicyTest(unittest.TestCase):
 
     def test_ci_ok_waits_for_every_ci_job(self):
         jobs = dict(self.docs["ci.yml"]["jobs"])
+        # A job or step that may fail without failing would read as success to the gate.
+        for job_id, job in jobs.items():
+            self.assertNotIn("continue-on-error", job, f"job {job_id}")
+            for step in job.get("steps", []):
+                self.assertNotIn("continue-on-error", step, f"job {job_id}")
         gate = jobs.pop("ci-ok")
         self.assertEqual(set(gate["needs"]), set(jobs))
         self.assertEqual(gate.get("if"), "always()")
-        # The gate fails when any needed job did not succeed, and nothing may swallow that failure.
-        self.assertNotIn("continue-on-error", gate)
+        # The gate fails when any needed job did not succeed.
         [step] = gate["steps"]
-        self.assertNotIn("continue-on-error", step)
         self.assertEqual(step["env"]["RESULTS"], "${{ join(needs.*.result, ' ') }}")
         self.assertIn('[ "$result" != success ]', step["run"])
         self.assertIn("exit 1", step["run"])
