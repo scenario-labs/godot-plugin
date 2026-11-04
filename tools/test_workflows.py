@@ -18,6 +18,23 @@ TARGET_ACTIONS = {"actions/create-github-app-token"}
 # The free contract check runs on pull requests that change core/; forks get no secrets.
 SECRETS_ON_PR_ALLOWED = {"contract.yml"}
 PR_EVENTS = {"pull_request", "pull_request_target"}
+# ci-ok, the one required check: it fails unless every job it needs succeeded.
+CI_OK = {
+    "name": "ci-ok",
+    "if": "always()",
+    "runs-on": "ubuntu-24.04",
+    "timeout-minutes": 5,
+    "steps": [{
+        "name": "Require every CI job to succeed",
+        "env": {"RESULTS": "${{ join(needs.*.result, ' ') }}"},
+        "run": 'for result in $RESULTS; do\n'
+               '  if [ "$result" != success ]; then\n'
+               '    echo "::error::A CI job did not succeed: $RESULTS"\n'
+               '    exit 1\n'
+               '  fi\n'
+               'done\n',
+    }],
+}
 
 
 def load(text: str) -> dict:
@@ -139,12 +156,8 @@ class WorkflowPolicyTest(unittest.TestCase):
                 self.assertNotIn("continue-on-error", step, f"job {job_id}")
         gate = jobs.pop("ci-ok")
         self.assertEqual(set(gate["needs"]), set(jobs))
-        self.assertEqual(gate.get("if"), "always()")
-        # The gate fails when any needed job did not succeed.
-        [step] = gate["steps"]
-        self.assertEqual(step["env"]["RESULTS"], "${{ join(needs.*.result, ' ') }}")
-        self.assertIn('[ "$result" != success ]', step["run"])
-        self.assertIn("exit 1", step["run"])
+        # The gate is pinned whole, so no step condition, skip or rewrite can let a failure through.
+        self.assertEqual({key: value for key, value in gate.items() if key != "needs"}, CI_OK)
 
     def test_check_names_on_pull_requests_are_unique(self):
         # A job without `name` is checked under its id, so required checks such as pr-title stay unique.
