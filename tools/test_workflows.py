@@ -172,6 +172,16 @@ class WorkflowPolicyTest(unittest.TestCase):
                 with self.subTest(check=check):
                     self.assertNotIn(check, seen, f"{name} and {seen.get(check)}")
                 seen[check] = name
+        # A name with an expression is only known at run time, so its literal start must set it
+        # apart: it may not be empty, and no other check name may begin with it.
+        for check, name in seen.items():
+            if "${{" not in check:
+                continue
+            prefix = check.split("${{", 1)[0]
+            with self.subTest(check=check):
+                self.assertTrue(prefix.strip(), f"{name}: a dynamic name needs a literal start")
+                others = [other for other in seen if other != check and other.startswith(prefix)]
+                self.assertEqual(others, [], f"{name}: other checks share the start {prefix!r}")
 
 
 class ParserTest(unittest.TestCase):
