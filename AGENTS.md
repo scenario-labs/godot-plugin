@@ -30,6 +30,8 @@ In `addons/scenario/`:
   - `schema_form.gd`: model schema to form fields, validation, payload;
     `prompt_name()` finds the prompt field by its flag.
   - `lanes.gd`: the five lanes, their models, presets and restrictions.
+  - `project_models.gd`: the project's trained models per lane; a LoRA or a
+    composition runs on the base `model_schema_get` names (`run_with`).
   - `oauth.gd`: Sign in with Scenario as Godot's registered OAuth application
     on `clerk.scenario.com`: PKCE with a loopback redirect, device grant,
     refresh, revoke.

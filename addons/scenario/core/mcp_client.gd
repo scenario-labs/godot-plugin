@@ -216,6 +216,24 @@ func list_projects(team_id: String) -> Dictionary:
 	return Errors.ok(projects)
 
 
+## The project's own trained models (private), every page up to max_pages.
+func list_project_models(max_pages: int = 5) -> Dictionary:
+	var models: Array = []
+	var token := ""
+	for page in max_pages:
+		var arguments := {"filters": {"privacy": "private", "status": "trained"}, "limit": 100}
+		if not token.is_empty():
+			arguments["page_token"] = token
+		var result: Dictionary = await call_tool("models_list", arguments)
+		if not result["ok"]:
+			return result
+		models.append_array(result["value"].get("models", []))
+		token = str(result["value"].get("nextPaginationToken", ""))
+		if token.is_empty():
+			break
+	return Errors.ok(models)
+
+
 func get_schema(model_id: String) -> Dictionary:
 	return await call_tool("model_schema_get", {"model_id": model_id})
 

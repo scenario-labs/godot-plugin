@@ -107,5 +107,25 @@ func set_workspace(team: Dictionary, project: Dictionary) -> void:
 		team_name = ""
 
 
+## {"team", "project"} holding project_id in a teams_list reply, or {}.
+static func find_workspace(teams: Array, project_id: String) -> Dictionary:
+	for team in teams:
+		for project in team.get("projects", []):
+			if project is Dictionary and str(project.get("id", "")) == project_id and not project_id.is_empty():
+				return {"team": team, "project": project}
+	return {}
+
+
+## {"team", "project"} when the account has exactly one project, else {}.
+static func only_workspace(teams: Array) -> Dictionary:
+	var found := {}
+	for team in teams:
+		for project in team.get("projects", []):
+			if not found.is_empty():
+				return {}
+			found = {"team": team, "project": project}
+	return found
+
+
 func workspace_label() -> String:
 	return "%s / %s" % [team_name, project_name] if has_project() else ""
