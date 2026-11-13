@@ -241,6 +241,14 @@ static func _edited(path: String) -> Node:
 
 
 func open_scratch_scene(path: String) -> Node:
+	# The editor reopens the scenes an earlier job left open and can switch back
+	# to one of them during an import, so placements would land there: close them.
+	for other in EditorInterface.get_open_scenes():
+		if other != path and not other.is_empty():
+			EditorInterface.open_scene_from_path(other)
+			await wait_frames(2)
+			EditorInterface.close_scene()
+			await wait_frames(2)
 	EditorInterface.get_resource_filesystem().update_file(path)
 	for attempt in 30:
 		EditorInterface.open_scene_from_path(path)
