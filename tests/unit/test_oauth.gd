@@ -128,7 +128,7 @@ func test_device_grant_off_and_plain_http_link() -> void:
 
 
 func test_revoke_is_best_effort() -> void:
-	fake.replies.append(_json(200, {}))
+	fake.replies.append({"http": 200, "body": ""})  # the provider answers with an empty body
 	assert_true(await oauth.revoke("rt_1"))
 	assert_eq(fake.requests[0]["url"], "https://idp.example.test/oauth/token/revoke")
 	assert_eq(_form(0), {"token": "rt_1", "token_type_hint": "refresh_token", "client_id": "client_godot"})

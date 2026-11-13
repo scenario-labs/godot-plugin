@@ -175,7 +175,7 @@ func _oauth(url: String, form: Dictionary) -> Dictionary:
 	if url.ends_with("/oauth/token/revoke"):
 		oauth_requests.append({"endpoint": "revoke", "form": form})
 		revoked.append(form.get("token", ""))
-		return _json(200, {})
+		return {"status": 200, "headers": {}, "body": "", "error": ""}  # empty, as the provider answers
 	oauth_requests.append({"endpoint": "token", "form": form})
 	match str(form.get("grant_type", "")):
 		"authorization_code":

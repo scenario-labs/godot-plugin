@@ -156,8 +156,11 @@ func _post_form(url: String, fields: Dictionary) -> Dictionary:
 		return Errors.fail(Errors.TIMEOUT, "Scenario's sign-in service took too long to answer.")
 	if not error.is_empty():
 		return Errors.fail(Errors.TRANSPORT, "Could not reach Scenario's sign-in service. Check the connection and try again.")
-	var data: Variant = JSON.parse_string(str(response.get("body", "")))
-	return Errors.ok({"status": int(response.get("status", 0)), "data": data if data is Dictionary else {}})
+	# JSON.new().parse(), not JSON.parse_string(): the revoke reply has an empty
+	# body, and parse_string would log an engine error for it.
+	var json := JSON.new()
+	var parsed := json.parse(str(response.get("body", ""))) == OK and json.data is Dictionary
+	return Errors.ok({"status": int(response.get("status", 0)), "data": json.data if parsed else {}})
 
 
 func _tokens(reply: Dictionary, what: String) -> Dictionary:
