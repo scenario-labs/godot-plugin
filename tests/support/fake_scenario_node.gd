@@ -57,6 +57,8 @@ var uploads := 0
 var puts: Array = []
 var estimates := 0
 var tool_log: Array = []
+## jobs_list answers per project: {project_id: [job, ...]}.
+var listed := {}
 var _jobs := {}
 
 
@@ -95,7 +97,7 @@ func post(url: String, headers: PackedStringArray, body: String, _timeout_s: flo
 			var ids: Array = OUTPUTS[lane].map(func(o: Dictionary) -> String: return o["id"])
 			return _reply(payload["id"], _tool({"job": {"jobId": args["job_id"], "status": "success", "progress": 1, "assetIds": ids, "cuCost": price}}))
 		"jobs_list":
-			return _reply(payload["id"], _tool({"jobs": []}))
+			return _reply(payload["id"], _tool({"jobs": listed.get(str(args.get("project_id", "")), [])}))
 		"asset_get":
 			var output := _output(str(args["asset_id"]))
 			return _reply(payload["id"], _tool({"asset": {"id": args["asset_id"], "mimeType": output["mime"], "metadata": {"type": output["type"]}}}))

@@ -63,6 +63,9 @@ func run() -> Dictionary:
 	# Choosing a project from the dock.
 	ui._team_option.select(0)
 	ui._project_option.select(1)
+	ui._project_option.item_selected.emit(1)
+	controller.changed.emit()  # polling and price checks refresh the dock while the picker is open
+	check("a refresh keeps the project picked", ui._project_option.selected == 1)
 	ui._use_project_button.pressed.emit()
 	await wait_frames(1)
 	check("project chosen", controller.client.session.project_id == "proj_a2" and not controller.picking and ui._main_box.visible)
@@ -82,14 +85,36 @@ func run() -> Dictionary:
 	# Another project: the quote does not follow, and the job is read where it ran.
 	controller.set_value("prompt", "a second chest")
 	await controller.estimate_now()
+	var reference := ""
+	for field in controller.fields:
+		if field["type"] in ["file", "files"]:
+			reference = field["name"]
+	controller.values[reference] = ["asset_in_a2"]
 	await controller.open_picker()
 	check("picker reopens with a Cancel", controller.picking and ui._picker_cancel_button.visible)
 	controller.choose_project("team_b", "proj_b1")
 	check("quotes are dropped on a switch", controller.quotes.usable(controller.fingerprint(), Time.get_unix_time_from_system()).is_empty())
+	check("references of the earlier project are dropped", not reference.is_empty() and not controller.values.has(reference))
 	await controller.poll()
 	check("job read back in its own project", _last_call(fake, "job_get").get("arguments", {}).get("project_id") == "proj_a2")
 	var imported: Dictionary = await controller.import_job(row.get("local_id", ""))
 	check("import reads assets in the job's project", imported.get("ok", false) and _last_call(fake, "asset_download").get("arguments", {}).get("project_id") == "proj_a2")
+
+	# An unknown send is looked for in the project it went to, not the current one.
+	var now := Time.get_unix_time_from_system()
+	var lost := controller.ledger.add_intent("image", controller.model_id, controller.payload(), "fp_lost", 1.0, now, "lost", {"team_id": "team_a", "project_id": "proj_a2"})
+	controller.ledger.mark_unknown(lost, "dropped", now)
+	fake.listed["proj_a2"] = [{"jobId": "job_lost", "modelId": controller.model_id, "status": "queued",
+		"createdAt": Time.get_datetime_string_from_unix_time(int(now) + 1) + "Z"}]
+	await controller.check_unresolved()
+	check("unknown send reconciled in its own project", _last_call(fake, "jobs_list").get("arguments", {}).get("project_id") == "proj_a2"
+		and controller.ledger.find(lost).get("job_id") == "job_lost")
+	# An unknown send made with an API key (no project) blocks the same request signed in.
+	var keyed := controller.ledger.add_intent("image", controller.model_id, controller.payload(), "fp_key", 1.0, now, "key", {})
+	controller.ledger.mark_unknown(keyed, "dropped", now)
+	check("an API-key unknown send blocks the same request", controller._blocked())
+	controller.dismiss(keyed)
+	check("dismissed: no longer blocked", not controller._blocked())
 	ui.queue_free()
 	controller.queue_free()
 
@@ -139,10 +164,16 @@ func run() -> Dictionary:
 	var notices: Array = []
 	solo.notified.connect(func(text: String, _level: String) -> void: notices.append(text))
 	fake.revoked.append(fake.refresh_token)
-	solo.client.session.tokens["expires_at"] = 1.0
+	var ended_session = solo.client.session
+	ended_session.tokens["expires_at"] = 1.0
 	await solo.client.get_job("job_x")
 	await wait_frames(1)
 	check("ended session: signed out with a notice", not solo.is_signed_in() and notices.any(func(t: String) -> bool: return t.contains("Sign in again")))
+	var kept: Dictionary = solo.credentials._read_config()
+	check("ended session: the dead token is forgotten, the project kept", solo.credentials.load_session(OAuth.PRODUCTION_ISSUER, OAuth.PRODUCTION_CLIENT_ID)["refresh_token"] == ""
+		and kept.get("workspace", {}).get("project_id") == "proj_solo")
+	ended_session.on_rotate.call("rt_late")
+	check("a replaced session's late rotation is not saved", solo.credentials.load_session(OAuth.PRODUCTION_ISSUER, OAuth.PRODUCTION_CLIENT_ID)["refresh_token"] == "")
 	check("ended session: the dock shows sign-in", device_ui._connect_box.visible)
 
 	# A cancelled browser sign-in closes its listener.

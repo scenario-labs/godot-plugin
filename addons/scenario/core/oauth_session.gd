@@ -7,8 +7,8 @@ extends RefCounted
 ## One refresh at a time: a call that needs a token while a refresh runs waits
 ## for it instead of sending a second one, which would spend the rotated token.
 
-## The provider refused the refresh token: the person must sign in again.
-signal ended
+## The provider refused refresh_token: the person must sign in again.
+signal ended(refresh_token: String)
 ## A refresh finished (internal: concurrent callers wait on it).
 signal refresh_finished
 
@@ -57,7 +57,8 @@ func refresh() -> Dictionary:
 	if refresh_token().is_empty():
 		return Errors.fail(Errors.AUTH, "Your Scenario session ended. Sign in again.", {"session_ended": true})
 	_refreshing = true
-	var result: Dictionary = await oauth.refresh(refresh_token())
+	var sent := refresh_token()
+	var result: Dictionary = await oauth.refresh(sent)
 	if result["ok"]:
 		var rotated := str(result["value"]["refresh_token"]) != refresh_token()
 		tokens = result["value"]
@@ -69,7 +70,7 @@ func refresh() -> Dictionary:
 	_refreshing = false
 	refresh_finished.emit()
 	if not result["ok"] and result["error"].get("session_ended", false):
-		ended.emit()
+		ended.emit(sent)
 	return result
 
 

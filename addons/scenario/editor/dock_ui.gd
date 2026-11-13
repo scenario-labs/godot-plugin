@@ -38,6 +38,7 @@ var _use_project_button: Button
 var _retry_teams_button: Button
 var _picker_cancel_button: Button
 var _picker_team := ""
+var _picker_project := ""
 var _menu: MenuButton
 var _main_box: VBoxContainer
 var _lane_buttons := {}
@@ -242,10 +243,13 @@ func _build_picker(content: VBoxContainer) -> void:
 	_team_option.fit_to_longest_item = false
 	_team_option.item_selected.connect(func(i: int) -> void:
 		_picker_team = str(_team_option.get_item_metadata(i))
+		_picker_project = ""
 		_refresh_picker())
 	_picker_box.add_child(_team_option)
 	_project_option = OptionButton.new()
 	_project_option.fit_to_longest_item = false
+	_project_option.item_selected.connect(func(i: int) -> void:
+		_picker_project = str(_project_option.get_item_metadata(i)))
 	_picker_box.add_child(_project_option)
 	_use_project_button = Button.new()
 	_use_project_button.text = "Use this project"
@@ -273,6 +277,9 @@ func _refresh() -> void:
 	_connect_box.visible = not signed_in
 	_picker_box.visible = signed_in and not connected
 	_main_box.visible = connected
+	if not _picker_box.visible:
+		_picker_team = ""  # the next opening starts from the session's project
+		_picker_project = ""
 	if not signed_in:
 		_refresh_sign_in()
 		return
@@ -334,6 +341,11 @@ func _refresh_picker() -> void:
 	if not _picker_team in team_ids:
 		var current := controller.client.session.team_id if controller.is_oauth() else ""
 		_picker_team = current if current in team_ids else (team_ids[0] if not team_ids.is_empty() else "")
+	# The project shown: the one picked here (a refresh while the picker is open
+	# must not undo it), else the session's.
+	var project_id := _picker_project
+	if project_id.is_empty() and controller.is_oauth():
+		project_id = controller.client.session.project_id
 	_team_option.clear()
 	_project_option.clear()
 	for team in teams:
@@ -344,7 +356,7 @@ func _refresh_picker() -> void:
 			for project in team.get("projects", []):
 				_project_option.add_item(str(project.get("name", project["id"])))
 				_project_option.set_item_metadata(_project_option.item_count - 1, str(project["id"]))
-				if controller.is_oauth() and str(project["id"]) == controller.client.session.project_id:
+				if str(project["id"]) == project_id:
 					_project_option.select(_project_option.item_count - 1)
 	var ready := not controller.teams_loading and not teams.is_empty()
 	_team_option.visible = ready

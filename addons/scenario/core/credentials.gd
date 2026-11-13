@@ -48,11 +48,15 @@ func save_credentials(key: String, secret: String) -> Dictionary:
 		return {"ok": false, "store": "", "message": "Enter both the API key and the secret."}
 	if key.contains(" ") or secret.contains(" "):
 		return {"ok": false, "store": "", "message": "The key and secret cannot contain spaces."}
-	_forget_secrets()
+	var previous := _saved_accounts()
 	if use_keychain and _safe(key) and _safe(secret) and _keychain_write(key, secret):
 		var saved := _write_config({"api_key": key, "secret_store": "keychain"})
+		if saved:
+			_delete_accounts(previous, key)
 		return {"ok": saved, "store": "keychain", "message": "" if saved else "Could not save the settings file."}
 	var ok := _write_config({"api_key": key, "secret_store": "file", "api_secret": secret})
+	if ok:
+		_delete_accounts(previous)
 	return {"ok": ok, "store": "file", "message": "" if ok else "Could not save the settings file."}
 
 
@@ -86,13 +90,16 @@ func save_session(issuer: String, client_id: String, refresh_token: String) -> D
 	var workspace: Variant = data.get("workspace", {})
 	if not previous is Dictionary or previous.get("issuer") != issuer or previous.get("client_id") != client_id:
 		workspace = {}
-	_forget_secrets()
+	var replaced := _saved_accounts()
+	var account := _session_account(client_id)
 	var oauth := {"issuer": issuer, "client_id": client_id, "secret_store": "file"}
-	if use_keychain and _safe(refresh_token) and _keychain_write(_session_account(client_id), refresh_token):
+	if use_keychain and _safe(refresh_token) and _keychain_write(account, refresh_token):
 		oauth["secret_store"] = "keychain"
 	else:
 		oauth["refresh_token"] = refresh_token
 	var ok := _write_config({"oauth": oauth, "workspace": workspace})
+	if ok:
+		_delete_accounts(replaced, account if oauth["secret_store"] == "keychain" else "")
 	return {"ok": ok, "store": oauth["secret_store"], "message": "" if ok else "Could not save the settings file."}
 
 
@@ -105,12 +112,32 @@ func save_refresh_token(refresh_token: String) -> bool:
 	var account := _session_account(str(oauth.get("client_id", "")))
 	if oauth.get("secret_store") == "keychain" and _safe(refresh_token) and _keychain_write(account, refresh_token):
 		return true
-	if oauth.get("secret_store") == "keychain" and use_keychain:
-		OS.execute(SECURITY, ["delete-generic-password", "-s", KEYCHAIN_SERVICE, "-a", account], [], true)
+	var stored_in_keychain: bool = oauth.get("secret_store") == "keychain"
 	oauth["secret_store"] = "file"
 	oauth["refresh_token"] = refresh_token
 	data["oauth"] = oauth
-	return _write_config(data)
+	var ok := _write_config(data)
+	if ok and stored_in_keychain:
+		_delete_accounts([account])
+	return ok
+
+
+## Forgets a refresh token the provider refused, so it is not resumed at the
+## next start. The team and project stay for the next sign-in. A token saved
+## since (by another editor) is kept.
+func forget_session(refresh_token: String) -> void:
+	var data := _read_config()
+	var oauth: Variant = data.get("oauth")
+	if not oauth is Dictionary or refresh_token.is_empty():
+		return
+	if load_session(str(oauth.get("issuer", "")), str(oauth.get("client_id", "")))["refresh_token"] != refresh_token:
+		return
+	var stored_in_keychain: bool = oauth.get("secret_store") == "keychain"
+	oauth.erase("refresh_token")
+	oauth["secret_store"] = "file"
+	data["oauth"] = oauth
+	if _write_config(data) and stored_in_keychain:
+		_delete_accounts([_session_account(str(oauth.get("client_id", "")))])
 
 
 ## {"team_id", "team_name", "project_id", "project_name"}, kept with the session.
@@ -123,22 +150,33 @@ func save_workspace(workspace: Dictionary) -> bool:
 
 
 func clear() -> void:
-	_forget_secrets()
+	var previous := _saved_accounts()
 	if FileAccess.file_exists(config_path):
 		_write_config({})
+	_delete_accounts(previous)
 
 
-## Removes the secrets the config file points to from the Keychain.
-func _forget_secrets() -> void:
-	if not use_keychain:
-		return
+## The Keychain accounts the config file points to.
+func _saved_accounts() -> PackedStringArray:
+	var accounts := PackedStringArray()
 	var data := _read_config()
 	var key := str(data.get("api_key", ""))
 	if data.get("secret_store") == "keychain" and not key.is_empty():
-		OS.execute(SECURITY, ["delete-generic-password", "-s", KEYCHAIN_SERVICE, "-a", key], [], true)
+		accounts.append(key)
 	var oauth: Variant = data.get("oauth")
 	if oauth is Dictionary and oauth.get("secret_store") == "keychain":
-		OS.execute(SECURITY, ["delete-generic-password", "-s", KEYCHAIN_SERVICE, "-a", _session_account(str(oauth.get("client_id", "")))], [], true)
+		accounts.append(_session_account(str(oauth.get("client_id", ""))))
+	return accounts
+
+
+## Removes these Keychain items, except keep (the account just written). Called
+## once the config file no longer points to them, so a failed save keeps them.
+func _delete_accounts(accounts: PackedStringArray, keep: String = "") -> void:
+	if not use_keychain:
+		return
+	for account in accounts:
+		if account != keep:
+			OS.execute(SECURITY, ["delete-generic-password", "-s", KEYCHAIN_SERVICE, "-a", account], [], true)
 
 
 static func _session_account(client_id: String) -> String:

@@ -159,8 +159,8 @@ func get_job(job_id: String, scope: Dictionary = {}) -> Dictionary:
 	return _unwrap(await call_tool("job_get", _scoped({"job_id": job_id}, scope)), "job")
 
 
-func list_jobs(page_size: int = 20) -> Dictionary:
-	return _unwrap(await call_tool("jobs_list", {"page_size": clampi(page_size, 1, 100)}), "jobs")
+func list_jobs(page_size: int = 20, scope: Dictionary = {}) -> Dictionary:
+	return _unwrap(await call_tool("jobs_list", _scoped({"page_size": clampi(page_size, 1, 100)}, scope)), "jobs")
 
 
 func cancel_job(job_id: String, scope: Dictionary = {}) -> Dictionary:

@@ -43,7 +43,7 @@ Press **Sign in with Scenario** in the dock, approve "Scenario for Godot" in you
 
 Secrets (the sign-in's refresh token, or the API secret) never go into your project folder, so they cannot end up in git:
 
-- macOS: stored in your login Keychain (service "Scenario Godot Plugin"). The rest is written to `scenario/credentials.json` in the Godot editor settings folder.
+- macOS: stored in your login Keychain (service "Scenario Godot Plugin") when it accepts them, otherwise in the file below. The rest is written to `scenario/credentials.json` in the Godot editor settings folder.
 - Other systems: written to that file, readable by your user only.
 - `SCENARIO_API_KEY` and `SCENARIO_API_SECRET` environment variables take precedence over both, which suits CI and shared machines.
 

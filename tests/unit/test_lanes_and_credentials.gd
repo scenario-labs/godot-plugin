@@ -138,6 +138,19 @@ func test_workspace_stays_with_the_same_application_only() -> void:
 	assert_eq(store.load_session(ISSUER, "client_dev")["workspace"], {}, "another application's ids mean nothing here")
 
 
+func test_a_refused_token_is_forgotten_but_not_a_newer_one() -> void:
+	var store := _store()
+	store.save_session(ISSUER, "client_godot", "rt_1")
+	var workspace := {"team_id": "team_a", "team_name": "A", "project_id": "proj_a1", "project_name": "Game"}
+	store.save_workspace(workspace)
+	store.forget_session("rt_0")
+	assert_eq(store.load_session(ISSUER, "client_godot")["refresh_token"], "rt_1", "a token saved since stays")
+	store.forget_session("rt_1")
+	assert_eq(store.load_session(ISSUER, "client_godot")["refresh_token"], "")
+	store.save_session(ISSUER, "client_godot", "rt_2")
+	assert_eq(store.load_session(ISSUER, "client_godot")["workspace"], workspace, "the project stays for the next sign-in")
+
+
 func test_api_key_replaces_the_session_and_clear_forgets_all() -> void:
 	var store := _store()
 	store.save_session(ISSUER, "client_godot", "rt_1")

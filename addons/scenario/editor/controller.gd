@@ -82,6 +82,7 @@ var uploads := {}
 
 var _estimate_serial := 0
 var _model_serial := 0
+var _reference_serial := 0
 var _debounce: Timer
 var _poll: Timer
 var _polling := false
@@ -292,6 +293,7 @@ func choose_project(team_id: String, project_id: String) -> void:
 	if changed_project:
 		quotes.clear()
 		_set_price(PRICE_IDLE, -1.0, "")
+		_drop_references()
 		notified.emit("Generations now go to %s." % client.session.workspace_label(), "info")
 	changed.emit()
 	_start_work()
@@ -379,9 +381,16 @@ func _finish_sign_in(serial: int, app: Dictionary, tokens: Dictionary) -> void:
 
 func _new_session(app: Dictionary, tokens: Dictionary) -> OAuthSession:
 	var session := OAuthSession.new(OAuth.new(transport, app["issuer"], app["client_id"]), tokens)
-	session.on_rotate = credentials.save_refresh_token
+	session.on_rotate = _save_rotated.bind(session)
 	session.ended.connect(_on_session_ended.bind(session))
 	return session
+
+
+## Saves a rotated refresh token only for the session in use: a refresh that
+## finishes after a sign-out or another sign-in must not replace the saved one.
+func _save_rotated(refresh_token: String, session: OAuthSession) -> void:
+	if client.session == session:
+		credentials.save_refresh_token(refresh_token)
 
 
 func _use_session(session: OAuthSession, source: String) -> void:
@@ -396,11 +405,12 @@ func _use_session(session: OAuthSession, source: String) -> void:
 		_start_work()
 
 
-## The provider refused the refresh token. The saved team and project stay for
-## the next sign-in; the dead token is replaced then.
-func _on_session_ended(session: OAuthSession) -> void:
+## The provider refused the refresh token: it is forgotten, so the next start
+## does not resume it. The saved team and project stay for the next sign-in.
+func _on_session_ended(dead_token: String, session: OAuthSession) -> void:
 	if client.session != session:
 		return
+	credentials.forget_session(dead_token)
 	client.set_credentials("", "")
 	_reset_account()
 	notified.emit("Your Scenario sign-in ended. Sign in again.", "warning")
@@ -556,7 +566,7 @@ func schedule_estimate() -> void:
 		_set_price(PRICE_INVALID, -1.0, problems[0])
 	elif not auto_estimates:
 		_set_price(PRICE_OFF, -1.0, "Automatic price checks are off for this session.")
-	elif ledger.blocks(fingerprint()):
+	elif _blocked():
 		_set_price(PRICE_BLOCKED, -1.0, "This exact request may already be running. Check the job marked Unknown first.")
 	else:
 		var quote := quotes.usable(fingerprint(), _now())
@@ -612,7 +622,7 @@ func generate(confirmed: bool = false) -> Dictionary:
 	var quote := quotes.usable(fp, _now())
 	if quote.is_empty() or price_state != PRICE_READY:
 		return {"ok": false, "message": "Wait for the price check to finish."}
-	if ledger.blocks(fp):
+	if _blocked():
 		return {"ok": false, "message": "This exact request may already be running."}
 	if float(quote["cu"]) > confirm_above_cu and not confirmed:
 		return {"needs_confirm": float(quote["cu"])}
@@ -682,22 +692,41 @@ func rerun(local_id: String) -> void:
 		return
 	lane_id = row["lane"]
 	await select_model(row["model_id"])
+	# References are assets of the project the row ran in: another project cannot use them.
+	var other_project := is_oauth() and str(row.get("project_id", "")) != client.session.project_id
+	var left_out := false
 	for key in row["parameters"]:
+		if other_project and _field(key).get("type", "") in ["file", "files"]:
+			left_out = true
+			continue
 		values[key] = row["parameters"][key]
+	if left_out:
+		notified.emit("The reference images were left out: they belong to another project.", "info")
 	schedule_estimate()
 	changed.emit()
 
 
-## Looks for unknown requests on Scenario and links the ones that match.
+## Looks for unknown requests on Scenario and links the ones that match, each
+## in the project it was sent to.
 func check_unresolved() -> void:
 	if ledger.unresolved().is_empty() or not is_connected_account():
 		return
-	var result: Dictionary = await client.list_jobs(50)
-	if result["ok"]:
-		var linked := ledger.reconcile(result["value"], _now(), client.session.project_id if is_oauth() else "")
-		if linked > 0:
-			notified.emit("Found %d job(s) that were sent before the connection dropped." % linked, "info")
-			_poll.start()
+	var session := client.session
+	var scopes := {}  # project_id ("" with an API key) -> the scope to list it in
+	for row in ledger.unresolved():
+		var scope := _row_scope(row)
+		if is_oauth() == not scope.is_empty():
+			scopes[str(scope.get("project_id", ""))] = scope
+	var linked := 0
+	for project_id in scopes:
+		var result: Dictionary = await client.list_jobs(50, scopes[project_id])
+		if client.session != session:
+			return  # signed out or in again meanwhile
+		if result["ok"]:
+			linked += ledger.reconcile(result["value"], _now(), project_id)
+	if linked > 0:
+		notified.emit("Found %d job(s) that were sent before the connection dropped." % linked, "info")
+		_poll.start()
 	schedule_estimate()
 	changed.emit()
 
@@ -812,6 +841,7 @@ func attach_file(field_name: String, path: String) -> void:
 		return
 	uploads[field_name] = "uploading"
 	schedule_estimate()
+	var serial := _reference_serial
 	var start: Dictionary = await client.upload_start(path.get_file(), type["mime"], type["kind"], bytes.size())
 	var asset_id := ""
 	var problem := ""
@@ -833,7 +863,9 @@ func attach_file(field_name: String, path: String) -> void:
 			else:
 				problem = done["error"]["message"] if not done["ok"] else "Scenario did not finish the upload."
 	uploads.erase(field_name)
-	if not problem.is_empty():
+	if serial != _reference_serial:
+		pass  # the project changed during the upload: the asset is in the earlier one
+	elif not problem.is_empty():
 		notified.emit(problem, "error")
 	elif field["type"] == "files":
 		var current: Array = values.get(field_name, []).duplicate()
@@ -888,6 +920,27 @@ func load_recommendations() -> void:
 
 
 # --- Internals ----------------------------------------------------------------
+
+## An unknown send blocks the same request. A row without a project (sent with
+## an API key) cannot be told apart from a signed-in project, so it also blocks
+## the same model and parameters there, and the other way round.
+func _blocked() -> bool:
+	if ledger.blocks(fingerprint()):
+		return true
+	var request := Quote.fingerprint(model_id, payload())
+	var project := client.session.project_id if is_oauth() else ""
+	return ledger.unresolved().any(func(row: Dictionary) -> bool:
+		return (project.is_empty() or str(row.get("project_id", "")).is_empty()) \
+			and Quote.fingerprint(str(row["model_id"]), row["parameters"]) == request)
+
+
+## Clears reference images: assets of the earlier project, unusable in the new one.
+func _drop_references() -> void:
+	for field in fields:
+		if field["type"] in ["file", "files"]:
+			values.erase(field["name"])
+	_reference_serial += 1  # an upload still running finishes into the old project: dropped
+
 
 ## The team and project a row's job ran in, for its reads and cancel ({} with an API key).
 func _row_scope(row: Dictionary) -> Dictionary:
