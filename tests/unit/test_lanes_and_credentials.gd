@@ -8,7 +8,7 @@ var config_path := ""
 
 
 func before_each() -> void:
-	config_path = "user://test_credentials_%d/credentials.json" % randi()
+	config_path = "res://tests/tmp_output/credentials-%d/credentials.json" % randi()
 	OS.unset_environment("SCENARIO_API_KEY")
 	OS.unset_environment("SCENARIO_API_SECRET")
 
@@ -105,6 +105,15 @@ func test_error_classification() -> void:
 const ISSUER := "https://idp.example.test"
 
 
+func test_a_rotation_is_kept_when_the_system_store_does_not_answer() -> void:
+	var store := _store()  # use_keychain off: a store-backed record reads as "", as a dismissed keyring prompt does
+	store._write_config({"oauth": {"issuer": ISSUER, "client_id": "client_godot", "secret_store": "keychain"}})
+	assert_true(store.save_refresh_token(ISSUER, "client_godot", "rt_1", "rt_2"), "kept in the file rather than lost")
+	assert_eq(store.load_session(ISSUER, "client_godot")["refresh_token"], "rt_2")
+	store.forget_session("rt_2")
+	assert_false(store.save_refresh_token(ISSUER, "client_godot", "rt_2", "rt_3"), "a forgotten session stays forgotten")
+
+
 func test_session_round_trip_in_the_file_store() -> void:
 	var store := _store()
 	store.save_credentials("api_abc", "sec_123")
@@ -165,6 +174,51 @@ func test_api_key_replaces_the_session_and_clear_forgets_all() -> void:
 	store.clear()
 	assert_eq(store.load_session(ISSUER, "client_godot")["refresh_token"], "")
 	assert_false(store.save_session(ISSUER, "client_godot", "")["ok"], "a session needs a refresh token")
+
+
+func test_system_store_per_platform() -> void:
+	var expected := {"macOS": Credentials.KEYCHAIN, "Windows": Credentials.CREDENTIAL_MANAGER}
+	if OS.get_name() in expected:
+		assert_eq(Credentials.detect_store(), expected[OS.get_name()])
+	else:
+		assert_true(Credentials.detect_store() in [Credentials.SECRET_SERVICE, ""])
+
+
+func test_secret_tool_never_gets_the_secret_as_an_argument() -> void:
+	assert_eq(Credentials.secret_tool_arguments("store", "oauth:client_godot"), PackedStringArray([
+		"store", "--label=Scenario Godot Plugin", "service", "Scenario Godot Plugin", "account", "oauth:client_godot"]))
+	assert_eq(Credentials.secret_tool_arguments("lookup", "api_abc"), PackedStringArray([
+		"lookup", "service", "Scenario Godot Plugin", "account", "api_abc"]))
+	assert_eq(Credentials.secret_tool_arguments("clear", "api_abc")[0], "clear")
+	var bounded := Credentials._bounded("/usr/bin/secret-tool", PackedStringArray(["lookup"]), Credentials.UNLOCK_TIMEOUT_S)
+	assert_eq(bounded, PackedStringArray([Credentials._timeout_tool(), "120", "/usr/bin/secret-tool", "lookup"]), "time to answer the unlock prompt")
+	if Credentials._timeout_tool().is_empty():
+		assert_ne(Credentials.detect_store(), Credentials.SECRET_SERVICE, "never an unbounded secret-tool call")
+
+
+func test_credential_manager_script_names_the_target_and_reads_base64() -> void:
+	var key := "api_x\u2019); Remove-Item C:\\ -Recurse; ('"  # a pasted key with a smart quote
+	var arguments := Credentials.windows_arguments(Credentials._WINDOWS_WRITE, key)
+	assert_eq(arguments[arguments.size() - 2], "-EncodedCommand")
+	var script := Marshalls.base64_to_raw(arguments[arguments.size() - 1]).get_string_from_utf16()
+	assert_false(script.contains("Remove-Item"), "the key reaches the script only as base64")
+	assert_string_contains(script, "FromBase64String('%s')" % Marshalls.raw_to_base64(("Scenario Godot Plugin/" + key).to_utf8_buffer()))
+	assert_string_contains(script, "CredWriteW")
+	assert_string_contains(script, "OpenStandardInput", "the secret comes on stdin")
+	assert_eq(Credentials.windows_secret(Marshalls.raw_to_base64("sec_é1".to_utf8_buffer()) + "\r\n"), "sec_é1")
+	assert_eq(Credentials.windows_secret(""), "")
+
+
+func test_a_store_this_machine_does_not_offer_is_not_read() -> void:
+	var store := _store()
+	store.save_credentials("api_abc", "sec_123")
+	var data := JSON.parse_string(FileAccess.get_file_as_string(config_path)) as Dictionary
+	data["secret_store"] = "some-other-store"
+	data.erase("api_secret")
+	var file := FileAccess.open(config_path, FileAccess.WRITE)
+	file.store_string(JSON.stringify(data))
+	file.close()
+	assert_eq(store.load_credentials()["source"], "", "nothing to read: the dock asks to sign in again")
 
 
 func test_signed_in_messages() -> void:
