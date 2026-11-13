@@ -181,13 +181,20 @@ func test_secret_tool_never_gets_the_secret_as_an_argument() -> void:
 	assert_eq(Credentials.secret_tool_arguments("lookup", "api_abc"), PackedStringArray([
 		"lookup", "service", "Scenario Godot Plugin", "account", "api_abc"]))
 	assert_eq(Credentials.secret_tool_arguments("clear", "api_abc")[0], "clear")
+	var bounded := Credentials._bounded("/usr/bin/secret-tool", PackedStringArray(["lookup"]), Credentials.UNLOCK_TIMEOUT_S)
+	if FileAccess.file_exists("/usr/bin/timeout"):
+		assert_eq(bounded, PackedStringArray(["/usr/bin/timeout", "120", "/usr/bin/secret-tool", "lookup"]), "time to answer the unlock prompt")
+	else:
+		assert_eq(bounded, PackedStringArray(["/usr/bin/secret-tool", "lookup"]))
 
 
 func test_credential_manager_script_names_the_target_and_reads_base64() -> void:
-	var arguments := Credentials.windows_arguments(Credentials._WINDOWS_WRITE, "api_o'brien")
+	var key := "api_x\u2019); Remove-Item C:\\ -Recurse; ('"  # a pasted key with a smart quote
+	var arguments := Credentials.windows_arguments(Credentials._WINDOWS_WRITE, key)
 	assert_eq(arguments[arguments.size() - 2], "-EncodedCommand")
 	var script := Marshalls.base64_to_raw(arguments[arguments.size() - 1]).get_string_from_utf16()
-	assert_string_contains(script, "$target = 'Scenario Godot Plugin/api_o''brien'", "a quote is doubled inside the string")
+	assert_false(script.contains("Remove-Item"), "the key reaches the script only as base64")
+	assert_string_contains(script, "FromBase64String('%s')" % Marshalls.raw_to_base64(("Scenario Godot Plugin/" + key).to_utf8_buffer()))
 	assert_string_contains(script, "CredWriteW")
 	assert_string_contains(script, "OpenStandardInput", "the secret comes on stdin")
 	assert_eq(Credentials.windows_secret(Marshalls.raw_to_base64("sec_é1".to_utf8_buffer()) + "\r\n"), "sec_é1")

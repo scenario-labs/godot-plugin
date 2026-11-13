@@ -25,7 +25,10 @@ const FILE := "file"
 ## Credential Manager's limit for one secret.
 const CREDENTIAL_MANAGER_MAX_BYTES := 2560
 ## A store tool that has not answered by then is stopped; the secret goes to the file.
-const STORE_TIMEOUT_MS := 10000
+const STORE_TIMEOUT_S := 10
+## A Secret Service read waits this long: time to answer the keyring's unlock
+## prompt at editor start, without hanging when nobody can.
+const UNLOCK_TIMEOUT_S := 120
 ## Windows PowerShell 5.1 calls the Credential Manager API (advapi32). The
 ## script comes as -EncodedCommand; a secret comes on stdin and goes back as
 ## base64 on stdout. Generic credentials, target "<service>/<account>".
@@ -47,8 +50,8 @@ public static extern bool CredDeleteW(string target, int type, int flags);
 [DllImport("advapi32.dll")]
 public static extern void CredFree(IntPtr credential);
 '@
-$target = '{target}'
-$account = '{account}'
+$target = {target}
+$account = {account}
 """
 const _WINDOWS_WRITE := """$stdin = [Console]::OpenStandardInput()
 $buffer = New-Object IO.MemoryStream
@@ -95,10 +98,20 @@ static func detect_store() -> String:
 		"Windows":
 			return CREDENTIAL_MANAGER if FileAccess.file_exists(_powershell()) else ""
 		"Linux", "FreeBSD", "NetBSD", "OpenBSD", "BSD":
-			# secret-tool needs a session bus to reach the Secret Service.
-			if not _secret_tool().is_empty() and not OS.get_environment("DBUS_SESSION_BUS_ADDRESS").is_empty():
+			# secret-tool needs a session bus to reach the Secret Service: the
+			# address in the environment, or the standard socket GLib also finds.
+			if not _secret_tool().is_empty() and _session_bus():
 				return SECRET_SERVICE
 	return ""
+
+
+static func _session_bus() -> bool:
+	if not OS.get_environment("DBUS_SESSION_BUS_ADDRESS").is_empty():
+		return true
+	var runtime := OS.get_environment("XDG_RUNTIME_DIR")
+	# A socket, which FileAccess.file_exists (regular files only) does not see.
+	return not runtime.is_empty() and FileAccess.file_exists("/usr/bin/test") \
+		and OS.execute("/usr/bin/test", ["-S", runtime.path_join("bus")]) == 0
 
 
 ## {"api_key", "api_secret", "source": "environment" | a store | "file" | ""}
@@ -261,7 +274,7 @@ func _delete_accounts(accounts: PackedStringArray, keep: String = "") -> void:
 			CREDENTIAL_MANAGER:
 				OS.execute(_powershell(), windows_arguments(_WINDOWS_DELETE, account), [], true)
 			SECRET_SERVICE:
-				var command := _bounded(_secret_tool(), secret_tool_arguments("clear", account))
+				var command := _bounded(_secret_tool(), secret_tool_arguments("clear", account), STORE_TIMEOUT_S)
 				OS.execute(command[0], command.slice(1), [], true)
 
 
@@ -307,7 +320,7 @@ func _store_read(kept: String, account: String) -> String:
 				return ""
 			return windows_secret(str(output[0]))
 		SECRET_SERVICE:
-			var command := _bounded(_secret_tool(), secret_tool_arguments("lookup", account))
+			var command := _bounded(_secret_tool(), secret_tool_arguments("lookup", account), UNLOCK_TIMEOUT_S)
 			if OS.execute(command[0], command.slice(1), output) != 0 or output.is_empty():
 				return ""
 			return str(output[0])
@@ -349,7 +362,7 @@ func _store_write(account: String, secret: String) -> bool:
 	io.close()
 	var pid: int = info["pid"]
 	var waited := 0
-	while OS.is_process_running(pid) and waited < STORE_TIMEOUT_MS:
+	while OS.is_process_running(pid) and waited < STORE_TIMEOUT_S * 1000:
 		OS.delay_msec(50)
 		waited += 50
 	if OS.is_process_running(pid):
@@ -360,7 +373,7 @@ func _store_write(account: String, secret: String) -> bool:
 
 ## powershell.exe arguments running one Credential Manager script for account.
 static func windows_arguments(script: String, account: String) -> PackedStringArray:
-	var head := _WINDOWS_API.replace("{target}", _ps_quoted("%s/%s" % [KEYCHAIN_SERVICE, account])).replace("{account}", _ps_quoted(account))
+	var head := _WINDOWS_API.replace("{target}", _ps_text("%s/%s" % [KEYCHAIN_SERVICE, account])).replace("{account}", _ps_text(account))
 	return PackedStringArray(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand",
 		Marshalls.raw_to_base64((head + script).to_utf16_buffer())])
 
@@ -380,9 +393,11 @@ static func secret_tool_arguments(action: String, account: String) -> PackedStri
 	return arguments
 
 
-## Inside a PowerShell single-quoted string, a quote is doubled.
-static func _ps_quoted(text: String) -> String:
-	return text.replace("'", "''")
+## A PowerShell expression for text, which comes from the user (an API key):
+## base64 inside the quotes, so no character of it can end the string.
+## (Doubling ' is not enough: PowerShell also closes a string on smart quotes.)
+static func _ps_text(text: String) -> String:
+	return "[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('%s'))" % Marshalls.raw_to_base64(text.to_utf8_buffer())
 
 
 static func _powershell() -> String:
@@ -399,10 +414,10 @@ static func _secret_tool() -> String:
 
 ## [path, arguments...], under coreutils timeout when present: a locked
 ## keyring can wait for a prompt nobody answers.
-static func _bounded(path: String, arguments: PackedStringArray) -> PackedStringArray:
+static func _bounded(path: String, arguments: PackedStringArray, seconds: int) -> PackedStringArray:
 	var command := PackedStringArray([path])
 	if FileAccess.file_exists("/usr/bin/timeout"):
-		command = PackedStringArray(["/usr/bin/timeout", str(STORE_TIMEOUT_MS / 1000), path])
+		command = PackedStringArray(["/usr/bin/timeout", str(seconds), path])
 	command.append_array(arguments)
 	return command
 
