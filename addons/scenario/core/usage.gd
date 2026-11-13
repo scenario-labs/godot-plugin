@@ -19,7 +19,7 @@ const MAX_BATCH := 100
 const FLUSH_AT := 50
 const LANES := ["image", "model3d", "material", "skybox", "sound"]
 const REQUESTS := ["price_check", "generate", "cancel", "import", "upload_reference", "recommend",
-	"list_teams", "check_unknown", "model_settings"]
+	"list_teams", "check_unknown", "check_key", "model_settings"]
 const ERROR_KINDS := [Errors.AUTH, Errors.FORBIDDEN, Errors.QUOTA, Errors.MODERATED, Errors.RATE_LIMIT,
 	Errors.NOT_FOUND, Errors.INVALID, Errors.TRANSPORT, Errors.TIMEOUT, Errors.HTTP_5XX, Errors.PROTOCOL,
 	Errors.LOCAL, Errors.ESTIMATE_JOB, Errors.SCENARIO]

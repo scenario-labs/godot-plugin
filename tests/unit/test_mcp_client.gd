@@ -350,8 +350,8 @@ func test_job_and_asset_listings_are_free_reads_with_the_tools_arguments() -> vo
 
 func test_each_call_reports_its_tool_and_outcome_only() -> void:
 	var seen: Array = []
-	client.called.connect(func(tool: String, dry_run: bool, ok: bool, kind: String, ms: int) -> void:
-		seen.append([tool, dry_run, ok, kind, ms >= 0]))
+	client.called.connect(func(tool: String, arguments: Dictionary, ok: bool, kind: String, ms: int) -> void:
+		seen.append([tool, arguments.get("dry_run", false), ok, kind, ms >= 0]))
 	fake.replies.append({"fixture": "estimate"})
 	await client.estimate("model_x", {"prompt": "a chest"})
 	fake.replies.append({"http": 403, "body": "forbidden"})

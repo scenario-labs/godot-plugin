@@ -134,16 +134,19 @@ test("records feedback as a survey response and says whether PostHog took it", a
   assert.equal(result.status, 200);
   assert.equal(received[0].path, "/i/v0/e/");
   assert.equal(received[0].body.event, "survey sent");
-  assert.equal(received[0].body.distinct_id, INSTALL);
+  assert.equal(received[0].body.distinct_id, SUBMISSION, "an address is never tied to the install id");
   assert.deepEqual(received[0].body.properties, {
     $survey_id: "survey_test", $survey_submission_id: SUBMISSION,
     $survey_response: "4", $survey_response_1: "Works well", $survey_response_2: "me@example.com",
     plugin: "godot", ...CONTEXT, country: "DE", $process_person_profile: false, $geoip_disable: true,
   });
 
+  await send("/telemetry/v1/feedback", { submission_id: SUBMISSION, install_id: INSTALL, rating: 5, message: "" });
+  assert.equal(received[1].body.distinct_id, INSTALL, "without an address, the install id while usage data is shared");
+
   status = 500;
   assert.equal((await send("/telemetry/v1/feedback", { submission_id: SUBMISSION, rating: 2, message: "" })).status, 502);
-  assert.equal(received[1].body.distinct_id, SUBMISSION, "without usage data, the submission id stands in");
+  assert.equal(received[2].body.distinct_id, SUBMISSION, "without usage data, the submission id stands in");
 });
 
 test("refuses feedback with a bad rating, address or id", async () => {
