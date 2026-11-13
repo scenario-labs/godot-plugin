@@ -241,8 +241,15 @@ static func _edited(path: String) -> Node:
 
 
 func open_scratch_scene(path: String) -> Node:
-	# The editor reopens the scenes an earlier job left open and can switch back
-	# to one of them during an import, so placements would land there: close them.
+	# The editor reopens the scenes an earlier job left open once its first scan
+	# ends, and switches to one of them, so placements would land there: wait for
+	# the scan, then close them.
+	var filesystem := EditorInterface.get_resource_filesystem()
+	for frame in 600:
+		if not filesystem.is_scanning():
+			break
+		await wait_frames(1)
+	await wait_frames(10)
 	for other in EditorInterface.get_open_scenes():
 		if other != path and not other.is_empty():
 			EditorInterface.open_scene_from_path(other)
