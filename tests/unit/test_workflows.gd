@@ -32,20 +32,26 @@ func _arguments(index: int = 0) -> Dictionary:
 	return fake.tool_calls()[index]["payload"]["params"]["arguments"]
 
 
+func test_workflow_ids_as_production_writes_them() -> void:
+	assert_true(Workflows.is_workflow("wflow_UcxXVCuMwjMak8NobqXQSCqv"))
+	assert_true(Workflows.is_workflow("wflow_true-4-pose"))
+	assert_false(Workflows.is_workflow("model_openai-gpt-image-2-5-flare"))
+
+
 func test_entries_keep_ready_workflows_only() -> void:
 	var entries := Workflows.entries(FakeNode.WORKFLOWS["private"])
-	assert_eq(entries, [{"id": "workflow_prop3d", "name": "Prop to 3D", "note": "Concept image, then a textured GLB"},
-		{"id": "workflow_kit", "name": "Prop Kit", "note": "Image, model and sound"}], "a draft cannot run")
+	assert_eq(entries, [{"id": "wflow_prop3d", "name": "Prop to 3D", "note": "Concept image, then a textured GLB"},
+		{"id": "wflow_kit", "name": "Prop Kit", "note": "Image, model and sound"}], "a draft cannot run")
 	var public := Workflows.entries(FakeNode.WORKFLOWS["public"], true)
 	assert_eq(public[0]["note"], "public, Three takes of one sound")
 	assert_eq(public[1]["note"], "public")
-	var long := Workflows.entries([{"id": "workflow_x", "name": "X", "description": "a".repeat(80) + "\nsecond line"}])
+	var long := Workflows.entries([{"id": "wflow_x", "name": "X", "description": "a".repeat(80) + "\nsecond line"}])
 	assert_eq(long[0]["note"].length(), 60)
 	assert_eq(Workflows.entries([{"id": "model_x"}, "junk"]), [])
 
 
 func test_inputs_become_form_fields() -> void:
-	var schema := Workflows.schema_from({"id": "workflow_prop3d", "inputs_definition": FakeNode.WORKFLOW_INPUTS["workflow_prop3d"]})
+	var schema := Workflows.schema_from({"id": "wflow_prop3d", "inputs_definition": FakeNode.WORKFLOW_INPUTS["wflow_prop3d"]})
 	assert_eq(schema["unsupported"], PackedStringArray(), "an optional list input is left to the workflow's default")
 	var fields := Form.fields_from_schema(schema)
 	var by_name := {}
@@ -67,12 +73,12 @@ func test_inputs_become_form_fields() -> void:
 
 
 func test_a_negative_prompt_is_never_the_prompt() -> void:
-	var schema := Workflows.schema_from({"id": "workflow_kit", "inputs_definition": FakeNode.WORKFLOW_INPUTS["workflow_kit"]})
+	var schema := Workflows.schema_from({"id": "wflow_kit", "inputs_definition": FakeNode.WORKFLOW_INPUTS["wflow_kit"]})
 	assert_eq(Form.prompt_name(Form.fields_from_schema(schema)), "prompt", "negativePrompt comes first but is not the prompt")
 
 
 func test_a_required_input_the_dock_cannot_fill_blocks_the_price() -> void:
-	var schema := Workflows.schema_from({"inputs_definition": FakeNode.WORKFLOW_INPUTS["workflow_pubbatch"]})
+	var schema := Workflows.schema_from({"inputs_definition": FakeNode.WORKFLOW_INPUTS["wflow_pubbatch"]})
 	assert_eq(schema["unsupported"], PackedStringArray(["sprites"]))
 	var fields := Form.fields_from_schema(schema)
 	var problems := Form.validate(fields, {"prompt": "slimes"})
@@ -131,12 +137,12 @@ func test_flags_sent_as_null_or_text_are_read() -> void:
 
 func test_a_workflow_is_priced_with_a_dry_run_and_never_retried() -> void:
 	fake.replies.append(FakeTransport.tool_result({"creativeUnitsCost": 18, "creativeUnitsDiscount": 0}))
-	var result: Dictionary = await client.estimate("workflow_prop3d", {"objectPrompt": "lantern"})
+	var result: Dictionary = await client.estimate("wflow_prop3d", {"objectPrompt": "lantern"})
 	assert_true(result["ok"])
 	assert_eq(result["value"]["cu"], 18.0)
 	var arguments := _arguments()
 	assert_eq(fake.tool_calls()[0]["payload"]["params"]["name"], "workflow_run")
-	assert_eq(arguments, {"workflow_id": "workflow_prop3d", "inputs": {"objectPrompt": "lantern"}, "dry_run": true})
+	assert_eq(arguments, {"workflow_id": "wflow_prop3d", "inputs": {"objectPrompt": "lantern"}, "dry_run": true})
 	assert_false(Client.is_retryable("workflow_run", {"dry_run": true}), "a run started by mistake fans out")
 	assert_false(Client.is_submission("workflow_run", {"dry_run": true}))
 	assert_true(Client.is_submission("workflow_run", {}))
@@ -144,39 +150,39 @@ func test_a_workflow_is_priced_with_a_dry_run_and_never_retried() -> void:
 
 func test_a_workflow_price_that_returns_a_job_is_an_alarm() -> void:
 	fake.replies.append(FakeTransport.tool_result({"creativeUnitsCost": 18, "job": {"jobId": "job_started"}}))
-	var result: Dictionary = await client.estimate("workflow_prop3d", {})
+	var result: Dictionary = await client.estimate("wflow_prop3d", {})
 	assert_eq(result["error"]["kind"], Errors.ESTIMATE_JOB)
 
 
 func test_a_workflow_run_is_sent_once_and_reads_its_job() -> void:
-	fake.replies.append(FakeTransport.tool_result({"job": {"jobId": "job_wf1", "status": "queued"}, "workflow": {"id": "workflow_prop3d"}}))
-	var result: Dictionary = await client.submit("workflow_prop3d", {"objectPrompt": "lantern"})
+	fake.replies.append(FakeTransport.tool_result({"job": {"jobId": "job_wf1", "status": "queued"}, "workflow": {"id": "wflow_prop3d"}}))
+	var result: Dictionary = await client.submit("wflow_prop3d", {"objectPrompt": "lantern"})
 	assert_eq(result["value"], {"job_id": "job_wf1", "status": "queued"})
-	assert_eq(_arguments(), {"workflow_id": "workflow_prop3d", "inputs": {"objectPrompt": "lantern"}})
+	assert_eq(_arguments(), {"workflow_id": "wflow_prop3d", "inputs": {"objectPrompt": "lantern"}})
 	fake.replies.append({"error": "timeout"})
 	fake.replies.append(FakeTransport.tool_result({"job": {"jobId": "job_never"}}))
-	var lost: Dictionary = await client.submit("workflow_prop3d", {"objectPrompt": "lantern"})
+	var lost: Dictionary = await client.submit("wflow_prop3d", {"objectPrompt": "lantern"})
 	assert_true(lost["error"]["ambiguous"])
 	assert_eq(fake.tool_calls().size(), 2, "a paid run is never sent again")
 
 
 func test_no_spend_refuses_a_workflow_run_but_prices_it() -> void:
 	client.spending_disabled = true
-	assert_eq((await client.submit("workflow_prop3d", {}))["error"]["kind"], Errors.LOCAL)
+	assert_eq((await client.submit("wflow_prop3d", {}))["error"]["kind"], Errors.LOCAL)
 	assert_eq(fake.requests.size(), 0)
 	fake.replies.append(FakeTransport.tool_result({"creativeUnitsCost": 18}))
-	assert_true((await client.estimate("workflow_prop3d", {}))["ok"])
+	assert_true((await client.estimate("wflow_prop3d", {}))["ok"])
 
 
 func test_workflow_form_and_listing_through_the_client() -> void:
-	fake.replies.append(FakeTransport.tool_result({"workflow": {"id": "workflow_prop3d", "inputs_definition": FakeNode.WORKFLOW_INPUTS["workflow_prop3d"]}}))
-	var schema: Dictionary = await client.get_schema("workflow_prop3d")
+	fake.replies.append(FakeTransport.tool_result({"workflow": {"id": "wflow_prop3d", "inputs_definition": FakeNode.WORKFLOW_INPUTS["wflow_prop3d"]}}))
+	var schema: Dictionary = await client.get_schema("wflow_prop3d")
 	assert_eq(fake.tool_calls()[0]["payload"]["params"]["name"], "workflow_get")
 	assert_eq(schema["value"]["parameters"].size(), 5)
 	fake.replies.append(FakeTransport.tool_result({"workflows": FakeNode.WORKFLOWS["private"]}))
 	fake.replies.append(FakeTransport.tool_result({"workflows": FakeNode.WORKFLOWS["public"]}))
 	var listed: Dictionary = await client.list_workflows()
-	assert_eq(listed["value"].map(func(e: Dictionary) -> String: return e["id"]), ["workflow_prop3d", "workflow_kit", "workflow_pubsfx", "workflow_pubbatch"])
+	assert_eq(listed["value"].map(func(e: Dictionary) -> String: return e["id"]), ["wflow_prop3d", "wflow_kit", "wflow_pubsfx", "wflow_pubbatch"])
 	assert_eq(_arguments(1), {"privacy": "private", "status": "ready", "limit": 100.0}, "JSON numbers read back as floats")
 	assert_eq(_arguments(2)["privacy"], "public")
 
@@ -192,17 +198,17 @@ func test_listing_keeps_the_project_when_the_public_catalog_fails() -> void:
 func test_a_workflow_job_reconciles_by_its_workflow_id() -> void:
 	var ledger := Ledger.new(ledger_path)
 	var now := 1790000000.0
-	var local_id := ledger.add_intent("workflow", "workflow_prop3d", {"objectPrompt": "lantern"}, "fp", 6.0, now)
+	var local_id := ledger.add_intent("workflow", "wflow_prop3d", {"objectPrompt": "lantern"}, "fp", 6.0, now)
 	ledger.mark_unknown(local_id, "timeout", now)
 	var created := Time.get_datetime_string_from_unix_time(int(now) + 2) + ".000Z"
-	var server := [{"jobId": "job_wf9", "workflowId": "workflow_prop3d", "status": "running", "createdAt": created}]
+	var server := [{"jobId": "job_wf9", "workflowId": "wflow_prop3d", "status": "running", "createdAt": created}]
 	assert_eq(ledger.reconcile(server, now + 10), 1)
 	assert_eq(ledger.find(local_id)["job_id"], "job_wf9")
 
 
 func test_a_run_waiting_for_a_person_says_so_until_it_moves_on() -> void:
 	var ledger := Ledger.new(ledger_path)
-	var local_id := ledger.add_intent("workflow", "workflow_prop3d", {}, "fp", 6.0, 1.0)
+	var local_id := ledger.add_intent("workflow", "wflow_prop3d", {}, "fp", 6.0, 1.0)
 	ledger.mark_submitted(local_id, "job_wf2", "queued", 1.0)
 	var row := ledger.apply_job({"jobId": "job_wf2", "status": "in-progress", "awaiting_input": [{"node_id": "n"}]}, 2.0)
 	assert_eq(row["state"], Ledger.RUNNING)
