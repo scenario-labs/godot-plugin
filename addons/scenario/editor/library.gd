@@ -159,18 +159,18 @@ func import_job(job: Dictionary) -> Dictionary:
 	changed.emit()
 	var read: Dictionary = await controller.client.get_job(job_id)
 	var asset_ids: Array = read["value"].get("assetIds", []) if read["ok"] and read["value"].get("assetIds") is Array else []
-	var mimes: Array = []
+	var outputs: Array = []
 	if read["ok"] and Query.model_lane(str(job["model_id"])).is_empty():
 		for asset_id in asset_ids.slice(0, MAX_OUTPUTS_READ):
 			var asset: Dictionary = await controller.client.get_asset(str(asset_id))
 			if asset["ok"]:
-				mimes.append(Query.text(asset["value"].get("mimeType")))
+				outputs.append(asset["value"])
 	busy.erase(job_id)
 	if generation != _generation:
 		return {"ok": false, "message": "The project changed."}
 	if not read["ok"]:
 		return _fail(read["error"]["message"])
-	var lane := Query.lane_for_job(str(job["model_id"]), mimes)
+	var lane := Query.lane_for_job(str(job["model_id"]), outputs)
 	if asset_ids.is_empty() or lane.is_empty():
 		return _fail("This job has no output the dock can place.")
 	var label := str(job["prompt"]) if not str(job["prompt"]).is_empty() else Query.model_name(str(job["model_id"]))
