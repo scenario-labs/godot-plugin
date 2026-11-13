@@ -128,8 +128,8 @@ var estimate_job := ""
 ## jobs_list answers per project: {project_id: [job, ...]}, newest first, in
 ## pages of the call's limit.
 var listed := {}
-## search answers per project ("" with an API key): {project_id: [hit, ...]},
-## hits shaped like Scenario's search index (see library_hit).
+## assets_list answers per project ("" with an API key): {project_id: [row, ...]}
+## (see library_asset).
 var library := {}
 var _jobs := {}
 
@@ -213,8 +213,10 @@ func post(url: String, headers: PackedStringArray, body: String, _timeout_s: flo
 			if start + 3 < project_models.size():
 				page["nextPaginationToken"] = "page2"
 			return _reply(payload["id"], _tool(page))
-		"search":
-			return _reply(payload["id"], _tool(_search(args)))
+		"scenario_tool_execute_read":
+			var found := _catalog_read(args)
+			if not found.is_empty():
+				return _reply(payload["id"], _tool(found))
 		"asset_get":
 			var output := _output(str(args["asset_id"]))
 			return _reply(payload["id"], _tool({"asset": {"id": args["asset_id"], "mimeType": output["mime"], "metadata": {"type": output["type"]}}}))
@@ -235,7 +237,7 @@ func post(url: String, headers: PackedStringArray, body: String, _timeout_s: flo
 
 
 func download(url: String, dest_path: String, _timeout_s: float = 600.0) -> Dictionary:
-	var asset_id := url.get_file()
+	var asset_id := url.get_file().get_slice("?", 0)
 	var output := _output(asset_id)
 	var bytes := FileAccess.get_file_as_bytes(ASSETS + output["file"])
 	var absolute := ProjectSettings.globalize_path(dest_path)
@@ -260,39 +262,40 @@ func add_job(job_id: String, lane: String) -> void:
 	_jobs[job_id] = lane
 
 
-## A search hit as Scenario's index returns it (include_urls on).
-static func library_hit(asset_id: String, kind: String, mime: String, created_at: String, name: String,
+## An assets_list row as Scenario returns it with include_urls (live reply,
+## 2026-11-13): no name, a caption in description, kind and source at the top,
+## images on the transform URL; a generation's prompt may be a text asset's id.
+static func library_asset(asset_id: String, kind: String, mime: String, created_at: String, description: String,
 		model_id: String = "", prompt: String = "") -> Dictionary:
-	var hit := {"id": asset_id, "kind": kind, "mimeType": mime, "createdAt": created_at, "name": name,
-		"metadata": {"type": "inference-txt2img" if not model_id.is_empty() else "uploaded"},
-		"url": "https://cdn.cloud.scenario.com/file/" + asset_id}
+	var source: String = {"image": "txt2img", "3d": "txt23d", "audio": "txt2audio", "text": "uploaded-text"}.get(kind, "txt2img")
+	if model_id.is_empty() and kind != "text":
+		source = "uploaded" if kind == "image" else "uploaded-" + kind
+	var row := {"id": asset_id, "kind": kind, "source": source, "mimeType": mime, "createdAt": created_at,
+		"ownerId": "proj_fake", "status": "success"}
+	row["url"] = ("https://cdn.cloud.scenario.com/assets-transform/%s?p=100&Policy=x&Signature=y" if kind == "image"
+		else "https://cdn.cloud.scenario.com/assets/%s?Policy=x&Signature=y") % asset_id
+	if not description.is_empty():
+		row["description"] = description
 	if not model_id.is_empty():
-		hit["metadata"]["modelId"] = model_id
-		hit["metadata"]["prompt"] = prompt
-	if kind in ["image", "3d"]:
-		hit["thumbnail"] = {"url": "https://cdn.cloud.scenario.com/thumb/" + asset_id}
-	return hit
+		row["modelId"] = model_id
+		row["prompt"] = prompt
+	return row
 
 
-## The search tool over library: the filter's kinds and source, the query in
-## names and prompts, newest first, one page.
-func _search(args: Dictionary) -> Dictionary:
-	var filter := str(args.get("filter", ""))
-	var query := str(args.get("query", "")).to_lower()
-	var hits: Array = []
-	for hit in library.get(str(args.get("project_id", "")), []):
-		if not ("\"%s\"" % hit["kind"]) in filter:
-			continue
-		var generated: bool = hit["metadata"].has("modelId")
-		if (filter.contains("NOT modelId EXISTS") and generated) or (filter.contains(" modelId EXISTS") and not filter.contains("NOT") and not generated):
-			continue
-		if not query.is_empty() and not (str(hit["name"]).to_lower().contains(query) or str(hit["metadata"].get("prompt", "")).to_lower().contains(query)):
-			continue
-		hits.append(hit)
-	hits.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return str(a["createdAt"]) > str(b["createdAt"]))
-	var offset := int(args.get("offset", 0))
-	var limit := int(args.get("limit", 20))
-	return {"assets": hits.slice(offset, offset + limit), "estimatedTotalHits": hits.size(), "offset": offset, "limit": limit}
+## scenario_tool_execute_read: assets_list over library (newest first, pages
+## of the limit, the page token an index); any other catalog tool is unknown.
+func _catalog_read(args: Dictionary) -> Dictionary:
+	var parameters: Dictionary = args.get("parameters", {})
+	if args.get("name") != "assets_list":
+		return {}
+	var rows: Array = library.get(str(parameters.get("project_id", "")), []).duplicate()
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return str(a["createdAt"]) > str(b["createdAt"]))
+	var start := int(str(parameters.get("page_token", "0")))
+	var size := int(parameters.get("limit", 20))
+	var page := {"assets": rows.slice(start, start + size)}
+	if start + size < rows.size():
+		page["nextPaginationToken"] = str(start + size)
+	return page
 
 
 func _output(asset_id: String) -> Dictionary:

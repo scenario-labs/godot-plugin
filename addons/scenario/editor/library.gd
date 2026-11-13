@@ -24,10 +24,8 @@ var controller: Controller
 var kind := "all"
 var source := "all"
 var query := ""
-## Rows from LibraryQuery.asset_row, newest first.
+## The rows read so far that pass the filter (LibraryQuery.asset_row), newest first.
 var assets: Array = []
-## How many assets match, or -1 when Scenario does not say.
-var total := -1
 var loading := false
 var loaded := false
 var error := ""
@@ -44,9 +42,10 @@ var busy := {}
 var _scope := ""  # the account and project the caches belong to
 var _generation := 0  # bumped when the caches are dropped: late replies are ignored
 var _page_serial := 0
-var _more := false
-var _next_offset := 0
+var _rows: Array = []  # every placeable row read, newest first
+var _next_token := ""
 var _thumbnail_queue: Array = []
+var _thumbnail_tried := {}  # asset id -> true once its download was attempted
 var _thumbnails_running := false
 
 
@@ -56,30 +55,35 @@ func bind(p_controller: Controller) -> void:
 	controller.changed.connect(_on_controller_changed)
 
 
+## Filters the rows already read, then reads on until a page's worth match.
 func set_filter(p_kind: String, p_source: String, p_query: String) -> void:
-	kind = p_kind if Query.KINDS.has(p_kind) else "all"
+	kind = p_kind if p_kind in Query.KINDS else "all"
 	source = p_source if p_source in Query.SOURCES else "all"
 	query = p_query.strip_edges()
-	await refresh()
+	_apply_filter()
+	changed.emit()
+	if loaded and assets.size() < Query.PAGE_SIZE and not _next_token.is_empty():
+		await load_more()
 
 
-## The first page again, with the current filter.
+## Reads the project's newest assets again.
 func refresh() -> void:
 	_page_serial += 1
+	_rows = []
+	_next_token = ""
 	assets = []
-	total = -1
-	_more = false
-	_next_offset = 0
-	await _load_page(0)
+	loaded = false
+	await _read(true)
 
 
+## True when Scenario has older assets not read yet.
 func can_load_more() -> bool:
-	return loaded and not loading and _more
+	return loaded and not loading and not _next_token.is_empty()
 
 
 func load_more() -> void:
 	if can_load_more():
-		await _load_page(_next_offset)
+		await _read(false)
 
 
 func load_history(more: bool = false) -> void:
@@ -169,7 +173,8 @@ func import_job(job: Dictionary) -> Dictionary:
 	var lane := Query.lane_for_job(str(job["model_id"]), mimes)
 	if asset_ids.is_empty() or lane.is_empty():
 		return _fail("This job has no output the dock can place.")
-	var local_id := controller.ledger.adopt(lane, str(job["model_id"]), str(job["prompt"]), job_id, asset_ids,
+	var label := str(job["prompt"]) if not str(job["prompt"]).is_empty() else Query.model_name(str(job["model_id"]))
+	var local_id := controller.ledger.adopt(lane, str(job["model_id"]), label, job_id, asset_ids,
 		Time.get_unix_time_from_system(), _workspace(), "history")
 	controller.ledger.apply_job(read["value"], Time.get_unix_time_from_system())
 	return await _import(job_id, local_id)
@@ -206,10 +211,9 @@ func use_as_reference(asset: Dictionary, field_name: String) -> bool:
 func clear() -> void:
 	_generation += 1
 	_page_serial += 1
+	_rows = []
+	_next_token = ""
 	assets = []
-	total = -1
-	_more = false
-	_next_offset = 0
 	loading = false
 	loaded = false
 	error = ""
@@ -221,37 +225,49 @@ func clear() -> void:
 	thumbnails = {}
 	busy = {}
 	_thumbnail_queue = []
+	_thumbnail_tried = {}
 	changed.emit()
 
 
-func _load_page(offset: int) -> void:
+## Reads assets_list pages until a page's worth more rows pass the filter, the
+## list ends, or MAX_LIST_PAGES were read (prompt texts and other files the
+## dock cannot place fill many rows).
+func _read(first: bool) -> void:
 	if not controller.is_connected_account():
 		return
 	var serial := _page_serial
+	var wanted := assets.size() + Query.PAGE_SIZE
 	loading = true
 	error = ""
 	changed.emit()
-	var result: Dictionary = await controller.client.search_assets(Query.search_args(kind, source, query, offset))
-	if serial != _page_serial:
-		return  # another filter or project since
-	loading = false
-	loaded = true
-	if result["ok"]:
-		var page := Query.parse_page(result["value"])
-		var known: Array = assets.map(func(row: Dictionary) -> String: return row["id"])
+	for page_read in Query.MAX_LIST_PAGES:
+		var result: Dictionary = await controller.client.list_assets(Query.list_args("" if first and page_read == 0 else _next_token, _workspace()))
+		if serial != _page_serial:
+			return  # read again, or another project, since
+		if not result["ok"]:
+			error = result["error"]["message"]
+			break
+		var page := Query.parse_assets(result["value"])
+		var known: Array = _rows.map(func(row: Dictionary) -> String: return row["id"])
 		for row in page["assets"]:
 			if not row["id"] in known:
-				assets.append(row)
-				if not row["thumbnail"].is_empty() and not thumbnails.has(row["id"]):
-					_thumbnail_queue.append(row)
-		_next_offset = offset + page["hits"]
-		total = maxi(page["total"], assets.size()) if page["total"] >= 0 else -1
-		# Without a total, a full page means more may follow; a short one ends the list.
-		_more = _next_offset < page["total"] if page["total"] >= 0 else page["hits"] >= Query.PAGE_SIZE
-		_fetch_thumbnails()
-	else:
-		error = result["error"]["message"]
+				_rows.append(row)
+		_next_token = page["next"]
+		_apply_filter()
+		if assets.size() >= wanted or _next_token.is_empty():
+			break
+	loading = false
+	loaded = true
 	changed.emit()
+
+
+## assets: the rows read that pass the filter; their thumbnails are queued.
+func _apply_filter() -> void:
+	assets = _rows.filter(func(row: Dictionary) -> bool: return Query.matches(row, kind, source, query))
+	for row in assets:
+		if not row["thumbnail"].is_empty() and not _thumbnail_tried.has(row["id"]) and not row in _thumbnail_queue:
+			_thumbnail_queue.append(row)
+	_fetch_thumbnails()
 
 
 ## One download at a time, in list order; the files stay out of the project.
@@ -262,6 +278,7 @@ func _fetch_thumbnails() -> void:
 	while not _thumbnail_queue.is_empty():
 		var generation := _generation
 		var row: Dictionary = _thumbnail_queue.pop_front()
+		_thumbnail_tried[row["id"]] = true
 		var path := "%s/%s.thumb" % [THUMBNAILS, row["id"]]
 		var downloaded: Dictionary = await controller.transport.download(row["thumbnail"], path, 60.0)
 		if downloaded["ok"] and generation == _generation:

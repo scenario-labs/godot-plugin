@@ -37,7 +37,7 @@ func run() -> Dictionary:
 	var fake := Fake.new()
 	root.add_child(fake)
 	fake.library["proj_a1"] = _assets()
-	fake.library["proj_a2"] = [Fake.library_hit("asset_other", "image", "image/png", "2026-11-12T08:00:00.000Z", "other.png")]
+	fake.library["proj_a2"] = [Fake.library_asset("asset_other", "image", "image/png", "2026-11-12T08:00:00.000Z", "Another project's image")]
 	var controller := Controller.new()
 	root.add_child(controller)
 	controller.setup(fake, run_dir + "/jobs.json", run_dir + "/credentials.json")
@@ -56,26 +56,28 @@ func run() -> Dictionary:
 	ui._show_view("library")
 	await _until(func() -> bool: return library.loaded and not library.loading)
 	await wait_frames(1)
-	var search := _last_call(fake, "search")
-	check("library read through search in the project", search.get("arguments", {}).get("project_id") == "proj_a1"
-		and search["arguments"].get("sort_by") == ["createdAt:desc"] and search["arguments"].get("include_urls") == true)
-	check("first page: newest first", library.assets.size() == Query.PAGE_SIZE and library.total == 28 and library.assets[0]["id"] == "asset_gen24")
-	check("dock shows the cards and Show more", ui._generate_box.visible == false and library_ui._cards.get_child_count() == Query.PAGE_SIZE and library_ui._more_button.visible)
+	var listing: Dictionary = _last_call(fake, "scenario_tool_execute_read").get("arguments", {})
+	check("library read with assets_list in the project", listing.get("name") == "assets_list"
+		and listing.get("parameters", {}).get("project_id") == "proj_a1" and listing["parameters"].get("include_urls") == true)
+	check("first page: newest first", library.assets.size() == Query.LIST_LIMIT and library.assets[0]["id"] == "asset_gen59")
+	check("dock shows the cards and Show more", ui._generate_box.visible == false and library_ui._cards.get_child_count() == Query.LIST_LIMIT and library_ui._more_button.visible)
 	await library.load_more()
-	check("next page appended", library.assets.size() == 28 and not library.can_load_more())
+	check("older page appended, prompt texts left out", library.assets.size() == 63 and not library.can_load_more()
+		and library.assets.all(func(a: Dictionary) -> bool: return not str(a["id"]).begins_with("asset_txt")))
 	await _until(func() -> bool: return library._thumbnail_queue.is_empty() and not library._thumbnails_running)
 	check("thumbnails for images, none for audio", library.thumbnails.has("asset_gen00") and library.thumbnails.has("asset_upl_logo")
 		and not library.thumbnails.has("asset_snd001") and library.thumbnails["asset_gen00"].get_width() <= 96)
 
-	# Filters and search.
+	# Filters, on the rows read: no new request.
+	var reads := fake.calls.size()
 	await library.set_filter("3d", "all", "")
 	check("kind filter", library.assets.map(func(a: Dictionary) -> String: return a["id"]) == ["asset_glb001"])
 	await library.set_filter("all", "uploaded", "")
 	check("uploads only", library.assets.map(func(a: Dictionary) -> String: return a["id"]) == ["asset_upl_logo"])
 	await library.set_filter("all", "all", "gem 7")
-	check("search by prompt", library.assets.size() == 1 and library.assets[0]["id"] == "asset_gen07" and not _last_call(fake, "search")["arguments"].has("sort_by"))
+	check("text filter on the prompt", library.assets.size() == 1 and library.assets[0]["id"] == "asset_gen07")
+	check("filters read nothing more", fake.calls.size() == reads)
 	await library.set_filter("all", "all", "")
-	await library.load_more()  # the oldest assets are on the second page
 
 	# Import and place an image, then a 3D model.
 	var logo := _asset(library, "asset_upl_logo")
@@ -92,7 +94,7 @@ func run() -> Dictionary:
 		and _last_call(fake, "asset_download")["arguments"].get("format") == "glb")
 	await wait_frames(1)
 	check("imported rows are listed without Re-run", ui._jobs_box.get_child_count() > 0 and not _has_button(ui._jobs_box, "Re-run"))
-	var preview := Fake.library_hit("asset_glbprv", "image", "image/png", "2026-10-02T09:00:00.000Z", "", "model_rodin-hyper3d-v2-5-text-to-3d", "a crate")
+	var preview := Fake.library_asset("asset_glbprv", "image", "image/png", "2026-10-02T09:00:00.000Z", "", "model_rodin-hyper3d-v2-5-text-to-3d", "a crate")
 	var preview_import: Dictionary = await library.import_asset(Query.asset_row(preview))
 	check("a 3D model's preview alone imports as an image", preview_import.get("ok", false) and _row_with(controller, "asset_glbprv").get("lane") == "image")
 
@@ -169,18 +171,18 @@ func _sign_in(controller: Controller, fake: Fake) -> void:
 	controller.choose_project("team_a", "proj_a1")
 
 
-## 25 generated images, an uploaded logo, a 3D model and a sound, oldest first.
+## 60 generated images, 30 prompt texts, a sound, a 3D model and an uploaded
+## logo, in no order (the fake sorts them newest first).
 static func _assets() -> Array:
-	var hits: Array = []
-	for i in 25:
-		hits.append(Fake.library_hit("asset_gen%02d" % i, "image", "image/png", "2026-11-%02dT10:00:00.000Z" % (i + 1),
-			"", FLARE, "a gem %d" % i))
-	hits.append(Fake.library_hit("asset_upl_logo", "image", "image/png", "2026-10-01T09:00:00.000Z", "logo.png"))
-	hits.append(Fake.library_hit("asset_glb001", "3d", "model/gltf-binary", "2026-10-02T09:00:00.000Z", "crate.glb",
-		"model_rodin-hyper3d-v2-5-text-to-3d", "a crate"))
-	hits.append(Fake.library_hit("asset_snd001", "audio", "audio/mpeg", "2026-10-03T09:00:00.000Z", "hit.mp3",
-		"model_sonilo-v1-1-text-to-sound-effects", "a hit"))
-	return hits
+	var rows: Array = []
+	for i in 60:
+		rows.append(Fake.library_asset("asset_gen%02d" % i, "image", "image/png", "2026-11-13T10:00:%02d.000Z" % i, "", FLARE, "a gem %d" % i))
+	for i in 30:
+		rows.append(Fake.library_asset("asset_txt%02d" % i, "text", "text/plain", "2026-11-13T09:00:%02d.000Z" % i, ""))
+	rows.append(Fake.library_asset("asset_upl_logo", "image", "image/png", "2026-10-01T09:00:00.000Z", "A studio logo"))
+	rows.append(Fake.library_asset("asset_glb001", "3d", "model/gltf-binary", "2026-10-02T09:00:00.000Z", "", "model_rodin-hyper3d-v2-5-text-to-3d", "a crate"))
+	rows.append(Fake.library_asset("asset_snd001", "audio", "audio/mpeg", "2026-10-03T09:00:00.000Z", "", "model_sonilo-v1-1-text-to-sound-effects", "a hit"))
+	return rows
 
 
 ## 38 jobs, newest first: a finished image sent just now (an Unknown row may

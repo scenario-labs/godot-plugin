@@ -60,7 +60,7 @@ Each request appears under **Jobs**, newest first. The list survives editor rest
 
 The buttons at the top of the dock switch between **Generate**, **Library** and **History**. Both read the project in the footer; nothing there costs CU.
 
-- **Library** shows the project's images, 3D models and sounds, newest first, with thumbnails. Filter by kind, by Generated or Uploaded, or search names and prompts; **Show more** reads the next page. **Import** downloads the file and places it like a result of its lane (an image on the selected node, a model in the scene, a sound as a player). **Reference** puts an image in one of the form's reference fields without uploading it again.
+- **Library** shows the project's images, 3D models and sounds, newest first, with thumbnails. Filter by kind, by Generated or Uploaded, or by words of the caption or prompt; filters apply to the assets read so far, and **Show more** reads older ones. **Import** downloads the file and places it like a result of its lane (an image on the selected node, a model in the scene, a sound as a player). **Reference** puts an image in one of the form's reference fields without uploading it again.
 - **History** lists the project's jobs on Scenario, newest first, including those sent from the web app or another editor. **Import** brings a finished job's results in. **Load older** reads the next page.
 
 Imports from either view join the **Jobs** list, once: importing the same asset or job again reuses its row. A History job that an **Unknown** row may stand for (same model, sent within three minutes) waits until you press **Check Scenario** or **Dismiss** on that row. The views are emptied when you change project or sign out.
