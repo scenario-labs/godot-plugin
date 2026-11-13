@@ -28,11 +28,12 @@ const OUTPUTS := {
 	],
 	"skybox": [{"id": "asset_sky001", "file": "sky.bin", "mime": "image/jpeg", "type": "skybox-base-360"}],
 	"sound": [{"id": "asset_snd001", "file": "sound.bin", "mime": "audio/mpeg", "type": "txt2audio"}],
-	# A workflow returning an image, a model and a sound.
+	# A workflow returning an image, a model, a sound and a video Godot cannot import.
 	"mixed": [
 		{"id": "asset_mixprv", "file": "image.bin", "mime": "image/png", "type": "inference-txt2img"},
 		{"id": "asset_mixglb", "file": "model.bin", "mime": "model/gltf-binary", "type": "inference-txt23d"},
 		{"id": "asset_mixsnd", "file": "sound.bin", "mime": "audio/mpeg", "type": "txt2audio"},
+		{"id": "asset_mixvid", "file": "video.bin", "mime": "video/mp4", "type": "inference-img2video"},
 	],
 }
 const MODEL_LANE := {
@@ -66,7 +67,12 @@ const WORKFLOW_INPUTS := {
 		{"name": "extraSteps", "type": "inputs_array"},
 	],
 	"workflow_pubsfx": [{"name": "prompt", "type": "string", "required": true}],
-	"workflow_kit": [{"name": "prompt", "type": "string", "required": true}],
+	# A negative prompt first, and inputs named like a LoRA's wiring: the workflow's own.
+	"workflow_kit": [
+		{"name": "negativePrompt", "type": "string"},
+		{"name": "prompt", "type": "string", "required": true},
+		{"name": "modelId", "type": "string", "default": "model_kit_base"},
+	],
 	"workflow_pubbatch": [
 		{"name": "prompt", "type": "string", "required": true},
 		{"name": "sprites", "type": "inputs_array", "required": true},

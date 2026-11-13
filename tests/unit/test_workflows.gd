@@ -66,6 +66,11 @@ func test_inputs_become_form_fields() -> void:
 	assert_eq(Form.payload(fields, values), {"objectPrompt": "a lantern", "style": "stylized", "detail": 2, "transparent": true})
 
 
+func test_a_negative_prompt_is_never_the_prompt() -> void:
+	var schema := Workflows.schema_from({"id": "workflow_kit", "inputs_definition": FakeNode.WORKFLOW_INPUTS["workflow_kit"]})
+	assert_eq(Form.prompt_name(Form.fields_from_schema(schema)), "prompt", "negativePrompt comes first but is not the prompt")
+
+
 func test_a_required_input_the_dock_cannot_fill_blocks_the_price() -> void:
 	var schema := Workflows.schema_from({"inputs_definition": FakeNode.WORKFLOW_INPUTS["workflow_pubbatch"]})
 	assert_eq(schema["unsupported"], PackedStringArray(["sprites"]))

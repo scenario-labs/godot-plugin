@@ -758,7 +758,9 @@ func rerun(local_id: String) -> void:
 	if row.is_empty():
 		return
 	lane_id = row["lane"]
-	var again := ProjectModels.rerun_of(row["model_id"], row["parameters"])
+	# A workflow's inputs may be named modelId or loras: they are its own, not a LoRA's wiring.
+	var again := {"model_id": row["model_id"], "values": row["parameters"]} if Workflows.is_workflow(row["model_id"]) \
+		else ProjectModels.rerun_of(row["model_id"], row["parameters"])
 	if lane_id == Lanes.WORKFLOW and not recommended.has(lane_id):
 		await _list_workflows()  # the picker shows the workflow being re-run
 	await select_model(again["model_id"])
@@ -830,6 +832,8 @@ func import_job(local_id: String) -> Dictionary:
 			else {"ok": true, "message": "Saved %d texture maps (no color map to make a material)." % groups[place_lane].size(), "resource_paths": []}
 		placed = {"ok": placed["ok"] and one["ok"], "message": (placed["message"] + " " + one["message"]).strip_edges(),
 			"resource_paths": placed["resource_paths"] + one["resource_paths"]}
+	if not fetched["skipped"].is_empty():
+		placed["message"] += " %d file(s) Godot cannot import stay on Scenario." % fetched["skipped"].size()
 	var paths: Array = files.map(func(f: Dictionary) -> String: return f["path"])
 	for extra in placed["resource_paths"]:
 		if not extra in paths:
