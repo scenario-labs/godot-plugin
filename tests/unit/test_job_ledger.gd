@@ -186,3 +186,15 @@ func test_an_unknown_send_blocks_across_an_api_key_and_a_sign_in() -> void:
 	ledger.mark_unknown(scoped, "timeout", T0)
 	assert_true(ledger.blocks_request("model_a", {"prompt": "a chest"}, ""), "same request, with an API key")
 	assert_false(ledger.blocks_request("model_a", {"prompt": "a chest"}, "proj_b1"), "another project is told apart by its fingerprint")
+
+
+func test_a_row_linked_to_a_finished_job_is_read_for_its_outputs() -> void:
+	var ledger := _ledger()
+	var local_id := ledger.add_intent("image", "model_a", {}, "fp", 2.0, T0)
+	ledger.mark_unknown(local_id, "timeout", T0)
+	ledger.reconcile([{"jobId": "job_1", "modelId": "model_a", "status": "success", "createdAt": "2026-10-04T09:10:53.000Z"}], T0 + 10)
+	assert_eq(ledger.find(local_id)["state"], Ledger.SUCCESS)
+	assert_eq(ledger.active().size(), 1, "polled once, for the outputs")
+	ledger.apply_job({"jobId": "job_1", "status": "success", "assetIds": []}, T0 + 20)
+	assert_eq(ledger.active().size(), 0, "one read is enough, even when the job had no outputs")
+	assert_eq(_ledger().active().size(), 0, "and it stays read after a restart")

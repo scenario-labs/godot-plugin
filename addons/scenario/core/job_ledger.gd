@@ -159,6 +159,7 @@ func apply_job(job: Dictionary, now: float) -> Dictionary:
 		row["charged_cu"] = float(job["billing"]["cuCost"])
 	if not error_text.is_empty():
 		row["error"] = error_text
+	row.erase("unread")
 	row["updated_at"] = now
 	save()
 	return row
@@ -191,6 +192,7 @@ func reconcile(server_jobs: Array, now: float, project_id: String = "") -> int:
 			row["job_id"] = str(candidates[0]["jobId"])
 			row["error"] = ""
 			row["state"] = state_for_status(str(candidates[0].get("status", "")), str(candidates[0].get("error", "")))
+			row["unread"] = true  # a listing has no outputs: the poll reads the job once
 			row["updated_at"] = now
 			linked += 1
 	if linked > 0:
@@ -214,8 +216,11 @@ func find_by_job(job_id: String) -> Dictionary:
 	return {}
 
 
+## Rows to read on Scenario: jobs still running, and an Unknown row reconcile
+## linked to a job, until one read of that job has been applied.
 func active() -> Array:
-	return jobs.filter(func(row: Dictionary) -> bool: return row["state"] in ACTIVE_STATES and not str(row["job_id"]).is_empty())
+	return jobs.filter(func(row: Dictionary) -> bool:
+		return not str(row["job_id"]).is_empty() and (row["state"] in ACTIVE_STATES or row.get("unread", false)))
 
 
 func unresolved() -> Array:
