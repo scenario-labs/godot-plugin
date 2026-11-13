@@ -20,6 +20,8 @@ const Loopback := preload("res://addons/scenario/core/loopback.gd")
 const Files := preload("res://addons/scenario/core/files.gd")
 const ProjectModels := preload("res://addons/scenario/core/project_models.gd")
 const Placer := preload("res://addons/scenario/editor/placer.gd")
+const Workflows := preload("res://addons/scenario/core/workflows.gd")
+const Downloads := preload("res://addons/scenario/editor/downloads.gd")
 
 const ESTIMATE_DEBOUNCE_S := 0.6
 const POLL_INTERVAL_S := 3.0
@@ -301,6 +303,7 @@ func choose_project(team_id: String, project_id: String) -> void:
 		_set_price(PRICE_IDLE, -1.0, "")
 		_drop_references()
 		_forget_project_models()
+		_forget_workflows()
 		notified.emit("Generations now go to %s." % client.session.workspace_label(), "info")
 	changed.emit()
 	_start_work()
@@ -389,6 +392,7 @@ func _use_session(session: OAuthSession, source: String) -> void:
 	picking = false
 	quotes.clear()
 	_forget_project_models()
+	_forget_workflows()
 	changed.emit()
 	if session.has_project():
 		_start_work()
@@ -422,8 +426,20 @@ func _reset_account() -> void:
 	picking = false
 	quotes.clear()
 	_forget_project_models()
+	_forget_workflows()
 	_set_price(PRICE_IDLE, -1.0, "")
 	changed.emit()
+
+
+## Workflows belong to the account and project: another one lists them again,
+## and a workflow chosen before is dropped from the form (kept on Refresh).
+func _forget_workflows(keep_choice: bool = false) -> void:
+	recommended.erase(Lanes.WORKFLOW)
+	for id in schemas.keys().filter(func(key: String) -> bool: return Workflows.is_workflow(key)):
+		schemas.erase(id)  # their inputs may have changed on Scenario
+	if lane_id == Lanes.WORKFLOW and not keep_choice:
+		model_id = ""
+		fields = []
 
 
 ## Starts what needs a project: the form's model, polling, unknown jobs.
@@ -470,6 +486,7 @@ func _use_account(key: String, secret: String, source: String) -> void:
 	picking = false
 	quotes.clear()
 	_forget_project_models()
+	_forget_workflows()
 	changed.emit()
 	_start_work()
 
@@ -480,7 +497,39 @@ func select_lane(id: String) -> void:
 	if Lanes.lane(id).is_empty():
 		return
 	lane_id = id
-	await select_model(Lanes.default_model(id))
+	if id != Lanes.WORKFLOW:
+		await select_model(Lanes.default_model(id))
+		return
+	# Nothing from the lane before stays priced while the list loads.
+	var keep := model_id if Workflows.is_workflow(model_id) else ""
+	_model_serial += 1
+	model_id = ""
+	fields = []
+	_set_price(PRICE_IDLE, -1.0, "")
+	changed.emit()
+	if not recommended.has(id):
+		await _list_workflows()
+	if lane_id != id or not model_id.is_empty():
+		return  # another lane, or a workflow picked meanwhile
+	var ids: Array = lane_models().map(func(m: Dictionary) -> String: return m["id"])
+	if not ids.is_empty():
+		await select_model(keep if keep in ids else ids[0])
+	else:
+		_set_price(PRICE_INVALID, -1.0, "No ready workflow to run here. Make one on app.scenario.com, then press Refresh.")
+		changed.emit()
+
+
+## Lists the project's ready workflows, then public ones. A reply that comes
+## back after a switch of account or project is dropped.
+func _list_workflows() -> void:
+	var asked := [client.session, client.api_key, client.session.project_id if is_oauth() else ""]
+	var listed: Dictionary = await client.list_workflows()
+	if asked != [client.session, client.api_key, client.session.project_id if is_oauth() else ""]:
+		return
+	if listed["ok"]:
+		recommended[Lanes.WORKFLOW] = listed["value"]
+	else:
+		notified.emit(listed["error"]["message"], "error")  # the next visit lists again
 
 
 func lane_models() -> Array:
@@ -560,6 +609,8 @@ func fingerprint() -> String:
 # --- Price --------------------------------------------------------------------
 
 func schedule_estimate() -> void:
+	if model_id.is_empty():
+		return  # nothing to price (a Workflow lane without a workflow): its message stays
 	if fields.is_empty() and not model_loading and is_connected_account() and not schemas.has(picked_model()):
 		select_model(picked_model())  # its schema read failed: read it again
 		return
@@ -589,20 +640,27 @@ func schedule_estimate() -> void:
 func _run_estimate() -> void:
 	if price_state != PRICE_CHECKING or not is_connected_account():
 		return
+	if not auto_estimates:  # a check debounced before they were turned off
+		_set_price(PRICE_OFF, -1.0, "Automatic price checks are off for this session.")
+		changed.emit()
+		return
 	_estimate_serial += 1
 	var serial := _estimate_serial
 	var fp := fingerprint()
 	var request := payload()
 	var result: Dictionary = await client.estimate(model_id, request)
+	# A price check that returned a job stops automatic checks even if the form changed meanwhile.
+	if not result["ok"] and result["error"]["kind"] == Errors.ESTIMATE_JOB:
+		auto_estimates = false
+		_set_price(PRICE_ERROR, -1.0, result["error"]["message"])
+		notified.emit(result["error"]["message"], "error")
+		changed.emit()
+		return
 	if serial != _estimate_serial or fp != fingerprint():
 		return  # the form changed while the check ran
 	if result["ok"]:
 		quotes.store(fp, result["value"]["cu"], result["value"]["discount"], _now())
 		_set_price(PRICE_READY, result["value"]["cu"], "")
-	elif result["error"]["kind"] == Errors.ESTIMATE_JOB:
-		auto_estimates = false
-		_set_price(PRICE_ERROR, -1.0, result["error"]["message"])
-		notified.emit(result["error"]["message"], "error")
 	else:
 		_set_price(PRICE_ERROR, -1.0, result["error"]["message"])
 	changed.emit()
@@ -667,11 +725,14 @@ func poll() -> void:
 	for row in ledger.active():
 		var result: Dictionary = await client.get_job(row["job_id"], _row_scope(row))
 		if result["ok"]:
+			var was_waiting: bool = row["error"] == Ledger.AWAITING
 			var updated := ledger.apply_job(result["value"], _now())
 			if updated.get("state") == Ledger.SUCCESS and auto_import and not updated["imported"]:
 				import_job(updated["local_id"])
 			elif updated.get("state") in [Ledger.FAILED, Ledger.BLOCKED]:
-				notified.emit("%s: %s" % [_model_name(updated["model_id"]), _failure_text(updated)], "error")
+				notified.emit("%s: %s" % [_model_name(updated["model_id"]), Ledger.failure_text(updated)], "error")
+			elif updated.get("error") == Ledger.AWAITING and not was_waiting:
+				notified.emit("%s: %s" % [_model_name(updated["model_id"]), Ledger.AWAITING], "warning")
 	_polling = false
 	if ledger.active().is_empty():
 		_poll.stop()
@@ -697,7 +758,11 @@ func rerun(local_id: String) -> void:
 	if row.is_empty():
 		return
 	lane_id = row["lane"]
-	var again := ProjectModels.rerun_of(row["model_id"], row["parameters"])
+	# A workflow's inputs may be named modelId or loras: they are its own, not a LoRA's wiring.
+	var again := {"model_id": row["model_id"], "values": row["parameters"]} if Workflows.is_workflow(row["model_id"]) \
+		else ProjectModels.rerun_of(row["model_id"], row["parameters"])
+	if lane_id == Lanes.WORKFLOW and not recommended.has(lane_id):
+		await _list_workflows()  # the picker shows the workflow being re-run
 	await select_model(again["model_id"])
 	# References are assets of the row's project: another project cannot use them.
 	var other_project := is_oauth() and str(row.get("project_id", "")) != client.session.project_id
@@ -749,69 +814,26 @@ func import_job(local_id: String) -> Dictionary:
 		return {"ok": false, "message": "Only finished jobs can be imported."}
 	_importing[local_id] = true
 	changed.emit()
-	var lane := Lanes.lane(row["lane"])
-	var files: Array = []
-	var assets: Array = []
-	var problem := ""
-	var pending := ""  # a download not yet moved into the project
-	var date := Files.today()
-	for asset_id in row["asset_ids"]:
-		var asset_result: Dictionary = await client.get_asset(asset_id, _row_scope(row))
-		if not asset_result["ok"]:
-			problem = asset_result["error"]["message"]
-			break
-		var asset: Dictionary = asset_result["value"]
-		var role := Files.role_for(asset)
-		var url_result: Dictionary = await client.download_url(asset_id, str(lane.get("download_format", "")), _row_scope(row))
-		if not url_result["ok"]:
-			problem = url_result["error"]["message"]
-			break
-		var temp := "%s/%s.download" % [Files.DOWNLOADS, asset_id]
-		var downloaded: Dictionary = await transport.download(url_result["value"], temp)
-		if not downloaded["ok"]:
-			problem = downloaded["error"]
-			break
-		pending = temp
-		var head := Files.head(temp)
-		var ext := Files.sniff_extension(head)
-		if ext.is_empty():
-			ext = Files.extension_for_mime(str(asset.get("mimeType", "")))
-		if not ext in Files.IMPORTABLE:
-			problem = "Scenario returned a file Godot cannot import (%s)." % str(asset.get("mimeType", "unknown type"))
-			break
-		if not Lanes.accepts(row["lane"], ext):
-			problem = "%s returned a %s file, which the %s lane cannot place. Pick one of the lane's own models." % [
-				_model_name(str(row["model_id"])), ext.to_upper(), lane["title"]]
-			break
-		if lane["importer"] == "model3d" and ext in ["png", "jpg", "webp"]:
-			role = "preview"  # 3D models come with a thumbnail next to the GLB
-		var base := Files.base_path(row["lane"], row["prompt"], asset_id, role, date, output_root)
-		var final_path := base + "." + ext
-		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(final_path.get_base_dir()))
-		if DirAccess.rename_absolute(ProjectSettings.globalize_path(temp), ProjectSettings.globalize_path(final_path)) != OK:
-			problem = "Could not move the download into " + final_path
-			break
-		pending = ""
-		files.append({"path": final_path, "role": role})
-		assets.append({"asset_id": asset_id, "role": role, "path": final_path, "mime": asset.get("mimeType", "")})
-	if problem.is_empty() and files.is_empty():
-		problem = "The job finished without output files."
-	if problem.is_empty() and lane["importer"] == "model3d" and files.all(func(f: Dictionary) -> bool: return f["role"] == "preview"):
-		problem = "%s returned no GLB or glTF model, which the 3D lane needs. Pick one of the lane's own models." % _model_name(str(row["model_id"]))
-	if not problem.is_empty():
-		# A failed import keeps nothing: neither the files already moved nor the pending download.
-		for item in files:
-			DirAccess.remove_absolute(ProjectSettings.globalize_path(item["path"]))
-		if not pending.is_empty():
-			DirAccess.remove_absolute(ProjectSettings.globalize_path(pending))
+	var fetched: Dictionary = await Downloads.fetch(client, transport, row, _row_scope(row), output_root, _model_name(str(row["model_id"])))
+	var files: Array = fetched["files"]
+	if not fetched["problem"].is_empty():
 		_importing.erase(local_id)
-		ledger.set_error(local_id, problem, _now())
-		notified.emit(problem, "error")
+		ledger.set_error(local_id, fetched["problem"], _now())
+		notified.emit(fetched["problem"], "error")
 		changed.emit()
-		return {"ok": false, "message": problem}
-	Files.write_provenance(row, assets, files[0]["path"].get_basename() + ".scenario.json", "Scenario Godot Plugin " + Client.VERSION)
-	await placer.import_files(row["lane"], files)
-	var placed := placer.place(row["lane"], files, Files.node_name(row["prompt"]))
+		return {"ok": false, "message": fetched["problem"]}
+	Files.write_provenance(row, fetched["assets"], files[0]["path"].get_basename() + ".scenario.json", "Scenario Godot Plugin " + Client.VERSION)
+	# A workflow's outputs are placed by their file type, each kind by its lane.
+	var groups: Dictionary = Workflows.groups(files) if row["lane"] == Lanes.WORKFLOW else {row["lane"]: files}
+	var placed := {"ok": true, "message": "", "resource_paths": []}
+	for place_lane in groups:
+		await placer.import_files(place_lane, groups[place_lane])
+		var one := placer.place(place_lane, groups[place_lane], Files.node_name(row["prompt"])) if place_lane != Workflows.FILES_ONLY \
+			else {"ok": true, "message": "Saved %d texture maps (no color map to make a material)." % groups[place_lane].size(), "resource_paths": []}
+		placed = {"ok": placed["ok"] and one["ok"], "message": (placed["message"] + " " + one["message"]).strip_edges(),
+			"resource_paths": placed["resource_paths"] + one["resource_paths"]}
+	if not fetched["skipped"].is_empty():
+		placed["message"] += " %d file(s) Godot cannot import stay on Scenario." % fetched["skipped"].size()
 	var paths: Array = files.map(func(f: Dictionary) -> String: return f["path"])
 	for extra in placed["resource_paths"]:
 		if not extra in paths:
@@ -845,26 +867,9 @@ func attach_file(field_name: String, path: String) -> void:
 	uploads[field_name] = "uploading"
 	schedule_estimate()
 	var serial := _reference_serial
-	var start: Dictionary = await client.upload_start(path.get_file(), type["mime"], type["kind"], bytes.size())
-	var asset_id := ""
-	var problem := ""
-	if not start["ok"]:
-		problem = start["error"]["message"]
-	else:
-		var part_size := int(start["value"].get("part_size", bytes.size()))
-		for part in start["value"].get("parts", []):
-			var index := int(part.get("part_number", 1)) - 1
-			var chunk := bytes.slice(index * part_size, mini((index + 1) * part_size, bytes.size()))
-			var put: Dictionary = await transport.put_bytes(str(part.get("upload_url", "")), chunk)
-			if not put["ok"]:
-				problem = put["error"]
-				break
-		if problem.is_empty():
-			var done: Dictionary = await client.upload_complete({"upload_id": start["value"].get("upload_id", "")})
-			if done["ok"] and str(done["value"].get("asset_id", "")).begins_with("asset_"):
-				asset_id = done["value"]["asset_id"]
-			else:
-				problem = done["error"]["message"] if not done["ok"] else "Scenario did not finish the upload."
+	var sent: Dictionary = await Downloads.upload(client, transport, path.get_file(), type, bytes)
+	var asset_id: String = sent["asset_id"]
+	var problem: String = sent["problem"]
 	uploads.erase(field_name)
 	if serial != _reference_serial:
 		pass  # the project changed during the upload: the asset is in the earlier one
@@ -903,6 +908,10 @@ func clear_field(field_name: String) -> void:
 
 
 func load_recommendations() -> void:
+	if lane_id == Lanes.WORKFLOW:
+		_forget_workflows(true)
+		await select_lane(lane_id)  # Refresh: list the workflows and read the chosen one's inputs again
+		return
 	var lane := Lanes.lane(lane_id)
 	if not lane.get("recommend", true):
 		return
@@ -967,10 +976,6 @@ func _set_price(state: String, cu: float, message: String) -> void:
 	price_message = message
 
 
-func _has_field(name: String) -> bool:
-	return not _field(name).is_empty()
-
-
 func _field(name: String) -> Dictionary:
 	for field in fields:
 		if field["name"] == name:
@@ -988,12 +993,6 @@ func _model_name(id: String) -> String:
 			if model["id"] == id:
 				return model["name"]
 	return id.trim_prefix("model_")
-
-
-func _failure_text(row: Dictionary) -> String:
-	if row["state"] == Ledger.BLOCKED:
-		return Errors.message_for(Errors.MODERATED)
-	return str(row["error"]) if not str(row["error"]).is_empty() else "the job failed on Scenario."
 
 
 static func _now() -> float:

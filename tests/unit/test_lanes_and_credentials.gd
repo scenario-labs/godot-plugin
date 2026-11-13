@@ -24,6 +24,10 @@ func after_each() -> void:
 func test_every_lane_is_complete() -> void:
 	for id in Lanes.ids():
 		var lane := Lanes.lane(id)
+		if id == Lanes.WORKFLOW:
+			assert_true(lane["models"].is_empty(), "workflows are listed live, per project")
+			assert_eq(Lanes.default_model(id), "")
+			continue
 		assert_false(lane["models"].is_empty(), id)
 		assert_true(lane["importer"] in ["image", "model3d", "material", "skybox", "audio"], id)
 		assert_true(str(Lanes.default_model(id)).begins_with("model_"), id)
