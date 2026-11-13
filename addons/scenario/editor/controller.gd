@@ -560,6 +560,9 @@ func fingerprint() -> String:
 # --- Price --------------------------------------------------------------------
 
 func schedule_estimate() -> void:
+	if fields.is_empty() and not model_loading and is_connected_account() and not schemas.has(picked_model()):
+		select_model(picked_model())  # its schema read failed: read it again
+		return
 	problems = Form.validate(fields, values)
 	if fields.is_empty() and not model_loading:
 		_set_price(PRICE_INVALID, -1.0, "Scenario gives no settings to run this model with here. Pick another one.")
@@ -941,15 +944,13 @@ func _load_project_models() -> void:
 	changed.emit()
 
 
-## A project's models and their schemas belong to it: forgotten on a switch or
-## sign-out, and a form on one of them goes back to the lane's default model.
+## Forgotten on a switch or sign-out; a form on one goes back to the lane's default.
 func _forget_project_models() -> void:
 	for entry in project_models.entries:
 		schemas.erase(entry["id"])
 	if not trained.is_empty() or project_models.entries.any(func(e: Dictionary) -> bool: return e["id"] == picked_model()):
 		trained = {}
-		model_id = ""
-		fields = []
+		model_id = ""  # _start_work picks the lane's default model
 	project_models.clear()
 
 
