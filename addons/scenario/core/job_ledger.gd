@@ -205,17 +205,7 @@ func reconcile(server_jobs: Array, now: float, project_id: String = "") -> int:
 			continue
 		var candidates: Array = []
 		for job in server_jobs:
-			# A workflow run is listed with its workflowId, a model run with its modelId.
-			if not job is Dictionary or not row["model_id"] in [str(job.get("modelId", "")), str(job.get("workflowId", ""))]:
-				continue
-			var job_id := str(job.get("jobId", ""))
-			if job_id.is_empty() or not find_by_job(job_id).is_empty():
-				continue
-			var created := iso_to_unix(str(job.get("createdAt", "")))
-			if created < 0.0:
-				continue
-			var delta := created - float(row["created_at"])
-			if delta >= -5.0 and delta <= RECONCILE_WINDOW_S:
+			if job is Dictionary and find_by_job(str(job.get("jobId", ""))).is_empty() and _could_be(row, job):
 				candidates.append(job)
 		if candidates.size() == 1:
 			row["job_id"] = str(candidates[0]["jobId"])
@@ -227,6 +217,26 @@ func reconcile(server_jobs: Array, now: float, project_id: String = "") -> int:
 	if linked > 0:
 		save()
 	return linked
+
+
+## True when an unresolved row of this project could stand for the server job
+## (same model, created in the window after the intent). Adopting such a job
+## from History would hide it from reconcile and leave a teammate's job as the
+## only candidate, so the row is resolved first.
+func could_be_unresolved(job: Dictionary, project_id: String = "") -> bool:
+	for row in jobs:
+		if row["state"] in UNRESOLVED_STATES and str(row.get("project_id", "")) == project_id and _could_be(row, job):
+			return true
+	return false
+
+
+func _could_be(row: Dictionary, job: Dictionary) -> bool:
+	# A workflow run is listed with its workflowId, a model run with its modelId.
+	if str(job.get("jobId", "")).is_empty() or not row["model_id"] in [str(job.get("modelId", "")), str(job.get("workflowId", ""))]:
+		return false
+	var created := iso_to_unix(str(job.get("createdAt", "")))
+	var delta := created - float(row["created_at"])
+	return created >= 0.0 and delta >= -5.0 and delta <= RECONCILE_WINDOW_S
 
 
 func find(local_id: String) -> Dictionary:

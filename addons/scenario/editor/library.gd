@@ -131,28 +131,21 @@ func import_asset(asset: Dictionary) -> Dictionary:
 
 
 ## Imports a finished job's outputs. A job already in the Jobs list is
-## imported from there, never added twice; one an Unknown row may stand for
-## is linked to that row first, as Check Scenario would.
+## imported from there, never added twice. A job an Unknown row may stand for
+## waits until that row is resolved (Check Scenario or Dismiss), so it is never
+## counted twice nor taken from a teammate's job.
 func import_job(job: Dictionary) -> Dictionary:
 	var job_id := str(job["job_id"])
 	if busy.has(job_id):
 		return {"ok": false, "message": "Already importing."}
-	# Every loaded job is a candidate, so a window holding two of them links nothing.
-	var candidates: Array = history.duplicate()
-	if not history.any(func(row: Dictionary) -> bool: return row["job_id"] == job_id):
-		candidates.append(job)
-	controller.ledger.reconcile(candidates.map(func(row: Dictionary) -> Dictionary:
-			return {"jobId": row["job_id"], "modelId": row["model_id"], "status": row["status"], "createdAt": row["created_at"]}),
-		Time.get_unix_time_from_system(), controller.client.session.project_id if controller.is_oauth() else "")
 	var existing := ledger_row(job_id)
 	if not existing.is_empty():
 		if existing["state"] != Ledger.SUCCESS or existing["imported"]:
 			return _fail("This job is already in the Jobs list.")
-		if existing["asset_ids"].is_empty():  # just linked to an Unknown row: read its outputs
-			var linked: Dictionary = await controller.client.get_job(job_id)
-			if linked["ok"]:
-				controller.ledger.apply_job(linked["value"], Time.get_unix_time_from_system())
 		return await _import(job_id, existing["local_id"])
+	if controller.ledger.could_be_unresolved(
+			{"jobId": job_id, "modelId": job["model_id"], "createdAt": job["created_at"]}, _workspace().get("project_id", "")):
+		return _fail("An Unknown row in Jobs may be this job. Press Check Scenario or Dismiss on it first.")
 	var generation := _generation
 	busy[job_id] = true
 	changed.emit()

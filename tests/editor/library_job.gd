@@ -131,18 +131,13 @@ func run() -> Dictionary:
 		and job_row.get("charged_cu") == 2.0 and job_row.get("imported") == true and controller.ledger.jobs.size() == rows_before + 1)
 	await library.import_job(library.history[1])
 	check("history: no second row for the same job", controller.ledger.jobs.size() == rows_before + 1)
-	var linked: Dictionary = await library.import_job(library.history[0])
-	check("history: a job an Unknown row stands for is linked to it, not added", linked.get("ok", false)
-		and controller.ledger.find(lost).get("job_id") == "job_h00" and controller.ledger.find(lost).get("imported") == true
+	var refused: Dictionary = await library.import_job(library.history[0])
+	check("history: a job an Unknown row may stand for waits for that row", not refused.get("ok", true)
+		and controller.ledger.find_by_job("job_h00").is_empty() and controller.ledger.find(lost).get("state") == Ledger.UNKNOWN
 		and controller.ledger.jobs.size() == rows_before + 1)
-	var lost_again := controller.ledger.add_intent("image", FLARE, {"prompt": "a torch"}, "fp_torch", 2.0, now, "a torch", controller.client.session.workspace())
-	controller.ledger.mark_unknown(lost_again, "dropped", now)
-	var iso := Time.get_datetime_string_from_unix_time(int(now) + 1) + "Z"
-	library.history.append({"job_id": "job_amb1", "model_id": FLARE, "prompt": "a torch", "status": "success", "created_at": iso, "finished": true})
-	library.history.append({"job_id": "job_amb2", "model_id": FLARE, "prompt": "a teammate's torch", "status": "success", "created_at": iso, "finished": true})
-	await library.import_job(library.history[-2])
-	check("history: two candidates in the window link nothing", controller.ledger.find(lost_again).get("job_id") == ""
-		and controller.ledger.find(lost_again).get("state") == Ledger.UNKNOWN)
+	controller.dismiss(lost)
+	var after_dismiss: Dictionary = await library.import_job(library.history[0])
+	check("history: imported once the row is dismissed", after_dismiss.get("ok", false) and controller.ledger.find_by_job("job_h00").get("imported") == true)
 	var unlisted: Dictionary = await library.import_job(library.history[4])
 	check("history: an unlisted model's 3D job goes to the 3D lane", unlisted.get("ok", false)
 		and controller.ledger.find_by_job("job_team3d").get("lane") == "model3d")
