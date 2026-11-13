@@ -640,20 +640,27 @@ func schedule_estimate() -> void:
 func _run_estimate() -> void:
 	if price_state != PRICE_CHECKING or not is_connected_account():
 		return
+	if not auto_estimates:  # a check debounced before they were turned off
+		_set_price(PRICE_OFF, -1.0, "Automatic price checks are off for this session.")
+		changed.emit()
+		return
 	_estimate_serial += 1
 	var serial := _estimate_serial
 	var fp := fingerprint()
 	var request := payload()
 	var result: Dictionary = await client.estimate(model_id, request)
+	# A price check that returned a job stops automatic checks even if the form changed meanwhile.
+	if not result["ok"] and result["error"]["kind"] == Errors.ESTIMATE_JOB:
+		auto_estimates = false
+		_set_price(PRICE_ERROR, -1.0, result["error"]["message"])
+		notified.emit(result["error"]["message"], "error")
+		changed.emit()
+		return
 	if serial != _estimate_serial or fp != fingerprint():
 		return  # the form changed while the check ran
 	if result["ok"]:
 		quotes.store(fp, result["value"]["cu"], result["value"]["discount"], _now())
 		_set_price(PRICE_READY, result["value"]["cu"], "")
-	elif result["error"]["kind"] == Errors.ESTIMATE_JOB:
-		auto_estimates = false
-		_set_price(PRICE_ERROR, -1.0, result["error"]["message"])
-		notified.emit(result["error"]["message"], "error")
 	else:
 		_set_price(PRICE_ERROR, -1.0, result["error"]["message"])
 	changed.emit()

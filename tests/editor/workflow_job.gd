@@ -166,6 +166,17 @@ func run() -> Dictionary:
 	check("unfillable input blocks the price", controller.price_state == Controller.PRICE_INVALID
 		and controller.price_message.contains("run this workflow on Scenario") and fake.estimates == estimates_before)
 
+	# A price check that returns a job stops automatic checks, and one already debounced sends nothing.
+	await controller.select_model("workflow_prop3d")
+	controller.set_value("objectPrompt", "a tin cup")
+	fake.estimate_job = "job_surprise"
+	await controller.estimate_now()
+	check("a dry run returning a job stops automatic checks", not controller.auto_estimates and controller.price_state == Controller.PRICE_ERROR)
+	var dry_runs_before := fake.estimates
+	controller.price_state = Controller.PRICE_CHECKING  # as if debounced before the stop
+	await controller._run_estimate()
+	check("a debounced check after that sends nothing", fake.estimates == dry_runs_before and controller.price_state == Controller.PRICE_OFF)
+
 	# SCENARIO_NO_SPEND: priced, never run.
 	await controller.select_model("workflow_prop3d")
 	controller.set_value("objectPrompt", "a copper kettle")
