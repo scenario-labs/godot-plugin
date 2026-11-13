@@ -74,8 +74,9 @@ static func schema_from(record: Dictionary) -> Dictionary:
 				continue
 			unsupported.append(str(parameter["name"]))
 			parameter["type"] = "unsupported"
-		# The first text input named like a prompt is the prompt: it labels the job.
-		if type == "string" and not prompt_taken and str(parameter["name"]).to_lower().contains("prompt") \
+		# The first text input named like a prompt (not a negative one) is the prompt: it labels the job.
+		var lower := str(parameter["name"]).to_lower()
+		if type == "string" and not prompt_taken and lower.contains("prompt") and not lower.contains("negative") \
 				and not parameter.has("allowed_values"):
 			parameter["prompt"] = true
 			prompt_taken = true

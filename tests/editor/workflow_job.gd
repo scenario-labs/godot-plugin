@@ -143,6 +143,11 @@ func run() -> Dictionary:
 	var glb_download := fake.calls.filter(func(c: Dictionary) -> bool: return c["tool"] == "asset_download" and c["arguments"]["asset_id"] == "asset_mixglb")
 	check("mixed run: the model downloaded as GLB, the rest as is", glb_download.size() == 1 and glb_download[0]["arguments"].get("format") == "glb"
 		and not _last_call(fake, "asset_download").get("arguments", {}).has("format"))
+	check("mixed run: the video Godot cannot import stays on Scenario, the rest is placed",
+		str(kit_placed.get("message", "")).contains("1 file(s) Godot cannot import"))
+	check("the prompt box is the prompt, not the negative prompt", controller.Form.prompt_name(controller.fields) == "prompt")
+	await controller.rerun(kit.get("local_id", ""))
+	check("re-run keeps the workflow, even with a modelId input", controller.model_id == "workflow_kit")
 
 	# Refresh lists again and reads the chosen workflow's inputs again, keeping it chosen.
 	var gets_before := fake.calls.filter(func(c: Dictionary) -> bool: return c["tool"] == "workflow_get").size()

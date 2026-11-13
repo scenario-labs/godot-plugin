@@ -10,13 +10,15 @@ const Workflows := preload("res://addons/scenario/core/workflows.gd")
 
 
 ## row: the ledger row; scope: the project its job ran in; model_name: for
-## messages. Returns {"files": [{path, role}], "assets": [...], "problem": ""}.
+## messages. Returns {"files": [{path, role}], "assets": [...], "problem": "",
+## "skipped": [MIME type of a workflow output Godot cannot import, ...]}.
 static func fetch(client: Object, transport: Object, row: Dictionary, scope: Dictionary, output_root: String, model_name: String) -> Dictionary:
 	var lane := Lanes.lane(row["lane"])
 	var files: Array = []
 	var assets: Array = []
 	var problem := ""
 	var pending := ""  # a download not yet moved into the project
+	var skipped: Array = []  # a workflow's outputs Godot cannot import (their MIME types)
 	var date := Files.today()
 	for asset_id in row["asset_ids"]:
 		var asset_result: Dictionary = await client.get_asset(asset_id, scope)
@@ -40,6 +42,12 @@ static func fetch(client: Object, transport: Object, row: Dictionary, scope: Dic
 		var ext := Files.sniff_extension(Files.head(temp))
 		if ext.is_empty():
 			ext = Files.extension_for_mime(str(asset.get("mimeType", "")))
+		if not ext in Files.IMPORTABLE and row["lane"] == Lanes.WORKFLOW:
+			# A workflow's other outputs are still placed: this one is left on Scenario.
+			skipped.append(str(asset.get("mimeType", "unknown type")))
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(temp))
+			pending = ""
+			continue
 		if not ext in Files.IMPORTABLE:
 			problem = "Scenario returned a file Godot cannot import (%s)." % str(asset.get("mimeType", "unknown type"))
 			break
@@ -57,7 +65,8 @@ static func fetch(client: Object, transport: Object, row: Dictionary, scope: Dic
 		files.append({"path": final_path, "role": role})
 		assets.append({"asset_id": asset_id, "role": role, "path": final_path, "mime": asset.get("mimeType", "")})
 	if problem.is_empty() and files.is_empty():
-		problem = "The job finished without output files."
+		problem = "The job finished without output files." if skipped.is_empty() \
+			else "Scenario returned only files Godot cannot import (%s)." % ", ".join(skipped)
 	if problem.is_empty() and lane["importer"] == "model3d" and files.all(func(f: Dictionary) -> bool: return f["role"] == "preview"):
 		problem = "%s returned no GLB or glTF model, which the 3D lane needs. Pick one of the lane's own models." % model_name
 	if not problem.is_empty():
@@ -66,7 +75,7 @@ static func fetch(client: Object, transport: Object, row: Dictionary, scope: Dic
 		if not pending.is_empty():
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(pending))
 		files = []
-	return {"files": files, "assets": assets, "problem": problem}
+	return {"files": files, "assets": assets, "problem": problem, "skipped": skipped}
 
 
 ## Uploads a reference file in the parts Scenario asks for. Free (no CU).
