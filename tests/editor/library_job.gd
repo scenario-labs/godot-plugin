@@ -135,6 +135,14 @@ func run() -> Dictionary:
 	check("history: a job an Unknown row stands for is linked to it, not added", linked.get("ok", false)
 		and controller.ledger.find(lost).get("job_id") == "job_h00" and controller.ledger.find(lost).get("imported") == true
 		and controller.ledger.jobs.size() == rows_before + 1)
+	var lost_again := controller.ledger.add_intent("image", FLARE, {"prompt": "a torch"}, "fp_torch", 2.0, now, "a torch", controller.client.session.workspace())
+	controller.ledger.mark_unknown(lost_again, "dropped", now)
+	var iso := Time.get_datetime_string_from_unix_time(int(now) + 1) + "Z"
+	library.history.append({"job_id": "job_amb1", "model_id": FLARE, "prompt": "a torch", "status": "success", "created_at": iso, "finished": true})
+	library.history.append({"job_id": "job_amb2", "model_id": FLARE, "prompt": "a teammate's torch", "status": "success", "created_at": iso, "finished": true})
+	await library.import_job(library.history[-2])
+	check("history: two candidates in the window link nothing", controller.ledger.find(lost_again).get("job_id") == ""
+		and controller.ledger.find(lost_again).get("state") == Ledger.UNKNOWN)
 	var unlisted: Dictionary = await library.import_job(library.history[4])
 	check("history: an unlisted model's 3D job goes to the 3D lane", unlisted.get("ok", false)
 		and controller.ledger.find_by_job("job_team3d").get("lane") == "model3d")

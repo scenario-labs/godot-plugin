@@ -137,7 +137,12 @@ func import_job(job: Dictionary) -> Dictionary:
 	var job_id := str(job["job_id"])
 	if busy.has(job_id):
 		return {"ok": false, "message": "Already importing."}
-	controller.ledger.reconcile([{"jobId": job_id, "modelId": job["model_id"], "status": job["status"], "createdAt": job["created_at"]}],
+	# Every loaded job is a candidate, so a window holding two of them links nothing.
+	var candidates: Array = history.duplicate()
+	if not history.any(func(row: Dictionary) -> bool: return row["job_id"] == job_id):
+		candidates.append(job)
+	controller.ledger.reconcile(candidates.map(func(row: Dictionary) -> Dictionary:
+			return {"jobId": row["job_id"], "modelId": row["model_id"], "status": row["status"], "createdAt": row["created_at"]}),
 		Time.get_unix_time_from_system(), controller.client.session.project_id if controller.is_oauth() else "")
 	var existing := ledger_row(job_id)
 	if not existing.is_empty():
