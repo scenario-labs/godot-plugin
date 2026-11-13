@@ -10,7 +10,7 @@ Version 0.2.1. For installation see the [README](../README.md). <!-- x-release-p
 
 The footer shows the team and project. The **...** menu holds **Change team or project**, **Open Scenario**, **Check unknown jobs** and **Sign out** (forgets the sign-in on this computer and tells Scenario to end it). The sign-in lasts across editor restarts; if Scenario ends it, the dock asks you to sign in again.
 
-With an API key instead: press **Use an API key instead**, paste a key (`api_...`) and its secret from the Scenario web app ([app.scenario.com](https://app.scenario.com)), and press **Connect**. Generations go to the key's project, and the footer shows the key and where it came from (`keychain`, `file` or `environment`).
+With an API key instead: press **Use an API key instead**, paste a key (`api_...`) and its secret from the Scenario web app ([app.scenario.com](https://app.scenario.com)), and press **Connect**. Generations go to the key's project, and the footer shows the key and where it came from (`keychain`, `credential-manager`, `secret-service`, `file` or `environment`).
 
 ## 2. Generate
 
