@@ -60,7 +60,7 @@ static func _field(p: Dictionary) -> Dictionary:
 	var options: Array = p.get("allowed_values", []) if p.get("allowed_values") is Array else []
 	var field := {
 		"name": name,
-		"label": humanize(name),
+		"label": str(p.get("label", humanize(name))),
 		"description": str(p.get("description", "")),
 		"required": truthy(p.get("required")),
 		"default": p.get("default"),

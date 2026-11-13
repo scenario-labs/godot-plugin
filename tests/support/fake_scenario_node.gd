@@ -42,6 +42,22 @@ var teams: Array = [
 	{"id": "team_a", "name": "Team A", "projects": [{"id": "proj_a1", "name": "Game A"}, {"id": "proj_a2", "name": "Game B"}]},
 	{"id": "team_b", "name": "Team B", "projects": [{"id": "proj_b1", "name": "Jam"}]},
 ]
+## What models_list (privacy private, status trained) returns, three per page.
+## Shaped like the MCP's records: heavy fields stripped.
+var project_models: Array = [
+	{"id": "model_projhero01", "name": "Hero Character", "type": "flux.1-lora", "privacy": "private", "status": "trained",
+		"capabilities": ["txt2img", "img2img"], "compliantModelIds": ["flux.1-dev"], "shortDescription": "A character LoRA"},
+	{"id": "model_projprop01", "name": "Prop Generator", "type": "custom", "privacy": "private", "status": "trained",
+		"capabilities": ["txt2img"]},
+	{"id": "model_projclip01", "name": "Clip Maker", "type": "custom", "privacy": "private", "status": "trained",
+		"capabilities": ["txt2video"]},
+	{"id": "model_projstyl01", "name": "Studio Style", "type": "flux.1-composition", "privacy": "private", "status": "trained",
+		"capabilities": ["txt2img"], "compliantModelIds": ["flux.1-dev"]},
+	{"id": "model_projsdxl01", "name": "Old SDXL LoRA", "type": "sd-xl-lora", "privacy": "private", "status": "trained",
+		"capabilities": ["txt2img"]},
+]
+## Tools whose next call fails (model_schema_get, models_list), once each.
+var failing: Array = []
 ## Polls of the device grant answered "authorization_pending" before the tokens.
 var device_pending := 0
 ## Every tool call: {"tool", "arguments", "authorization"}.
@@ -83,7 +99,13 @@ func post(url: String, headers: PackedStringArray, body: String, _timeout_s: flo
 		"teams_list":
 			return _reply(payload["id"], _tool({"teams": teams}))
 		"model_schema_get":
+			if failing.has(tool):
+				failing.erase(tool)
+				return _reply(payload["id"], {"content": [{"type": "text", "text": "Model not found."}], "isError": true})
 			return _reply(payload["id"], _tool(_schema(str(args["model_id"]))))
+		"models_list" when failing.has(tool):
+			failing.erase(tool)
+			return _reply(payload["id"], {"content": [{"type": "text", "text": "Project not found."}], "isError": true})
 		"model_run":
 			if args.get("dry_run", false):
 				estimates += 1
@@ -98,6 +120,12 @@ func post(url: String, headers: PackedStringArray, body: String, _timeout_s: flo
 			return _reply(payload["id"], _tool({"job": {"jobId": args["job_id"], "status": "success", "progress": 1, "assetIds": ids, "cuCost": price}}))
 		"jobs_list":
 			return _reply(payload["id"], _tool({"jobs": listed.get(str(args.get("project_id", "")), [])}))
+		"models_list":
+			var start := 3 if str(args.get("page_token", "")) == "page2" else 0
+			var page := {"models": project_models.slice(start, start + 3)}
+			if start + 3 < project_models.size():
+				page["nextPaginationToken"] = "page2"
+			return _reply(payload["id"], _tool(page))
 		"asset_get":
 			var output := _output(str(args["asset_id"]))
 			return _reply(payload["id"], _tool({"asset": {"id": args["asset_id"], "mimeType": output["mime"], "metadata": {"type": output["type"]}}}))
@@ -152,6 +180,20 @@ func _schema(model_id: String) -> Dictionary:
 		fixture = "schema_flare"
 	elif model_id == "model_patina-material":
 		fixture = "schema_patina"
+	# Trained models, as model_schema_get answers: the base's inputs and how to run on it.
+	if model_id in ["model_projhero01", "model_projstyl01"]:
+		var lora := model_id == "model_projhero01"
+		return {"model_id": model_id, "parameters": [
+			{"name": "prompt", "type": "string", "required": true, "prompt": true},
+			{"name": "seed", "type": "number"},
+			{"name": "loras", "type": "model_array", "model_types": ["flux.1-lora"]},
+			{"name": "lorasScale", "type": "number_array", "min": -1, "max": 2},
+			{"name": "modelId", "type": "model", "model_types": ["flux.1-composition"]},
+		], "parameters_inherited_from": "model_bfl-flux-1-dev", "runs_as": "lora" if lora else "composition",
+			"run_with": {"tool": "model_run", "required_arguments": {"model_id": "model_bfl-flux-1-dev",
+				"parameters": {"loras": [model_id]} if lora else {"modelId": model_id}}}}
+	if model_id == "model_projsdxl01":
+		return {"model_id": model_id, "parameters": []}  # no base the MCP knows
 	if model_id == "model_elevenlabs-sound-effects-v2":
 		return {"model_id": model_id, "parameters": [
 			{"name": "text", "type": "string", "required": true, "prompt": true},

@@ -18,6 +18,7 @@ const OAuth := preload("res://addons/scenario/core/oauth.gd")
 const OAuthSession := preload("res://addons/scenario/core/oauth_session.gd")
 const Loopback := preload("res://addons/scenario/core/loopback.gd")
 const Files := preload("res://addons/scenario/core/files.gd")
+const ProjectModels := preload("res://addons/scenario/core/project_models.gd")
 const Placer := preload("res://addons/scenario/editor/placer.gd")
 
 const ESTIMATE_DEBOUNCE_S := 0.6
@@ -77,6 +78,11 @@ var output_root := Files.ROOT
 var schemas := {}
 ## Per lane: extra models from Scenario's recommend, [{id, name, note}].
 var recommended := {}
+## The project's own models, listed under each lane's.
+var project_models := ProjectModels.new()
+## How the picked project model runs on its base (ProjectModels.plan); {} otherwise.
+## model_id is then the base, the model every call goes to.
+var trained := {}
 ## Per field: an upload in progress ("uploading") or its error text.
 var uploads := {}
 
@@ -252,14 +258,14 @@ func load_teams() -> void:
 		return
 	teams = result["value"]
 	if session.has_project():
-		var saved := find_workspace(teams, session.project_id)
+		var saved := OAuthSession.find_workspace(teams, session.project_id)
 		if saved.is_empty():
 			notified.emit("The saved Scenario project is no longer available. Choose a project.", "warning")
 			_set_workspace({}, {})
 		else:
 			_set_workspace(saved["team"], saved["project"])  # names may have changed
 	if not session.has_project():
-		var only := only_workspace(teams)
+		var only := OAuthSession.only_workspace(teams)
 		if only.is_empty():
 			picking = true
 		else:
@@ -284,7 +290,7 @@ func close_picker() -> void:
 
 
 func choose_project(team_id: String, project_id: String) -> void:
-	var found := find_workspace(teams, project_id)
+	var found := OAuthSession.find_workspace(teams, project_id)
 	if not is_oauth() or found.is_empty() or str(found["team"]["id"]) != team_id:
 		return
 	var changed_project := client.session.project_id != project_id
@@ -294,29 +300,10 @@ func choose_project(team_id: String, project_id: String) -> void:
 		quotes.clear()
 		_set_price(PRICE_IDLE, -1.0, "")
 		_drop_references()
+		_forget_project_models()
 		notified.emit("Generations now go to %s." % client.session.workspace_label(), "info")
 	changed.emit()
 	_start_work()
-
-
-## {"team", "project"} holding project_id, or {}.
-static func find_workspace(p_teams: Array, project_id: String) -> Dictionary:
-	for team in p_teams:
-		for project in team.get("projects", []):
-			if project is Dictionary and str(project.get("id", "")) == project_id and not project_id.is_empty():
-				return {"team": team, "project": project}
-	return {}
-
-
-## {"team", "project"} when the account has exactly one project, else {}.
-static func only_workspace(p_teams: Array) -> Dictionary:
-	var found := {}
-	for team in p_teams:
-		for project in team.get("projects", []):
-			if not found.is_empty():
-				return {}
-			found = {"team": team, "project": project}
-	return found
 
 
 func sign_out() -> void:
@@ -401,6 +388,7 @@ func _use_session(session: OAuthSession, source: String) -> void:
 	teams_error = ""
 	picking = false
 	quotes.clear()
+	_forget_project_models()
 	changed.emit()
 	if session.has_project():
 		_start_work()
@@ -433,6 +421,7 @@ func _reset_account() -> void:
 	teams_error = ""
 	picking = false
 	quotes.clear()
+	_forget_project_models()
 	_set_price(PRICE_IDLE, -1.0, "")
 	changed.emit()
 
@@ -442,9 +431,11 @@ func _start_work() -> void:
 	if model_id.is_empty():
 		select_lane(lane_id)
 	elif fields.is_empty():
-		select_model(model_id)
+		select_model(picked_model())
 	else:
 		schedule_estimate()
+	if not project_models.loaded and not project_models.loading:
+		_load_project_models()
 	if not ledger.active().is_empty():
 		_poll.start()
 	if not ledger.unresolved().is_empty():
@@ -478,6 +469,7 @@ func _use_account(key: String, secret: String, source: String) -> void:
 	teams = []
 	picking = false
 	quotes.clear()
+	_forget_project_models()
 	changed.emit()
 	_start_work()
 
@@ -497,7 +489,7 @@ func lane_models() -> Array:
 	for extra in recommended.get(lane_id, []):
 		if not extra["id"] in known:
 			models.append(extra)
-	return models
+	return models + project_models.for_lane(lane_id)
 
 
 func select_model(id: String) -> void:
@@ -505,6 +497,7 @@ func select_model(id: String) -> void:
 	_model_serial += 1
 	var serial := _model_serial
 	model_id = id
+	trained = {}
 	fields = []
 	values = {}
 	uploads = {}
@@ -524,7 +517,9 @@ func select_model(id: String) -> void:
 		schema = result["value"]
 		schemas[id] = schema
 	model_loading = false
-	fields = Form.fields_from_schema(schema, Lanes.RESTRICT)
+	trained = ProjectModels.plan(id, schema)
+	model_id = trained.get("base", id)
+	fields = Form.fields_from_schema(ProjectModels.form_schema(schema, trained), Lanes.RESTRICT)
 	values = Form.initial_values(fields, Lanes.presets(id))
 	if not keep_prompt.is_empty() and not Form.prompt_name(fields).is_empty():
 		values[Form.prompt_name(fields)] = keep_prompt
@@ -548,7 +543,12 @@ func set_value(name: String, value: Variant) -> void:
 
 
 func payload() -> Dictionary:
-	return Form.payload(fields, values)
+	return ProjectModels.run_payload(trained, Form.payload(fields, values))
+
+
+## The model picked in the list: a trained model's own id, not its base.
+func picked_model() -> String:
+	return str(trained.get("id", model_id))
 
 
 ## The quote is bound to the project too: a price checked in one project is
@@ -560,8 +560,13 @@ func fingerprint() -> String:
 # --- Price --------------------------------------------------------------------
 
 func schedule_estimate() -> void:
+	if fields.is_empty() and not model_loading and is_connected_account() and not schemas.has(picked_model()):
+		select_model(picked_model())  # its schema read failed: read it again
+		return
 	problems = Form.validate(fields, values)
-	if not uploads.is_empty():
+	if fields.is_empty() and not model_loading:
+		_set_price(PRICE_INVALID, -1.0, "Scenario gives no settings to run this model with here. Pick another one.")
+	elif not uploads.is_empty():
 		_set_price(PRICE_INVALID, -1.0, "Waiting for the reference upload.")
 	elif not problems.is_empty():
 		_set_price(PRICE_INVALID, -1.0, problems[0])
@@ -692,12 +697,13 @@ func rerun(local_id: String) -> void:
 	if row.is_empty():
 		return
 	lane_id = row["lane"]
-	await select_model(row["model_id"])
+	var again := ProjectModels.rerun_of(row["model_id"], row["parameters"])
+	await select_model(again["model_id"])
 	# References are assets of the row's project: another project cannot use them.
 	var other_project := is_oauth() and str(row.get("project_id", "")) != client.session.project_id
-	for key in row["parameters"]:
+	for key in again["values"]:
 		if not (other_project and _field(key).get("type", "") in ["file", "files"]):
-			values[key] = row["parameters"][key]
+			values[key] = again["values"][key]
 	schedule_estimate()
 	changed.emit()
 
@@ -766,7 +772,7 @@ func import_job(local_id: String) -> Dictionary:
 			problem = downloaded["error"]
 			break
 		pending = temp
-		var head := _head(temp)
+		var head := Files.head(temp)
 		var ext := Files.sniff_extension(head)
 		if ext.is_empty():
 			ext = Files.extension_for_mime(str(asset.get("mimeType", "")))
@@ -803,7 +809,7 @@ func import_job(local_id: String) -> Dictionary:
 		notified.emit(problem, "error")
 		changed.emit()
 		return {"ok": false, "message": problem}
-	_write_provenance(row, assets, files[0]["path"].get_basename() + ".scenario.json")
+	Files.write_provenance(row, assets, files[0]["path"].get_basename() + ".scenario.json", "Scenario Godot Plugin " + Client.VERSION)
 	await placer.import_files(row["lane"], files)
 	var placed := placer.place(row["lane"], files, Files.node_name(row["prompt"]))
 	var paths: Array = files.map(func(f: Dictionary) -> String: return f["path"])
@@ -931,6 +937,23 @@ func _drop_references() -> void:
 	_reference_serial += 1  # an upload still running finishes into the old project: dropped
 
 
+func _load_project_models() -> void:
+	await project_models.load(client)
+	if not project_models.error.is_empty():
+		notified.emit("Could not read this project's models: " + project_models.error, "warning")
+	changed.emit()
+
+
+## Forgotten on a switch or sign-out; a form on one goes back to the lane's default.
+func _forget_project_models() -> void:
+	for entry in project_models.entries:
+		schemas.erase(entry["id"])
+	if not trained.is_empty() or project_models.entries.any(func(e: Dictionary) -> bool: return e["id"] == picked_model()):
+		trained = {}
+		model_id = ""  # _start_work picks the lane's default model
+	project_models.clear()
+
+
 ## The team and project a row's job ran in, for its reads and cancel ({} with an API key).
 func _row_scope(row: Dictionary) -> Dictionary:
 	if not is_oauth() or str(row.get("project_id", "")).is_empty():
@@ -960,7 +983,7 @@ func _model_name(id: String) -> String:
 		for model in lane["models"]:
 			if model["id"] == id:
 				return model["name"]
-	for extras in recommended.values():
+	for extras in recommended.values() + [project_models.entries]:
 		for model in extras:
 			if model["id"] == id:
 				return model["name"]
@@ -971,29 +994,6 @@ func _failure_text(row: Dictionary) -> String:
 	if row["state"] == Ledger.BLOCKED:
 		return Errors.message_for(Errors.MODERATED)
 	return str(row["error"]) if not str(row["error"]).is_empty() else "the job failed on Scenario."
-
-
-func _write_provenance(row: Dictionary, assets: Array, path: String) -> void:
-	var record := {
-		"generator": "Scenario Godot Plugin " + Client.VERSION,
-		"job_id": row["job_id"], "model_id": row["model_id"], "lane": row["lane"],
-		"prompt": row["prompt"], "parameters": row["parameters"],
-		"quoted_cu": row["quoted_cu"], "charged_cu": row["charged_cu"],
-		"assets": assets, "imported_at": Time.get_datetime_string_from_system(true) + "Z",
-	}
-	var file := FileAccess.open(path, FileAccess.WRITE)
-	if file != null:
-		file.store_string(JSON.stringify(record, "\t"))
-		file.close()
-
-
-static func _head(path: String) -> PackedByteArray:
-	var file := FileAccess.open(path, FileAccess.READ)
-	if file == null:
-		return PackedByteArray()
-	var head := file.get_buffer(16)
-	file.close()
-	return head
 
 
 static func _now() -> float:
