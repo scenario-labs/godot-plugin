@@ -21,6 +21,7 @@ const Files := preload("res://addons/scenario/core/files.gd")
 const ProjectModels := preload("res://addons/scenario/core/project_models.gd")
 const Placer := preload("res://addons/scenario/editor/placer.gd")
 const Workflows := preload("res://addons/scenario/core/workflows.gd")
+const Downloads := preload("res://addons/scenario/editor/downloads.gd")
 
 const ESTIMATE_DEBOUNCE_S := 0.6
 const POLL_INTERVAL_S := 3.0
@@ -302,9 +303,7 @@ func choose_project(team_id: String, project_id: String) -> void:
 		_set_price(PRICE_IDLE, -1.0, "")
 		_drop_references()
 		_forget_project_models()
-		recommended.erase(Lanes.WORKFLOW)  # workflows belong to the project
-		if lane_id == Lanes.WORKFLOW:
-			model_id = ""  # _start_work lists the new project's workflows
+		_forget_workflows()
 		notified.emit("Generations now go to %s." % client.session.workspace_label(), "info")
 	changed.emit()
 	_start_work()
@@ -393,7 +392,7 @@ func _use_session(session: OAuthSession, source: String) -> void:
 	picking = false
 	quotes.clear()
 	_forget_project_models()
-	recommended.erase(Lanes.WORKFLOW)
+	_forget_workflows()
 	changed.emit()
 	if session.has_project():
 		_start_work()
@@ -427,8 +426,20 @@ func _reset_account() -> void:
 	picking = false
 	quotes.clear()
 	_forget_project_models()
+	_forget_workflows()
 	_set_price(PRICE_IDLE, -1.0, "")
 	changed.emit()
+
+
+## Workflows belong to the account and project: another one lists them again,
+## and a workflow chosen before is dropped from the form (kept on Refresh).
+func _forget_workflows(keep_choice: bool = false) -> void:
+	recommended.erase(Lanes.WORKFLOW)
+	for id in schemas.keys().filter(func(key: String) -> bool: return Workflows.is_workflow(key)):
+		schemas.erase(id)  # their inputs may have changed on Scenario
+	if lane_id == Lanes.WORKFLOW and not keep_choice:
+		model_id = ""
+		fields = []
 
 
 ## Starts what needs a project: the form's model, polling, unknown jobs.
@@ -475,6 +486,7 @@ func _use_account(key: String, secret: String, source: String) -> void:
 	picking = false
 	quotes.clear()
 	_forget_project_models()
+	_forget_workflows()
 	changed.emit()
 	_start_work()
 
@@ -488,19 +500,36 @@ func select_lane(id: String) -> void:
 	if id != Lanes.WORKFLOW:
 		await select_model(Lanes.default_model(id))
 		return
-	if not recommended.has(id):  # the project's ready workflows, then public ones
-		var listed: Dictionary = await client.list_workflows()
-		if listed["ok"]:
-			recommended[id] = listed["value"]
-		else:
-			notified.emit(listed["error"]["message"], "error")  # the next visit lists again
-	if lane_id == id and not lane_models().is_empty():
-		await select_model(lane_models()[0]["id"])
-	elif lane_id == id:
-		model_id = ""
-		fields = []
+	# Nothing from the lane before stays priced while the list loads.
+	var keep := model_id if Workflows.is_workflow(model_id) else ""
+	_model_serial += 1
+	model_id = ""
+	fields = []
+	_set_price(PRICE_IDLE, -1.0, "")
+	changed.emit()
+	if not recommended.has(id):
+		await _list_workflows()
+	if lane_id != id or not model_id.is_empty():
+		return  # another lane, or a workflow picked meanwhile
+	var ids: Array = lane_models().map(func(m: Dictionary) -> String: return m["id"])
+	if not ids.is_empty():
+		await select_model(keep if keep in ids else ids[0])
+	else:
 		_set_price(PRICE_INVALID, -1.0, "No ready workflow to run here. Make one on app.scenario.com, then press Refresh.")
 		changed.emit()
+
+
+## Lists the project's ready workflows, then public ones. A reply that comes
+## back after a switch of account or project is dropped.
+func _list_workflows() -> void:
+	var asked := [client.session, client.api_key, client.session.project_id if is_oauth() else ""]
+	var listed: Dictionary = await client.list_workflows()
+	if asked != [client.session, client.api_key, client.session.project_id if is_oauth() else ""]:
+		return
+	if listed["ok"]:
+		recommended[Lanes.WORKFLOW] = listed["value"]
+	else:
+		notified.emit(listed["error"]["message"], "error")  # the next visit lists again
 
 
 func lane_models() -> Array:
@@ -580,6 +609,8 @@ func fingerprint() -> String:
 # --- Price --------------------------------------------------------------------
 
 func schedule_estimate() -> void:
+	if model_id.is_empty():
+		return  # nothing to price (a Workflow lane without a workflow): its message stays
 	if fields.is_empty() and not model_loading and is_connected_account() and not schemas.has(picked_model()):
 		select_model(picked_model())  # its schema read failed: read it again
 		return
@@ -721,6 +752,8 @@ func rerun(local_id: String) -> void:
 		return
 	lane_id = row["lane"]
 	var again := ProjectModels.rerun_of(row["model_id"], row["parameters"])
+	if lane_id == Lanes.WORKFLOW and not recommended.has(lane_id):
+		await _list_workflows()  # the picker shows the workflow being re-run
 	await select_model(again["model_id"])
 	# References are assets of the row's project: another project cannot use them.
 	var other_project := is_oauth() and str(row.get("project_id", "")) != client.session.project_id
@@ -772,71 +805,23 @@ func import_job(local_id: String) -> Dictionary:
 		return {"ok": false, "message": "Only finished jobs can be imported."}
 	_importing[local_id] = true
 	changed.emit()
-	var lane := Lanes.lane(row["lane"])
-	var files: Array = []
-	var assets: Array = []
-	var problem := ""
-	var pending := ""  # a download not yet moved into the project
-	var date := Files.today()
-	for asset_id in row["asset_ids"]:
-		var asset_result: Dictionary = await client.get_asset(asset_id, _row_scope(row))
-		if not asset_result["ok"]:
-			problem = asset_result["error"]["message"]
-			break
-		var asset: Dictionary = asset_result["value"]
-		var role := Files.role_for(asset)
-		var url_result: Dictionary = await client.download_url(asset_id, str(lane.get("download_format", "")), _row_scope(row))
-		if not url_result["ok"]:
-			problem = url_result["error"]["message"]
-			break
-		var temp := "%s/%s.download" % [Files.DOWNLOADS, asset_id]
-		var downloaded: Dictionary = await transport.download(url_result["value"], temp)
-		if not downloaded["ok"]:
-			problem = downloaded["error"]
-			break
-		pending = temp
-		var head := Files.head(temp)
-		var ext := Files.sniff_extension(head)
-		if ext.is_empty():
-			ext = Files.extension_for_mime(str(asset.get("mimeType", "")))
-		if not ext in Files.IMPORTABLE:
-			problem = "Scenario returned a file Godot cannot import (%s)." % str(asset.get("mimeType", "unknown type"))
-			break
-		if not Lanes.accepts(row["lane"], ext):
-			problem = "%s returned a %s file, which the %s lane cannot place. Pick one of the lane's own models." % [
-				_model_name(str(row["model_id"])), ext.to_upper(), lane["title"]]
-			break
-		if lane["importer"] == "model3d" and ext in ["png", "jpg", "webp"]:
-			role = "preview"  # 3D models come with a thumbnail next to the GLB
-		var base := Files.base_path(row["lane"], row["prompt"], asset_id, role, date, output_root)
-		var final_path := base + "." + ext
-		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(final_path.get_base_dir()))
-		if DirAccess.rename_absolute(ProjectSettings.globalize_path(temp), ProjectSettings.globalize_path(final_path)) != OK:
-			problem = "Could not move the download into " + final_path
-			break
-		pending = ""
-		files.append({"path": final_path, "role": role})
-		assets.append({"asset_id": asset_id, "role": role, "path": final_path, "mime": asset.get("mimeType", "")})
-	if problem.is_empty() and files.is_empty():
-		problem = "The job finished without output files."
-	if problem.is_empty() and lane["importer"] == "model3d" and files.all(func(f: Dictionary) -> bool: return f["role"] == "preview"):
-		problem = "%s returned no GLB or glTF model, which the 3D lane needs. Pick one of the lane's own models." % _model_name(str(row["model_id"]))
-	if not problem.is_empty():
-		# A failed import keeps nothing: neither the files already moved nor the pending download.
-		for item in files:
-			DirAccess.remove_absolute(ProjectSettings.globalize_path(item["path"]))
-		if not pending.is_empty():
-			DirAccess.remove_absolute(ProjectSettings.globalize_path(pending))
+	var fetched: Dictionary = await Downloads.fetch(client, transport, row, _row_scope(row), output_root, _model_name(str(row["model_id"])))
+	var files: Array = fetched["files"]
+	if not fetched["problem"].is_empty():
 		_importing.erase(local_id)
-		ledger.set_error(local_id, problem, _now())
-		notified.emit(problem, "error")
+		ledger.set_error(local_id, fetched["problem"], _now())
+		notified.emit(fetched["problem"], "error")
 		changed.emit()
-		return {"ok": false, "message": problem}
-	Files.write_provenance(row, assets, files[0]["path"].get_basename() + ".scenario.json", "Scenario Godot Plugin " + Client.VERSION)
-	# A workflow's outputs are placed by their file type.
-	var place_lane: String = Workflows.place_lane(files) if row["lane"] == Lanes.WORKFLOW else row["lane"]
-	await placer.import_files(place_lane, files)
-	var placed := placer.place(place_lane, files, Files.node_name(row["prompt"]))
+		return {"ok": false, "message": fetched["problem"]}
+	Files.write_provenance(row, fetched["assets"], files[0]["path"].get_basename() + ".scenario.json", "Scenario Godot Plugin " + Client.VERSION)
+	# A workflow's outputs are placed by their file type, each kind by its lane.
+	var groups: Dictionary = Workflows.groups(files) if row["lane"] == Lanes.WORKFLOW else {row["lane"]: files}
+	var placed := {"ok": true, "message": "", "resource_paths": []}
+	for place_lane in groups:
+		await placer.import_files(place_lane, groups[place_lane])
+		var one := placer.place(place_lane, groups[place_lane], Files.node_name(row["prompt"]))
+		placed = {"ok": placed["ok"] and one["ok"], "message": (placed["message"] + " " + one["message"]).strip_edges(),
+			"resource_paths": placed["resource_paths"] + one["resource_paths"]}
 	var paths: Array = files.map(func(f: Dictionary) -> String: return f["path"])
 	for extra in placed["resource_paths"]:
 		if not extra in paths:
@@ -929,8 +914,8 @@ func clear_field(field_name: String) -> void:
 
 func load_recommendations() -> void:
 	if lane_id == Lanes.WORKFLOW:
-		recommended.erase(lane_id)
-		await select_lane(lane_id)  # Refresh: list the workflows again
+		_forget_workflows(true)
+		await select_lane(lane_id)  # Refresh: list the workflows and read the chosen one's inputs again
 		return
 	var lane := Lanes.lane(lane_id)
 	if not lane.get("recommend", true):
