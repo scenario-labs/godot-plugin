@@ -100,7 +100,7 @@ static func detect_store() -> String:
 		"Linux", "FreeBSD", "NetBSD", "OpenBSD", "BSD":
 			# secret-tool needs a session bus to reach the Secret Service: the
 			# address in the environment, or the standard socket GLib also finds.
-			if not _secret_tool().is_empty() and _session_bus():
+			if not _secret_tool().is_empty() and not _timeout_tool().is_empty() and _session_bus():
 				return SECRET_SERVICE
 	return ""
 
@@ -406,18 +406,26 @@ static func _powershell() -> String:
 
 
 static func _secret_tool() -> String:
-	for path in ["/usr/bin/secret-tool", "/usr/local/bin/secret-tool", "/bin/secret-tool"]:
+	return _first_existing(["/usr/bin/secret-tool", "/usr/local/bin/secret-tool", "/bin/secret-tool"])
+
+
+## timeout(1), which bounds every secret-tool call: without it the Secret
+## Service is not used, since a locked keyring could hold the editor forever.
+static func _timeout_tool() -> String:
+	return _first_existing(["/usr/bin/timeout", "/bin/timeout", "/usr/local/bin/timeout"])
+
+
+static func _first_existing(paths: Array) -> String:
+	for path in paths:
 		if FileAccess.file_exists(path):
 			return path
 	return ""
 
 
-## [path, arguments...], under coreutils timeout when present: a locked
-## keyring can wait for a prompt nobody answers.
+## [timeout, seconds, path, arguments...]: a locked keyring can wait for a
+## prompt nobody answers.
 static func _bounded(path: String, arguments: PackedStringArray, seconds: int) -> PackedStringArray:
-	var command := PackedStringArray([path])
-	if FileAccess.file_exists("/usr/bin/timeout"):
-		command = PackedStringArray(["/usr/bin/timeout", str(seconds), path])
+	var command := PackedStringArray([_timeout_tool(), str(seconds), path])
 	command.append_array(arguments)
 	return command
 
