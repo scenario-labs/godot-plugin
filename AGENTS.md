@@ -51,7 +51,7 @@ In `addons/scenario/`:
   - `controller.gd`: state and actions (price, generate, poll, import,
     references, recommendations); emits `changed`.
   - `downloads.gd`: a finished job's outputs into the project, named and
-    typed, for the controller's import.
+    typed, for the controller's import; a reference file's upload.
   - `dock_ui.gd`: the dock, built in code, no logic.
   - `placer.gd`: import with `.import` sidecars, then placement per lane
     through `EditorUndoRedoManager`.

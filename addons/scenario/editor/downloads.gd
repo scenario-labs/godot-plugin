@@ -1,8 +1,8 @@
 @tool
 extends RefCounted
-## Downloads a finished job's outputs into the project, named and typed, for
-## the controller's import. A failure keeps nothing: neither the files already
-## moved nor the pending download.
+## Transfers for the controller: a finished job's outputs downloaded into the
+## project, named and typed (a failure keeps nothing: neither the files already
+## moved nor the pending download), and a reference file uploaded to Scenario.
 
 const Files := preload("res://addons/scenario/core/files.gd")
 const Lanes := preload("res://addons/scenario/core/lanes.gd")
@@ -67,3 +67,22 @@ static func fetch(client: Object, transport: Object, row: Dictionary, scope: Dic
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(pending))
 		files = []
 	return {"files": files, "assets": assets, "problem": problem}
+
+
+## Uploads a reference file in the parts Scenario asks for. Free (no CU).
+## type: Files.upload_type(). Returns {"asset_id", "problem"}; one is empty.
+static func upload(client: Object, transport: Object, file_name: String, type: Dictionary, bytes: PackedByteArray) -> Dictionary:
+	var start: Dictionary = await client.upload_start(file_name, type["mime"], type["kind"], bytes.size())
+	if not start["ok"]:
+		return {"asset_id": "", "problem": start["error"]["message"]}
+	var part_size := int(start["value"].get("part_size", bytes.size()))
+	for part in start["value"].get("parts", []):
+		var index := int(part.get("part_number", 1)) - 1
+		var chunk := bytes.slice(index * part_size, mini((index + 1) * part_size, bytes.size()))
+		var put: Dictionary = await transport.put_bytes(str(part.get("upload_url", "")), chunk)
+		if not put["ok"]:
+			return {"asset_id": "", "problem": put["error"]}
+	var done: Dictionary = await client.upload_complete({"upload_id": start["value"].get("upload_id", "")})
+	if done["ok"] and str(done["value"].get("asset_id", "")).begins_with("asset_"):
+		return {"asset_id": done["value"]["asset_id"], "problem": ""}
+	return {"asset_id": "", "problem": done["error"]["message"] if not done["ok"] else "Scenario did not finish the upload."}
