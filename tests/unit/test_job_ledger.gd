@@ -213,3 +213,16 @@ func test_adopted_results_are_finished_and_never_added_twice() -> void:
 	assert_eq(ledger.adopt("image", "", "logo.png", "", ["asset_7"], T0 + 1, scope, "library"), asset, "the same asset too")
 	assert_ne(ledger.adopt("image", "", "icon.png", "", ["asset_8"], T0, scope, "library"), asset)
 	assert_eq(ledger.jobs.size(), 3)
+
+
+func test_a_job_an_unknown_row_may_stand_for() -> void:
+	var ledger := _ledger()
+	var local_id := ledger.add_intent("image", "model_a", {}, "fp", 2.0, T0, "", {"team_id": "team_a", "project_id": "proj_a1"})
+	ledger.mark_unknown(local_id, "timeout", T0)
+	var job := {"jobId": "job_1", "modelId": "model_a", "createdAt": "2026-10-04T09:10:53.000Z"}
+	assert_true(ledger.could_be_unresolved(job, "proj_a1"))
+	assert_false(ledger.could_be_unresolved(job, "proj_b1"), "another project")
+	assert_false(ledger.could_be_unresolved({"jobId": "job_2", "modelId": "model_b", "createdAt": job["createdAt"]}, "proj_a1"), "another model")
+	assert_false(ledger.could_be_unresolved({"jobId": "job_3", "modelId": "model_a", "createdAt": "2026-10-05T09:00:00.000Z"}, "proj_a1"), "outside the window")
+	ledger.dismiss(local_id, T0)
+	assert_false(ledger.could_be_unresolved(job, "proj_a1"), "a dismissed row stands for nothing")
