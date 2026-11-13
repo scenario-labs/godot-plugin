@@ -47,8 +47,8 @@ In `addons/scenario/`:
   - `files.gd`: output names, roles from asset metadata, file type from bytes,
     the `.scenario.json` provenance.
   - `errors.gd`: error kinds and user messages.
-  - `library_query.gd`: Library `search` arguments, asset and History rows,
-    the lane that places an asset.
+  - `library_query.gd`: Library `assets_list` arguments, asset and History
+    rows and their filters, the lane that places an asset.
 - `editor/`:
   - `controller.gd`: state and actions (price, generate, poll, import,
     references, recommendations); emits `changed`.

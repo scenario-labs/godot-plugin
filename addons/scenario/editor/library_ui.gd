@@ -59,11 +59,11 @@ func _build() -> void:
 	_library_box.add_child(filters)
 	var search_row := HBoxContainer.new()
 	_search_edit = LineEdit.new()
-	_search_edit.placeholder_text = "Search names and prompts"
+	_search_edit.placeholder_text = "Filter by caption or prompt"
 	_search_edit.size_flags_horizontal = SIZE_EXPAND_FILL
-	_search_edit.text_submitted.connect(func(_text: String) -> void: _apply_filter())
+	_search_edit.text_changed.connect(func(_text: String) -> void: _apply_filter())
 	search_row.add_child(_search_edit)
-	search_row.add_child(_button("Refresh", _apply_filter))
+	search_row.add_child(_button("Refresh", library.refresh))
 	_library_box.add_child(search_row)
 	_library_status = _dim("")
 	_library_box.add_child(_library_status)
@@ -119,10 +119,10 @@ func _refresh_library() -> void:
 	elif not library.error.is_empty():
 		_library_status.text = library.error
 	elif library.loaded and library.assets.is_empty():
-		_library_status.text = "Nothing here yet. Generations and uploads of this project appear here."
+		_library_status.text = "Nothing matches yet. Show more reads older assets." if library.can_load_more() else "Nothing here yet. Generations and uploads of this project appear here."
 	else:
-		var count := "%d of %d" % [library.assets.size(), library.total] if library.total >= 0 else str(library.assets.size())
-		_library_status.text = "%s assets in this project" % count if library.loaded else ""
+		var count := "%d assets" % library.assets.size()
+		_library_status.text = (count + (", newest first" if library.can_load_more() else " in this project")) if library.loaded else ""
 	for asset in library.assets:
 		_cards.add_child(_card(asset))
 	_more_button.visible = library.can_load_more()

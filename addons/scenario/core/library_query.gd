@@ -1,85 +1,117 @@
 @tool
 extends RefCounted
-## The Library and History in the dock: search arguments, and the rows read
-## back from Scenario's search and jobs_list. No editor API, unit-tested.
+## The Library and History in the dock: assets_list and jobs_list arguments,
+## the rows read back, and the filters applied to them. No editor API,
+## unit-tested.
 ##
-## The Library lists the project's assets newest first through `search`
-## (assets_list strips thumbnails); History lists its jobs through jobs_list.
-## Both are free reads.
+## The Library pages through the project's assets newest first with
+## assets_list (a catalog tool, run through scenario_tool_execute_read).
+## `search` is not used: it counts and pages across every project of the team,
+## then narrows each page to one project, so a project's pages come back short
+## or empty. Kind, source and text are filtered here, over the rows read, as
+## the Photoshop plugin does. History lists jobs with jobs_list. Free reads.
 
 const Lanes := preload("res://addons/scenario/core/lanes.gd")
 
+## Placeable rows to show before Show more.
 const PAGE_SIZE := 24
+## assets_list rows per request, and requests per Show more at most.
+const LIST_LIMIT := 50
+const MAX_LIST_PAGES := 5
 const HISTORY_PAGE_SIZE := 30
-## The kinds the dock can place, by filter. "all" is every placeable kind.
-const KINDS := {
-	"all": ["image", "image-hdr", "3d", "audio"],
-	"image": ["image", "image-hdr"],
-	"3d": ["3d"],
-	"audio": ["audio"],
-}
+## Thumbnail width asked of Scenario's image transform.
+const THUMBNAIL_WIDTH := 192
+const KINDS := ["all", "image", "3d", "audio"]
 const SOURCES := ["all", "generated", "uploaded"]
+## The kinds the dock can place.
+const PLACEABLE := ["image", "image-hdr", "3d", "audio"]
 
 
-## Arguments for the `search` tool: one page of the project's assets, newest
-## first. query searches names, prompts and captions.
-static func search_args(kind: String, source: String, query: String, offset: int, limit: int = PAGE_SIZE) -> Dictionary:
-	var kinds: Array = KINDS.get(kind, KINDS["all"])
-	var parts := PackedStringArray()
-	parts.append("kind = \"%s\"" % kinds[0] if kinds.size() == 1 else "kind IN [%s]" % ", ".join(kinds.map(func(k: String) -> String: return "\"%s\"" % k)))
-	# Generated assets carry the model that made them; uploads do not.
-	if source == "generated":
-		parts.append("modelId EXISTS")
-	elif source == "uploaded":
-		parts.append("NOT modelId EXISTS")
-	var args := {
-		"target": "assets", "filter": " AND ".join(parts), "limit": clampi(limit, 1, 100),
-		"offset": maxi(offset, 0), "include_urls": true,
-	}
-	query = query.strip_edges()
-	if query.is_empty():
-		args["sort_by"] = ["createdAt:desc"]  # a text search ranks by relevance instead
-	else:
-		args["query"] = query
-	return args
+## scenario_tool_execute_read arguments for one assets_list page. scope: the
+## team and project ({} with an API key); the executor passes on only its
+## `parameters`, so they carry it.
+static func list_args(page_token: String, scope: Dictionary, limit: int = LIST_LIMIT) -> Dictionary:
+	var parameters := {"limit": clampi(limit, 1, 100), "include_urls": true}
+	parameters.merge(scope)
+	if not page_token.is_empty():
+		parameters["page_token"] = page_token
+	return {"name": "assets_list", "parameters": parameters}
 
 
-## {"assets": [row], "total": int, "offset": int} from a search reply.
-## total is -1 when the reply gives none: a full page then means more may follow.
-static func parse_page(value: Variant) -> Dictionary:
-	var page := {"assets": [], "total": -1, "offset": 0, "hits": 0}
+## {"assets": [row], "next": token} from an assets_list reply; rows the dock
+## cannot place (prompt texts, videos, documents) are left out.
+static func parse_assets(value: Variant) -> Dictionary:
+	var page := {"assets": [], "next": ""}
 	if not value is Dictionary:
 		return page
-	var hits: Variant = value.get("assets", value.get("hits", []))
-	for hit in hits if hits is Array else []:
-		page["hits"] += 1
-		var row := asset_row(hit)
-		if not row.is_empty():
+	var items: Variant = value.get("assets", [])
+	for item in items if items is Array else []:
+		var row := asset_row(item)
+		if not row.is_empty() and row["kind"] in PLACEABLE:
 			page["assets"].append(row)
-	for key in ["estimatedTotalHits", "totalHits"]:
-		if value.get(key) is float or value.get(key) is int:
-			page["total"] = int(value[key])
-			break
-	page["offset"] = int(value.get("offset", 0)) if value.get("offset") != null else 0
+	page["next"] = text(value.get("nextPaginationToken"))
 	return page
 
 
-## One asset as the dock shows it, or {} for a hit without an id:
-## {"id", "kind", "name", "prompt", "model_id", "mime", "created_at", "thumbnail", "generated"}
-static func asset_row(hit: Variant) -> Dictionary:
-	if not hit is Dictionary or text(hit.get("id")).is_empty():
+## One asset as the dock shows it, or {} without an id:
+## {"id", "kind", "name", "prompt", "model_id", "mime", "created_at", "thumbnail", "generated", "uploaded"}
+static func asset_row(item: Variant) -> Dictionary:
+	if not item is Dictionary or text(item.get("id")).is_empty():
 		return {}
-	var metadata: Dictionary = hit.get("metadata") if hit.get("metadata") is Dictionary else {}
-	var model_id := text(hit.get("modelId", metadata.get("modelId")))
-	var prompt := text(hit.get("prompt", metadata.get("prompt")))
-	var name := text(hit.get("name"))
-	if name.is_empty():
-		name = prompt if not prompt.is_empty() else text(hit["id"])
+	var mime := text(item.get("mimeType"))
+	var kind := text(item.get("kind"))
+	if kind.is_empty():
+		kind = kind_for_mime(mime)
+	var model_id := text(item.get("modelId"))
+	var prompt := text(item.get("prompt"))
+	if prompt.begins_with("asset_"):
+		prompt = ""  # the prompt was kept as a text asset: its id says nothing
+	var name := text(item.get("name"))
+	for fallback in [text(item.get("description")), prompt, text(item["id"])]:
+		if name.is_empty():
+			name = fallback
 	return {
-		"id": text(hit["id"]), "kind": text(hit.get("kind")), "name": name, "prompt": prompt,
-		"model_id": model_id, "mime": text(hit.get("mimeType")), "created_at": text(hit.get("createdAt")),
-		"thumbnail": thumbnail_url(hit), "generated": not model_id.is_empty(),
+		"id": text(item["id"]), "kind": kind, "name": name, "prompt": prompt, "model_id": model_id, "mime": mime,
+		"created_at": text(item.get("createdAt")), "thumbnail": thumbnail_url(item, kind),
+		"generated": not model_id.is_empty(), "uploaded": text(item.get("source")).begins_with("uploaded"),
 	}
+
+
+## True when the row passes the dock's filters; query matches its name,
+## caption or prompt.
+static func matches(row: Dictionary, kind: String, source: String, query: String) -> bool:
+	if kind == "image" and not row["kind"] in ["image", "image-hdr"]:
+		return false
+	if kind in ["3d", "audio"] and row["kind"] != kind:
+		return false
+	if (source == "generated" and not row["generated"]) or (source == "uploaded" and not row["uploaded"]):
+		return false
+	query = query.strip_edges().to_lower()
+	return query.is_empty() or (str(row["name"]) + " " + str(row["prompt"])).to_lower().contains(query)
+
+
+## A small picture of an image: Scenario's transform URL with a width (the
+## signed policy covers any parameter after p=100), else the file itself.
+## 3D and audio have none.
+static func thumbnail_url(item: Dictionary, kind: String) -> String:
+	var url := text(item.get("url"))
+	if not kind in ["image", "image-hdr"] or not url.begins_with("https://"):
+		return ""
+	if url.contains("/assets-transform/") and url.contains("?p=100"):
+		return url + "&width=%d&height=auto" % THUMBNAIL_WIDTH
+	return url
+
+
+static func kind_for_mime(mime: String) -> String:
+	if mime in ["image/x-exr", "image/vnd.radiance"]:
+		return "image-hdr"
+	if mime.begins_with("image/"):
+		return "image"
+	if mime.begins_with("model/"):
+		return "3d"
+	if mime.begins_with("audio/"):
+		return "audio"
+	return ""
 
 
 ## A reply's optional string: "" for a missing or null value (str(null) is "<null>").
@@ -87,34 +119,14 @@ static func text(value: Variant) -> String:
 	return "" if value == null else str(value)
 
 
-## The hit's thumbnail URL ("" if none). Images without a thumbnail use the
-## file itself; 3D and audio have no picture then.
-static func thumbnail_url(hit: Dictionary) -> String:
-	var thumbnail: Variant = hit.get("thumbnail")
-	if thumbnail is Dictionary:
-		thumbnail = thumbnail.get("url", "")
-	if thumbnail is String and thumbnail.begins_with("https://"):
-		return thumbnail
-	var url: Variant = hit.get("url")
-	if url is String and url.begins_with("https://") and str(hit.get("kind", "")) == "image":
-		return url
-	return ""
-
-
 ## The lane that places one asset on its own, by its kind or MIME type ("" when
 ## the dock cannot place it). A material or a 3D model needs the job's other
 ## files, so a map or a preview image goes to the Image lane; a skybox model's
 ## panorama still goes to the sky.
 static func lane_for(model_id: String, kind: String, mime: String = "") -> String:
-	var by_kind := ""
-	if kind == "3d" or mime.begins_with("model/"):
-		by_kind = "model3d"
-	elif kind == "audio" or mime.begins_with("audio/"):
-		by_kind = "sound"
-	elif kind == "image-hdr" or mime in ["image/x-exr", "image/vnd.radiance"]:
-		by_kind = "skybox"
-	elif kind == "image" or mime.begins_with("image/"):
-		by_kind = "image"
+	if kind.is_empty():
+		kind = kind_for_mime(mime)
+	var by_kind: String = {"3d": "model3d", "audio": "sound", "image-hdr": "skybox", "image": "image"}.get(kind, "")
 	return "skybox" if by_kind == "image" and model_lane(model_id) == "skybox" else by_kind
 
 
@@ -152,8 +164,9 @@ static func parse_history(value: Variant) -> Dictionary:
 		if not job is Dictionary or text(job.get("jobId")).is_empty() or text(job.get("modelId")).is_empty():
 			continue
 		var status := text(job.get("status"))
+		var prompt := text(job.get("prompt"))
 		page["jobs"].append({
-			"job_id": text(job["jobId"]), "model_id": text(job["modelId"]), "prompt": text(job.get("prompt")),
+			"job_id": text(job["jobId"]), "model_id": text(job["modelId"]), "prompt": "" if prompt.begins_with("asset_") else prompt,
 			"status": status, "created_at": text(job.get("createdAt")),
 			"finished": status.to_lower() in ["success", "succeeded", "completed"],
 		})

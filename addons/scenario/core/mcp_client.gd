@@ -34,6 +34,7 @@ const PAID_MIN_TOKEN_S := 300.0
 const READ_TOOLS := [
 	"model_schema_get", "models_list", "job_get", "jobs_list", "asset_get", "asset_download",
 	"recommend", "search", "usage", "teams_list", "projects_list", "workflows_list", "workflow_get",
+	"scenario_tool_execute_read",  # runs read-class catalog tools only
 ]
 ## Calls that can spend Creative Units or create something.
 const SUBMIT_TOOLS := [
@@ -185,9 +186,10 @@ func list_jobs_page(page_size: int, page_token: String = "") -> Dictionary:
 	return await call_tool("jobs_list", arguments)
 
 
-## ok(reply) of the search tool (see LibraryQuery.search_args). Free.
-func search_assets(arguments: Dictionary) -> Dictionary:
-	return await call_tool("search", arguments)
+## ok({"assets", "nextPaginationToken"}): one page of assets_list, a catalog
+## tool run through the read executor (see LibraryQuery.list_args). Free.
+func list_assets(arguments: Dictionary) -> Dictionary:
+	return await call_tool("scenario_tool_execute_read", arguments)
 
 
 func cancel_job(job_id: String, scope: Dictionary = {}) -> Dictionary:
