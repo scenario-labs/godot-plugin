@@ -12,6 +12,8 @@ const Form := preload("res://addons/scenario/core/schema_form.gd")
 ## Input types the dock has no widget for. An optional one is left to the
 ## workflow's default; a required one blocks the price check.
 const UNSUPPORTED := ["inputs_array", "number_array", "model_array"]
+## Roles of PBR maps (Files.ROLES): a set of them is a material.
+const MAP_ROLES := ["normal", "roughness", "metallic", "height", "ao"]
 ## API input keys (camelCase) renamed to the schema_form ones.
 const _KEYS := {"allowedValues": "allowed_values", "maxLength": "max_length", "costImpact": "cost_impact"}
 
@@ -80,8 +82,9 @@ static func schema_from(record: Dictionary) -> Dictionary:
 
 
 ## A workflow's files by the lane that places them: a GLB or glTF on the 3D
-## lane with the images as its previews (else the images on the Image lane),
-## and sounds on the Sound lane. {lane_id: [file, ...]}
+## lane with the images as its previews; else a 360 panorama on the Skybox
+## lane, PBR maps on the Material lane and other images on the Image lane;
+## sounds on the Sound lane. Roles come from Files.role_for. {lane_id: [file, ...]}
 static func groups(files: Array) -> Dictionary:
 	var models: Array = []
 	var sounds: Array = []
@@ -99,8 +102,17 @@ static func groups(files: Array) -> Dictionary:
 		for image in images:
 			image["role"] = "preview"
 		out["model3d"] = models + images
-	elif not images.is_empty():
-		out["image"] = images
+	else:
+		var panoramas := images.filter(func(f: Dictionary) -> bool: return f["role"] == "panorama")
+		var rest := images.filter(func(f: Dictionary) -> bool: return f["role"] != "panorama")
+		if not panoramas.is_empty():
+			out["skybox"] = panoramas
+		if rest.any(func(f: Dictionary) -> bool: return f["role"] in MAP_ROLES):
+			out["material"] = rest
+		elif not rest.is_empty():
+			if not rest.any(func(f: Dictionary) -> bool: return f["role"] in ["main", "base", "albedo"]):
+				rest[0]["role"] = "main"  # the Image lane places a main, base or albedo image
+			out["image"] = rest
 	if not sounds.is_empty():
 		out["sound"] = sounds
 	return out

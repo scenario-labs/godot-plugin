@@ -62,7 +62,7 @@ const LANES := [
 	},
 	{
 		"id": WORKFLOW, "title": "Workflow", "importer": "workflow", "recommend": false,
-		"hint": "Runs one of this project's Scenario workflows. Results are placed by type: image, 3D model or sound.",
+		"hint": "Runs one of this project's Scenario workflows. Each result is placed as its own lane would: image, 3D model, material, sky or sound.",
 		"models": [],
 	},
 ]
