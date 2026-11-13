@@ -100,6 +100,9 @@ func run() -> Dictionary:
 	# Outputs placed by type: a GLB with its preview.
 	EditorInterface.get_selection().clear()
 	var placed: Dictionary = await controller.import_job(row.get("local_id", ""))
+	scene = _edited(scene_path)  # an import can make the editor reload the open scene
+	if scene == null:
+		return _abort("scratch scene still open after the import")
 	row = controller.ledger.find(sent.get("local_id", ""))
 	var model: Node = null
 	for child in scene.get_children():
@@ -117,6 +120,9 @@ func run() -> Dictionary:
 	var sound: Dictionary = await controller.generate()
 	await controller.poll()
 	var sound_placed: Dictionary = await controller.import_job(sound.get("local_id", ""))
+	scene = _edited(scene_path)
+	if scene == null:
+		return _abort("scratch scene still open after the import")
 	check("sound output placed as a player: " + str(sound_placed.get("message", "")), _first_of(scene, "AudioStreamPlayer3D") != null or _first_of(scene, "AudioStreamPlayer") != null)
 
 	# Image, model and sound from one run: each placed by its lane, the model asked for as GLB.
@@ -129,6 +135,9 @@ func run() -> Dictionary:
 	await controller.poll()
 	EditorInterface.get_selection().clear()
 	var kit_placed: Dictionary = await controller.import_job(kit.get("local_id", ""))
+	scene = _edited(scene_path)
+	if scene == null:
+		return _abort("scratch scene still open after the import")
 	check("mixed run: model and sound both placed: " + str(kit_placed.get("message", "")), kit_placed.get("ok", false) and _models(scene) == models_before + 1
 		and scene.find_children("*", "AudioStreamPlayer3D", true, false).size() == players_before + 1)
 	var glb_download := fake.calls.filter(func(c: Dictionary) -> bool: return c["tool"] == "asset_download" and c["arguments"]["asset_id"] == "asset_mixglb")
@@ -216,6 +225,17 @@ static func _models(node: Node) -> int:
 static func _first_of(node: Node, type: String) -> Node:
 	var found := node.find_children("*", type, true, false)
 	return found[0] if not found.is_empty() else null
+
+
+func _abort(label: String) -> Dictionary:
+	check(label, false)
+	return {"ok": false, "checks": checks, "failures": failures}
+
+
+## The scene being edited now, if it is still the scratch scene (else null: checks fail).
+static func _edited(path: String) -> Node:
+	var current := EditorInterface.get_edited_scene_root()
+	return current if current != null and current.scene_file_path == path else null
 
 
 func open_scratch_scene(path: String) -> Node:
