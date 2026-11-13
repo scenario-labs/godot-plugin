@@ -21,7 +21,7 @@ func run() -> Dictionary:
 		return {"ok": true, "skipped": "no credential store on %s" % OS.get_name()}
 	OS.unset_environment("SCENARIO_API_KEY")
 	OS.unset_environment("SCENARIO_API_SECRET")
-	var path := "user://keychain_check_%d/credentials.json" % Time.get_ticks_usec()
+	var path := "res://tests/tmp_output/keychain-check-%d/credentials.json" % Time.get_ticks_usec()
 	var store := Credentials.new(path)
 	var started := Time.get_ticks_msec()
 	var saved := store.save_credentials(KEY, SECRET)
