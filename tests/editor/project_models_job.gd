@@ -41,8 +41,13 @@ func run() -> Dictionary:
 	root.add_child(ui)
 	ui.bind(c)
 
-	# Connecting reads the list, every page.
+	# A failed read is tried again at the next start; then the list comes, every page.
+	fake.failing = ["models_list"]
 	c._use_account("api_test", "sec_test", "test")
+	await _until(func() -> bool: return not c.project_models.error.is_empty() and not c.fields.is_empty())
+	check("failed read: not marked read", not c.project_models.loaded and c.project_models.entries.is_empty())
+	fake.calls.clear()
+	c._start_work()
 	await _until(func() -> bool: return c.project_models.loaded and not c.fields.is_empty())
 	var listed := fake.calls.filter(func(call: Dictionary) -> bool: return call["tool"] == "models_list")
 	check("list read on two pages, private and trained", listed.size() == 2 and listed[0]["arguments"].get("filters") == {"privacy": "private", "status": "trained"}
@@ -82,6 +87,14 @@ func run() -> Dictionary:
 	await c.estimate_now()
 	priced = _last(fake, "model_run")["arguments"]
 	check("composition: modelId wiring, no weight", not ProjectModels.WEIGHT_FIELD in names and priced["parameters"].get("modelId") == "model_projstyl01")
+
+	# A schema read that failed is read again by the next price check.
+	fake.failing = ["model_schema_get"]
+	await c.select_model("model_projprop01")
+	check("schema error shown as is", c.price_state == Controller.PRICE_ERROR and c.price_message.contains("not found"))
+	await c.estimate_now()
+	await _until(func() -> bool: return not c.fields.is_empty())
+	check("schema read again", not c.fields.is_empty())
 
 	# A model with its own schema runs by its id; one without a base is refused.
 	await c.select_model("model_projprop01")
