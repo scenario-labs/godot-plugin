@@ -232,3 +232,101 @@ func test_version_matches_plugin_cfg() -> void:
 	var cfg := ConfigFile.new()
 	assert_eq(cfg.load("res://addons/scenario/plugin.cfg"), OK)
 	assert_eq(Client.VERSION, cfg.get_value("plugin", "version"))
+
+
+const OAuth := preload("res://addons/scenario/core/oauth.gd")
+const OAuthSession := preload("res://addons/scenario/core/oauth_session.gd")
+
+
+func _sign_in(expires_in: float = 3600.0) -> OAuthSession:
+	var session := OAuthSession.new(OAuth.new(fake, "https://idp.example.test", "client_godot"),
+		{"access_token": "at_1", "refresh_token": "rt_1", "expires_at": Time.get_unix_time_from_system() + expires_in})
+	session.set_workspace({"id": "team_a", "name": "A"}, {"id": "proj_a1", "name": "Game"})
+	client.set_session(session)
+	return session
+
+
+func _token_reply(access: String) -> Dictionary:
+	return {"http": 200, "body": JSON.stringify({"access_token": access, "refresh_token": "rt_" + access, "expires_in": 3600})}
+
+
+func test_signed_in_calls_carry_the_bearer_and_the_project() -> void:
+	_sign_in()
+	fake.replies.append({"fixture": "job"})
+	await client.get_job("job_1")
+	var call: Dictionary = fake.tool_calls()[0]
+	assert_eq(_header(call, "Authorization"), "Bearer at_1")
+	assert_eq(call["payload"]["params"]["arguments"], {"job_id": "job_1", "team_id": "team_a", "project_id": "proj_a1"})
+	assert_eq(_header(fake.requests[0], "Authorization"), "Bearer at_1", "initialize too")
+
+
+func test_a_job_is_read_in_its_own_project() -> void:
+	_sign_in()
+	fake.replies.append({"fixture": "job"})
+	await client.get_job("job_1", {"team_id": "team_b", "project_id": "proj_b1"})
+	assert_eq(fake.tool_calls()[0]["payload"]["params"]["arguments"]["project_id"], "proj_b1")
+
+
+func test_teams_are_listed_without_a_project_and_projects_filled_in() -> void:
+	var session := _sign_in()
+	session.set_workspace({}, {})
+	fake.replies.append(Fake.tool_result({"teams": [{"id": "team_a", "name": "A"}, {"id": "team_b", "projects": [{"id": "proj_b1"}]}]}))
+	fake.replies.append(Fake.tool_result({"projects": [{"id": "proj_a1"}], "nextPaginationToken": "next"}))
+	fake.replies.append(Fake.tool_result({"projects": [{"id": "proj_a2"}]}))
+	var result: Dictionary = await client.list_teams()
+	assert_true(result["ok"])
+	assert_eq(result["value"][0]["projects"], [{"id": "proj_a1"}, {"id": "proj_a2"}])
+	var calls := fake.tool_calls()
+	assert_eq(calls[0]["payload"]["params"]["arguments"], {})
+	assert_eq(calls[1]["payload"]["params"]["arguments"], {"team_id": "team_a", "limit": 100.0})
+	assert_eq(calls[2]["payload"]["params"]["arguments"]["page_token"], "next")
+	var refused: Dictionary = await client.get_job("job_1")
+	assert_eq(refused["error"]["kind"], Errors.LOCAL, "nothing else goes out before a project is chosen")
+	assert_eq(fake.tool_calls().size(), 3)
+
+
+func test_a_refused_token_is_renewed_and_a_read_sent_again() -> void:
+	_sign_in()
+	fake.replies.append({"http": 401, "body": "{\"error\":\"invalid_token\"}"})
+	fake.replies.append(_token_reply("at_2"))
+	fake.replies.append({"fixture": "job"})
+	var result: Dictionary = await client.get_job("job_1")
+	assert_true(result["ok"])
+	assert_eq(_header(fake.tool_calls()[1], "Authorization"), "Bearer at_2")
+
+
+func test_a_paid_call_refused_for_its_token_is_not_sent_again() -> void:
+	_sign_in()
+	fake.replies.append({"http": 401, "body": "{\"error\":\"invalid_token\"}"})
+	fake.replies.append(_token_reply("at_2"))
+	var result: Dictionary = await client.submit("model_a", {"prompt": "p"})
+	assert_false(result["ok"])
+	assert_false(result["error"]["ambiguous"], "a refused request did not run")
+	assert_eq(fake.tool_calls().size(), 1)
+	assert_string_contains(result["error"]["message"], "nothing was sent")
+
+
+func test_a_paid_call_goes_out_with_a_token_that_will_last() -> void:
+	_sign_in(120.0)
+	fake.replies.append(_token_reply("at_2"))
+	fake.replies.append(Fake.tool_result({"job_id": "job_9", "status": "queued"}))
+	var result: Dictionary = await client.submit("model_a", {"prompt": "p"})
+	assert_true(result["ok"])
+	assert_eq(_header(fake.tool_calls()[0], "Authorization"), "Bearer at_2")
+
+
+func test_an_ended_session_sends_nothing() -> void:
+	var session := _sign_in(0.0)
+	session.tokens["expires_at"] = 1.0
+	fake.replies.append({"http": 400, "body": "{\"error\":\"invalid_grant\"}"})
+	var result: Dictionary = await client.submit("model_a", {"prompt": "p"})
+	assert_eq(result["error"]["kind"], Errors.AUTH)
+	assert_false(result["error"]["ambiguous"])
+	assert_eq(fake.tool_calls().size(), 0)
+
+
+func test_signed_in_errors_speak_of_the_account() -> void:
+	_sign_in()
+	fake.replies.append({"http": 403, "body": "forbidden"})
+	var result: Dictionary = await client.get_job("job_1")
+	assert_string_contains(result["error"]["message"], "Scenario account")

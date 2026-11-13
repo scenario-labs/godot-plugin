@@ -11,12 +11,34 @@ const Form := preload("res://addons/scenario/core/schema_form.gd")
 const KEYS_URL := "https://app.scenario.com"
 const DOCS_URL := "https://docs.scenario.com"
 
+# Footer menu items.
+const MENU_SIGN_OUT := 0
+const MENU_OPEN := 1
+const MENU_CHECK := 2
+const MENU_PROJECT := 3
+
 var controller: Controller
 
 var _connect_box: VBoxContainer
+var _sign_in_box: VBoxContainer
+var _sign_in_button: Button
+var _waiting_box: VBoxContainer
+var _waiting_label: Label
+var _code_edit: LineEdit
+var _device_buttons: HBoxContainer
+var _key_box: VBoxContainer
 var _key_edit: LineEdit
 var _secret_edit: LineEdit
 var _connect_button: Button
+var _picker_box: VBoxContainer
+var _picker_label: Label
+var _team_option: OptionButton
+var _project_option: OptionButton
+var _use_project_button: Button
+var _retry_teams_button: Button
+var _picker_cancel_button: Button
+var _picker_team := ""
+var _menu: MenuButton
 var _main_box: VBoxContainer
 var _lane_buttons := {}
 var _lane_hint: Label
@@ -62,25 +84,8 @@ func _build() -> void:
 	content.add_theme_constant_override("separation", 8)
 	scroll.add_child(content)
 
-	_connect_box = VBoxContainer.new()
-	content.add_child(_connect_box)
-	_connect_box.add_child(_wrap_label("Connect your Scenario API key to generate images, 3D models, materials, skyboxes and sounds into this project."))
-	_key_edit = LineEdit.new()
-	_key_edit.placeholder_text = "API key (api_...)"
-	_connect_box.add_child(_key_edit)
-	_secret_edit = LineEdit.new()
-	_secret_edit.placeholder_text = "API secret"
-	_secret_edit.secret = true
-	_connect_box.add_child(_secret_edit)
-	_connect_button = Button.new()
-	_connect_button.text = "Connect"
-	_connect_button.pressed.connect(_on_connect)
-	_connect_box.add_child(_connect_button)
-	var keys_link := LinkButton.new()
-	keys_link.text = "Create an API key in Scenario"
-	keys_link.uri = KEYS_URL
-	_connect_box.add_child(keys_link)
-	_connect_box.add_child(_dim_label("The secret is stored in your system keychain (or your editor settings folder), never in the project."))
+	_build_connect(content)
+	_build_picker(content)
 
 	_main_box = VBoxContainer.new()
 	_main_box.add_theme_constant_override("separation", 6)
@@ -144,14 +149,15 @@ func _build() -> void:
 	_account_label = _dim_label("")
 	_account_label.size_flags_horizontal = SIZE_EXPAND_FILL
 	footer.add_child(_account_label)
-	var menu := MenuButton.new()
-	menu.text = "..."
-	menu.flat = false
-	menu.get_popup().add_item("Disconnect", 0)
-	menu.get_popup().add_item("Open Scenario", 1)
-	menu.get_popup().add_item("Check unknown jobs", 2)
-	menu.get_popup().id_pressed.connect(_on_menu)
-	footer.add_child(menu)
+	_menu = MenuButton.new()
+	_menu.text = "..."
+	_menu.flat = false
+	_menu.get_popup().add_item("Change team or project", MENU_PROJECT)
+	_menu.get_popup().add_item("Open Scenario", MENU_OPEN)
+	_menu.get_popup().add_item("Check unknown jobs", MENU_CHECK)
+	_menu.get_popup().add_item("Sign out", MENU_SIGN_OUT)
+	_menu.get_popup().id_pressed.connect(_on_menu)
+	footer.add_child(_menu)
 	_main_box.add_child(footer)
 
 	_confirm = ConfirmationDialog.new()
@@ -165,15 +171,113 @@ func _build() -> void:
 	add_child(_file_dialog)
 
 
+## Signed out: Sign in with Scenario, on another device, or an API key.
+func _build_connect(content: VBoxContainer) -> void:
+	_connect_box = VBoxContainer.new()
+	_connect_box.add_theme_constant_override("separation", 6)
+	content.add_child(_connect_box)
+	_connect_box.add_child(_wrap_label("Sign in with your Scenario account to generate images, 3D models, materials, skyboxes and sounds into this project."))
+
+	_sign_in_box = VBoxContainer.new()
+	_connect_box.add_child(_sign_in_box)
+	_sign_in_button = Button.new()
+	_sign_in_button.text = "Sign in with Scenario"
+	_sign_in_button.custom_minimum_size.y = _px(34)
+	_sign_in_button.pressed.connect(controller.sign_in_browser)
+	_sign_in_box.add_child(_sign_in_button)
+	var device_link := LinkButton.new()
+	device_link.text = "Sign in on another device"
+	device_link.tooltip_text = "Shows a code to enter in the browser of any device, for when this computer's browser cannot finish the sign-in."
+	device_link.pressed.connect(controller.sign_in_device)
+	_sign_in_box.add_child(device_link)
+	var key_link := LinkButton.new()
+	key_link.text = "Use an API key instead"
+	key_link.pressed.connect(func() -> void: _key_box.visible = not _key_box.visible)
+	_sign_in_box.add_child(key_link)
+
+	_waiting_box = VBoxContainer.new()
+	_connect_box.add_child(_waiting_box)
+	_waiting_label = _wrap_label("")
+	_waiting_box.add_child(_waiting_label)
+	_code_edit = LineEdit.new()
+	_code_edit.editable = false
+	_code_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_code_edit.add_theme_font_size_override("font_size", int(_px(22)))
+	_waiting_box.add_child(_code_edit)
+	_device_buttons = HBoxContainer.new()
+	_device_buttons.add_child(_action("Open the page here", controller.open_device_page))
+	_device_buttons.add_child(_action("Copy code", func() -> void: DisplayServer.clipboard_set(_code_edit.text)))
+	_waiting_box.add_child(_device_buttons)
+	_waiting_box.add_child(_action("Cancel", controller.cancel_sign_in))
+
+	_key_box = VBoxContainer.new()
+	_key_box.visible = false
+	_connect_box.add_child(_key_box)
+	_key_edit = LineEdit.new()
+	_key_edit.placeholder_text = "API key (api_...)"
+	_key_box.add_child(_key_edit)
+	_secret_edit = LineEdit.new()
+	_secret_edit.placeholder_text = "API secret"
+	_secret_edit.secret = true
+	_key_box.add_child(_secret_edit)
+	_connect_button = Button.new()
+	_connect_button.text = "Connect"
+	_connect_button.pressed.connect(_on_connect)
+	_key_box.add_child(_connect_button)
+	var keys_link := LinkButton.new()
+	keys_link.text = "Create an API key in Scenario"
+	keys_link.uri = KEYS_URL
+	_key_box.add_child(keys_link)
+	_connect_box.add_child(_dim_label("Your sign-in is stored in your system keychain (or your editor settings folder), never in the project."))
+
+
+## Signed in: the team and project that pays for the generations.
+func _build_picker(content: VBoxContainer) -> void:
+	_picker_box = VBoxContainer.new()
+	_picker_box.add_theme_constant_override("separation", 6)
+	content.add_child(_picker_box)
+	_picker_label = _wrap_label("")
+	_picker_box.add_child(_picker_label)
+	_team_option = OptionButton.new()
+	_team_option.fit_to_longest_item = false
+	_team_option.item_selected.connect(func(i: int) -> void:
+		_picker_team = str(_team_option.get_item_metadata(i))
+		_refresh_picker())
+	_picker_box.add_child(_team_option)
+	_project_option = OptionButton.new()
+	_project_option.fit_to_longest_item = false
+	_picker_box.add_child(_project_option)
+	_use_project_button = Button.new()
+	_use_project_button.text = "Use this project"
+	_use_project_button.pressed.connect(func() -> void:
+		if _project_option.selected >= 0:
+			controller.choose_project(_picker_team, str(_project_option.get_item_metadata(_project_option.selected))))
+	_picker_box.add_child(_use_project_button)
+	_retry_teams_button = _action("Try again", controller.load_teams)
+	_picker_box.add_child(_retry_teams_button)
+	_picker_cancel_button = _action("Cancel", controller.close_picker)
+	_picker_box.add_child(_picker_cancel_button)
+	var sign_out := LinkButton.new()
+	sign_out.text = "Sign out"
+	sign_out.pressed.connect(controller.sign_out)
+	_picker_box.add_child(sign_out)
+
+
 # --- Refresh ------------------------------------------------------------------
 
 func _refresh() -> void:
 	if controller == null:
 		return
-	var connected := controller.is_connected_account()
-	_connect_box.visible = not connected
+	var signed_in := controller.is_signed_in()
+	var connected := controller.is_connected_account() and not controller.picking
+	_connect_box.visible = not signed_in
+	_picker_box.visible = signed_in and not connected
 	_main_box.visible = connected
+	if not signed_in:
+		_refresh_sign_in()
+		return
 	if not connected:
+		_refresh_picker()
 		return
 	for id in _lane_buttons:
 		_lane_buttons[id].set_pressed_no_signal(id == controller.lane_id)
@@ -187,8 +291,68 @@ func _refresh() -> void:
 	_sync_field_values()
 	_refresh_price()
 	_refresh_jobs()
-	var key: String = controller.account["api_key"]
-	_account_label.text = "Key %s...%s (%s)" % [key.substr(0, 8), key.right(4), controller.account["source"]] if key.length() > 12 else "Connected"
+	var popup := _menu.get_popup()
+	popup.set_item_disabled(popup.get_item_index(MENU_PROJECT), not controller.is_oauth())
+	if controller.is_oauth():
+		_account_label.text = controller.client.session.workspace_label()
+		_account_label.tooltip_text = "Signed in with Scenario. Generations go to this team and project."
+	else:
+		var key: String = controller.account["api_key"]
+		_account_label.text = "Key %s...%s (%s)" % [key.substr(0, 8), key.right(4), controller.account["source"]] if key.length() > 12 else "Connected"
+		_account_label.tooltip_text = ""
+
+
+func _refresh_sign_in() -> void:
+	var state: String = controller.sign_in["state"]
+	_sign_in_box.visible = state == Controller.SIGN_IN_IDLE
+	_waiting_box.visible = not _sign_in_box.visible
+	var code := str(controller.sign_in.get("user_code", ""))
+	_code_edit.text = code
+	_code_edit.visible = not code.is_empty()
+	_device_buttons.visible = not code.is_empty()
+	match state:
+		Controller.SIGN_IN_BROWSER:
+			_waiting_label.text = "Finish signing in in your browser, then come back here."
+		Controller.SIGN_IN_DEVICE:
+			_waiting_label.text = "Starting..." if code.is_empty() else "On any device, open %s and enter this code:" % controller.sign_in.get("verification_uri", "")
+		Controller.SIGN_IN_FINISHING:
+			_waiting_label.text = "Signing in..."
+
+
+func _refresh_picker() -> void:
+	var teams := controller.teams
+	if controller.teams_loading:
+		_picker_label.text = "Reading your Scenario teams..."
+	elif not controller.teams_error.is_empty():
+		_picker_label.text = controller.teams_error
+	elif teams.is_empty():
+		_picker_label.text = "This Scenario account has no team yet. Create one at app.scenario.com, then try again."
+	else:
+		_picker_label.text = "Choose the team and project that pays for the generations. Jobs and results stay in that project."
+	# The team shown: the one picked here, else the session's, else the first.
+	var team_ids: Array = teams.map(func(t: Dictionary) -> String: return str(t["id"]))
+	if not _picker_team in team_ids:
+		var current := controller.client.session.team_id if controller.is_oauth() else ""
+		_picker_team = current if current in team_ids else (team_ids[0] if not team_ids.is_empty() else "")
+	_team_option.clear()
+	_project_option.clear()
+	for team in teams:
+		_team_option.add_item(str(team.get("name", team["id"])))
+		_team_option.set_item_metadata(_team_option.item_count - 1, str(team["id"]))
+		if str(team["id"]) == _picker_team:
+			_team_option.select(_team_option.item_count - 1)
+			for project in team.get("projects", []):
+				_project_option.add_item(str(project.get("name", project["id"])))
+				_project_option.set_item_metadata(_project_option.item_count - 1, str(project["id"]))
+				if controller.is_oauth() and str(project["id"]) == controller.client.session.project_id:
+					_project_option.select(_project_option.item_count - 1)
+	var ready := not controller.teams_loading and not teams.is_empty()
+	_team_option.visible = ready
+	_project_option.visible = ready
+	_use_project_button.visible = ready
+	_use_project_button.disabled = _project_option.item_count == 0
+	_retry_teams_button.visible = not controller.teams_loading and (teams.is_empty() or not controller.teams_error.is_empty())
+	_picker_cancel_button.visible = controller.is_oauth() and controller.client.session.has_project()
 
 
 func _refresh_models() -> void:
@@ -439,12 +603,14 @@ func _on_generate() -> void:
 
 func _on_menu(id: int) -> void:
 	match id:
-		0:
-			controller.disconnect_account()
-		1:
+		MENU_SIGN_OUT:
+			controller.sign_out()
+		MENU_OPEN:
 			OS.shell_open(KEYS_URL)
-		2:
+		MENU_CHECK:
 			controller.check_unresolved()
+		MENU_PROJECT:
+			controller.open_picker()
 
 
 func _on_notified(text: String, level: String) -> void:

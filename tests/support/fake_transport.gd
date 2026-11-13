@@ -21,7 +21,8 @@ var init_count := 0
 
 
 func post(url: String, headers: PackedStringArray, body: String, timeout_s: float) -> Dictionary:
-	var payload: Variant = JSON.parse_string(body)
+	var json := JSON.new()
+	var payload: Variant = json.data if json.parse(body) == OK else {"form": body}  # a form: an OAuth request
 	requests.append({"url": url, "headers": headers, "payload": payload, "timeout": timeout_s})
 	var method := str(payload.get("method", ""))
 	if auto_init and method == "initialize":

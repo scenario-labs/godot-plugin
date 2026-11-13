@@ -39,15 +39,13 @@ Generate images, 3D models, PBR materials, skyboxes and sound effects with [Scen
 
 ## Sign in
 
-Create an API key and secret in the Scenario web app ([app.scenario.com](https://app.scenario.com)), then paste both into the dock and press **Connect**.
+Press **Sign in with Scenario** in the dock, approve "Scenario for Godot" in your browser, then choose the team and project that pays for the generations. **Sign in on another device** shows a code to enter in any browser instead. **Use an API key instead** takes a key and secret from the Scenario web app ([app.scenario.com](https://app.scenario.com)); generations then go to the key's project.
 
-The secret never goes into your project folder, so it cannot end up in git:
+Secrets (the sign-in's refresh token, or the API secret) never go into your project folder, so they cannot end up in git:
 
-- macOS: the secret is stored in your login Keychain (service "Scenario Godot Plugin"). Only the key id is written to the editor settings folder.
-- Other systems: key and secret are written to `scenario/credentials.json` in the Godot editor settings folder, readable by your user only.
+- macOS: stored in your login Keychain (service "Scenario Godot Plugin"). The rest is written to `scenario/credentials.json` in the Godot editor settings folder.
+- Other systems: written to that file, readable by your user only.
 - `SCENARIO_API_KEY` and `SCENARIO_API_SECRET` environment variables take precedence over both, which suits CI and shared machines.
-
-Generations are billed to the Scenario project that owns the key.
 
 ## Lanes
 

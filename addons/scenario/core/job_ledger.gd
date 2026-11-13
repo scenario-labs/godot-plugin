@@ -1,6 +1,7 @@
 @tool
 extends RefCounted
-## Durable job ledger: survives editor restarts.
+## Durable job ledger: survives editor restarts. Each row keeps the team and
+## project its request went to, so its job is read back there.
 ##
 ## The intent is written with state "submitting" BEFORE the paid request is
 ## sent. A row still "submitting" when the ledger loads means the editor
@@ -72,8 +73,9 @@ func save() -> bool:
 
 
 ## prompt: the text that names the files and the node; defaults to parameters.prompt.
+## scope: {"team_id", "project_id"} the request goes to ({} with an API key).
 func add_intent(lane: String, model_id: String, parameters: Dictionary, fingerprint: String,
-		quoted_cu: float, now: float, prompt: String = "") -> String:
+		quoted_cu: float, now: float, prompt: String = "", scope: Dictionary = {}) -> String:
 	_counter += 1
 	var local_id := "local_%d_%d" % [int(now * 1000.0), _counter]
 	var row := {
@@ -81,6 +83,7 @@ func add_intent(lane: String, model_id: String, parameters: Dictionary, fingerpr
 		"prompt": prompt if not prompt.is_empty() else str(parameters.get("prompt", "")), "parameters": parameters, "fingerprint": fingerprint,
 		"quoted_cu": quoted_cu, "charged_cu": null, "asset_ids": [], "files": [], "imported": false,
 		"error": "", "created_at": now, "updated_at": now,
+		"team_id": str(scope.get("team_id", "")), "project_id": str(scope.get("project_id", "")),
 	}
 	jobs.push_front(row)
 	_trim()
@@ -163,10 +166,12 @@ func apply_job(job: Dictionary, now: float) -> Dictionary:
 ## Links unresolved rows to jobs found on Scenario. Returns how many were linked.
 ## Only an unambiguous match (exactly one untracked job of the same model in the
 ## window after the intent) is linked; anything else stays for the user.
-func reconcile(server_jobs: Array, now: float) -> int:
+## project_id: the project server_jobs were listed in; rows sent to another
+## project are left alone ("" with an API key, whose rows carry none).
+func reconcile(server_jobs: Array, now: float, project_id: String = "") -> int:
 	var linked := 0
 	for row in jobs:
-		if not row["state"] in UNRESOLVED_STATES:
+		if not row["state"] in UNRESOLVED_STATES or str(row.get("project_id", "")) != project_id:
 			continue
 		var candidates: Array = []
 		for job in server_jobs:

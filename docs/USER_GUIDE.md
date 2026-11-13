@@ -2,13 +2,15 @@
 
 Version 0.2.1. For installation see the [README](../README.md). <!-- x-release-please-version -->
 
-## 1. Connect
+## 1. Sign in
 
 1. Enable the plugin (Project > Project Settings > Plugins > Scenario). The **Scenario** dock opens in its own column, right of the Inspector. Like any dock, you can drag its tab elsewhere; Godot remembers the layout per project.
-2. In the Scenario web app ([app.scenario.com](https://app.scenario.com)), create an API key for the project that should pay for the generations. Copy the key (`api_...`) and the secret.
-3. Paste both into the dock and press **Connect**. The dock checks the pair with a free call and then shows the lanes.
+2. Press **Sign in with Scenario**. Your browser opens Scenario's sign-in; approve "Scenario for Godot", then come back to Godot. When this computer's browser cannot finish (a remote machine, a locked-down browser), press **Sign in on another device** instead: the dock shows a code to enter at the address it gives, on any device.
+3. Choose the team and project that pays for the generations, and press **Use this project**. An account with a single project skips this step. Jobs and their results stay in the project they were sent to.
 
-The footer shows which key is in use and where it came from (`keychain`, `file` or `environment`). The **...** menu holds **Disconnect** (forgets the key, and on macOS removes the secret from the Keychain), **Open Scenario** and **Check unknown jobs**.
+The footer shows the team and project. The **...** menu holds **Change team or project**, **Open Scenario**, **Check unknown jobs** and **Sign out** (forgets the sign-in on this computer and tells Scenario to end it). The sign-in lasts across editor restarts; if Scenario ends it, the dock asks you to sign in again.
+
+With an API key instead: press **Use an API key instead**, paste a key (`api_...`) and its secret from the Scenario web app ([app.scenario.com](https://app.scenario.com)), and press **Connect**. Generations go to the key's project, and the footer shows the key and where it came from (`keychain`, `file` or `environment`).
 
 ## 2. Generate
 
@@ -68,7 +70,8 @@ Editor Settings > Scenario:
 
 Environment variables, read when Godot starts:
 
-- `SCENARIO_API_KEY`, `SCENARIO_API_SECRET`: use this key instead of the saved one.
+- `SCENARIO_API_KEY`, `SCENARIO_API_SECRET`: use this key instead of the saved sign-in or key.
+- `SCENARIO_OAUTH_ISSUER`, `SCENARIO_OAUTH_CLIENT_ID`, `SCENARIO_MCP_URL`: sign in to a development instance of Scenario (for Scenario developers; set the first two together).
 - `SCENARIO_NO_SPEND=1`: refuse every paid request and upload inside the editor. Price checks, cancels and imports still work.
 
 ## 7. Troubleshooting

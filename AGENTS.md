@@ -8,8 +8,8 @@ Root `AGENTS.md` is the repository rulebook; `.claude/CLAUDE.md` links here.
 A Godot 4.7 editor plugin, GDScript only, in `addons/scenario/`. It generates
 images, 3D models, PBR materials, skyboxes and sound effects through the
 Scenario MCP server (`https://mcp.scenario.com/mcp`: JSON-RPC 2.0 over HTTP,
-SSE replies, Basic auth with an API key and secret) and places them in the open
-scene. The repository root is a small demo project that hosts the addon and its
+SSE replies; a Bearer token from Sign in with Scenario, or Basic auth with an
+API key and secret) and places them in the open scene. The repository root is a small demo project that hosts the addon and its
 tests. `addons/gut/` (GUT) and `addons/agentkit/` (from the toolkit below) serve
 the tests only: the release zip holds `addons/scenario/` alone.
 
@@ -23,13 +23,19 @@ In `addons/scenario/`:
   - `mcp_client.gd`: Scenario MCP calls, session init and re-init, error kinds,
     retry policy (reads only), estimate and submit.
   - `sse.gd`: parses SSE or JSON replies, keeps the message matching the request id.
-  - `quote.gd`: canonical JSON, fingerprint (model + parameters), single-use
+  - `quote.gd`: canonical JSON, fingerprint (model, project, parameters), single-use
     quote store.
   - `job_ledger.gd`: durable job list (`res://.godot/scenario/jobs.json`),
     states, reconciles Unknown rows with `jobs_list`.
   - `schema_form.gd`: model schema to form fields, validation, payload;
     `prompt_name()` finds the prompt field by its flag.
   - `lanes.gd`: the five lanes, their models, presets and restrictions.
+  - `oauth.gd`: Sign in with Scenario as Godot's registered OAuth application
+    on `clerk.scenario.com`: PKCE with a loopback redirect, device grant,
+    refresh, revoke.
+  - `loopback.gd`: one-shot listener on a free 127.0.0.1 port for the redirect.
+  - `oauth_session.gd`: access token in memory, one refresh at a time, the
+    chosen team and project that every MCP call carries.
   - `credentials.gd`: environment, macOS Keychain (`security -i` over stdin),
     or a 0600 file in the editor config folder.
   - `files.gd`: output names, roles from asset metadata, file type from bytes.
@@ -61,7 +67,7 @@ Every change keeps them.
 4. The intent row is written to the ledger before the paid request.
 5. `SCENARIO_NO_SPEND=1` refuses paid calls and uploads before any request;
    `job_cancel` still goes out.
-6. The secret never goes under `res://`.
+6. Secrets (the API secret, the refresh token) never go under `res://`.
 
 ## Commands
 

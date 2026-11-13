@@ -100,3 +100,57 @@ func test_error_classification() -> void:
 	assert_eq(Errors.classify("something odd"), Errors.SCENARIO)
 	assert_true(Errors.message_for(Errors.QUOTA, "need 80, have 12").contains("need 80"))
 	assert_false(Errors.message_for(Errors.TRANSPORT, "socket").contains("socket"))
+
+
+const ISSUER := "https://idp.example.test"
+
+
+func test_session_round_trip_in_the_file_store() -> void:
+	var store := _store()
+	store.save_credentials("api_abc", "sec_123")
+	var saved := store.save_session(ISSUER, "client_godot", "rt_1")
+	assert_true(saved["ok"])
+	assert_eq(saved["store"], "file")
+	assert_eq(store.load_credentials()["api_key"], "", "one way of signing in at a time")
+	assert_eq(store.load_session(ISSUER, "client_godot")["refresh_token"], "rt_1")
+	assert_true(store.save_refresh_token("rt_2"))
+	assert_eq(store.load_session(ISSUER, "client_godot")["refresh_token"], "rt_2")
+	if OS.get_name() != "Windows":
+		var mode := FileAccess.get_unix_permissions(ProjectSettings.globalize_path(config_path)) & 0x1FF
+		assert_eq(mode, FileAccess.UNIX_READ_OWNER | FileAccess.UNIX_WRITE_OWNER)
+
+
+func test_session_of_another_application_is_not_resumed() -> void:
+	var store := _store()
+	store.save_session(ISSUER, "client_godot", "rt_1")
+	assert_eq(store.load_session(ISSUER, "client_other")["refresh_token"], "")
+	assert_eq(store.load_session("https://other.example.test", "client_godot")["refresh_token"], "")
+
+
+func test_workspace_stays_with_the_same_application_only() -> void:
+	var store := _store()
+	store.save_session(ISSUER, "client_godot", "rt_1")
+	var workspace := {"team_id": "team_a", "team_name": "A", "project_id": "proj_a1", "project_name": "Game"}
+	assert_true(store.save_workspace(workspace))
+	store.save_session(ISSUER, "client_godot", "rt_2")
+	assert_eq(store.load_session(ISSUER, "client_godot")["workspace"], workspace, "signing in again keeps the project")
+	store.save_session(ISSUER, "client_dev", "rt_3")
+	assert_eq(store.load_session(ISSUER, "client_dev")["workspace"], {}, "another application's ids mean nothing here")
+
+
+func test_api_key_replaces_the_session_and_clear_forgets_all() -> void:
+	var store := _store()
+	store.save_session(ISSUER, "client_godot", "rt_1")
+	store.save_credentials("api_abc", "sec_123")
+	assert_eq(store.load_session(ISSUER, "client_godot")["refresh_token"], "")
+	assert_false(store.save_workspace({"project_id": "p"}), "no project without a session")
+	store.save_session(ISSUER, "client_godot", "rt_1")
+	store.clear()
+	assert_eq(store.load_session(ISSUER, "client_godot")["refresh_token"], "")
+	assert_false(store.save_session(ISSUER, "client_godot", "")["ok"], "a session needs a refresh token")
+
+
+func test_signed_in_messages() -> void:
+	assert_string_contains(Errors.message_for(Errors.AUTH, "", true), "Sign in again")
+	assert_string_contains(Errors.message_for(Errors.AUTH), "API key")
+	assert_string_contains(Errors.message_for(Errors.QUOTA, "", true), "Creative Units")

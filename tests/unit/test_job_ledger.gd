@@ -160,3 +160,16 @@ func test_intent_keeps_an_explicit_prompt_label() -> void:
 	var ledger := _ledger()
 	var local_id := ledger.add_intent("sound", "model_elevenlabs-sound-effects-v2", {"text": "coin"}, "fp", 1.0, T0, "coin")
 	assert_eq(ledger.find(local_id)["prompt"], "coin")
+
+
+func test_rows_keep_their_project_and_reconcile_only_there() -> void:
+	var ledger := _ledger()
+	var scope := {"team_id": "team_a", "project_id": "proj_a1"}
+	var local_id := ledger.add_intent("image", "model_a", {}, "fp", 2.0, T0, "", scope)
+	ledger.mark_unknown(local_id, "timeout", T0)
+	var row := _ledger().find(local_id)
+	assert_eq([row["team_id"], row["project_id"]], ["team_a", "proj_a1"])
+	var server := [{"jobId": "job_1", "modelId": "model_a", "status": "success", "createdAt": "2026-10-04T09:10:53.000Z"}]
+	assert_eq(ledger.reconcile(server, T0 + 10, "proj_other"), 0, "jobs listed in another project")
+	assert_eq(ledger.reconcile(server, T0 + 10), 0, "jobs listed with an API key")
+	assert_eq(ledger.reconcile(server, T0 + 10, "proj_a1"), 1)

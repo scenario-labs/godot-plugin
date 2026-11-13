@@ -43,6 +43,11 @@ const _MESSAGES := {
 	HTTP_5XX: "Scenario had a server error. Try again in a moment.",
 	PROTOCOL: "Scenario returned a response the plugin could not read.",
 }
+## The same, for a person signed in with their Scenario account.
+const _SIGNED_IN_MESSAGES := {
+	AUTH: "Scenario refused the sign-in. Sign in again from the Scenario dock.",
+	FORBIDDEN: "Your Scenario account is not allowed to do that in this project. Check your role, or pick another project.",
+}
 
 
 static func ok(value: Variant = null) -> Dictionary:
@@ -96,8 +101,11 @@ static func classify(detail: String, status: int = 0) -> String:
 
 
 ## User-facing message: the plain explanation, plus the server's detail when it adds something.
-static func message_for(kind: String, detail: String = "") -> String:
-	var base: String = _MESSAGES.get(kind, "Scenario reported an error.")
+## signed_in: the person signed in with their account rather than an API key.
+static func message_for(kind: String, detail: String = "", signed_in: bool = false) -> String:
+	var base: String = _SIGNED_IN_MESSAGES.get(kind, "") if signed_in else ""
+	if base.is_empty():
+		base = _MESSAGES.get(kind, "Scenario reported an error.")
 	var clean := detail.strip_edges()
 	if clean.is_empty() or kind in [TRANSPORT, TIMEOUT]:
 		return base
