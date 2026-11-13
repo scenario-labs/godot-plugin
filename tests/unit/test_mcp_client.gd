@@ -346,3 +346,14 @@ func test_job_and_asset_listings_are_free_reads_with_the_tools_arguments() -> vo
 	assert_eq([calls[2]["name"], calls[2]["arguments"]["name"]], ["scenario_tool_execute_read", "assets_list"])
 	assert_false(Client.is_submission("scenario_tool_execute_read", {}) or Client.is_submission("jobs_list", {}))
 	assert_true(Client.is_retryable("scenario_tool_execute_read", {}), "the read executor runs read-class tools only")
+
+
+func test_each_call_reports_its_tool_and_outcome_only() -> void:
+	var seen: Array = []
+	client.called.connect(func(tool: String, dry_run: bool, ok: bool, kind: String, ms: int) -> void:
+		seen.append([tool, dry_run, ok, kind, ms >= 0]))
+	fake.replies.append({"fixture": "estimate"})
+	await client.estimate("model_x", {"prompt": "a chest"})
+	fake.replies.append({"http": 403, "body": "forbidden"})
+	await client.get_job("job_1")
+	assert_eq(seen, [["model_run", true, true, "", true], ["job_get", false, false, Errors.FORBIDDEN, true]])

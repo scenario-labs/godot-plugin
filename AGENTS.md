@@ -17,8 +17,9 @@ the tests only: the release zip holds `addons/scenario/` alone.
 
 In `addons/scenario/`:
 
-- `plugin.gd`: the `EditorPlugin`; editor settings `scenario/confirm_above_cu`
-  and `scenario/auto_import`; creates the controller and the dock.
+- `plugin.gd`: the `EditorPlugin`; editor settings `scenario/confirm_above_cu`,
+  `scenario/auto_import` and `scenario/share_anonymous_usage_data`; creates the
+  controller, the usage reporter and the dock.
 - `core/` (no editor API, unit-tested):
   - `mcp_client.gd`: Scenario MCP calls, session init and re-init, error kinds,
     retry policy (reads only), estimate and submit.
@@ -49,6 +50,8 @@ In `addons/scenario/`:
   - `errors.gd`: error kinds and user messages.
   - `library_query.gd`: Library `assets_list` arguments, asset and History
     rows and their filters, the lane that places an asset.
+  - `usage.gd`: opt-in usage data: install ID, allowlisted events, batches.
+  - `feedback.gd`: the feedback form's checks and payload.
 - `editor/`:
   - `controller.gd`: state and actions (price, generate, poll, import,
     references, recommendations); emits `changed`.
@@ -62,6 +65,10 @@ In `addons/scenario/`:
     through `EditorUndoRedoManager`.
   - `http_transport.gd`: `HTTPRequest` wrapper; uploads only to
     `*.amazonaws.com`, downloads only from Scenario CDN hosts.
+  - `usage_reporter.gd`: records usage events from the controller and the
+    client while sharing is on, sends batches and feedback to the site relay;
+    never from a headless editor.
+  - `feedback_dialog.gd`: the Send feedback dialog.
 
 Tests: GUT unit tests in `tests/unit/`, the headless editor test
 `tests/editor/editor_flow_job.gd`, both against the fake backend
@@ -198,7 +205,10 @@ verify. The page has the look of the Blender plugin's site: `docs/site/site.css`
 and the guide search `docs/site/handbook-search.js` come from there, so restyle
 both sites together. `tools/site_proxy/` is a Vercel project in front of Pages
 that counts zip downloads in PostHog (anonymous; `plugin: "godot"`, the Godot
-version and OS from the editor's User-Agent); its Vercel Web Analytics counts
+version and OS from the editor's User-Agent) and relays the plugin's opt-in
+usage events and feedback (`/telemetry/v1/`, allowlisted to the same events as
+`core/usage.gd`; env `POSTHOG_PROJECT_TOKEN`, `POSTHOG_HOST`,
+`POSTHOG_FEEDBACK_SURVEY_ID`); its Vercel Web Analytics counts
 page visits and Download clicks, without cookies, from the script in
 `docs/site/template.html`, served at a path of ours (`vercel.json`) because
 blocker lists block Vercel's own. `make site-test` type-checks and

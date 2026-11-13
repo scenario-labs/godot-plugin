@@ -10,6 +10,7 @@ const Form := preload("res://addons/scenario/core/schema_form.gd")
 const Workflows := preload("res://addons/scenario/core/workflows.gd")
 const Library := preload("res://addons/scenario/editor/library.gd")
 const LibraryUI := preload("res://addons/scenario/editor/library_ui.gd")
+const FeedbackDialog := preload("res://addons/scenario/editor/feedback_dialog.gd")
 
 ## The dock's views: generate in a lane, or browse the project's assets or jobs.
 const VIEWS := [["generate", "Generate"], ["library", "Library"], ["history", "History"]]
@@ -21,12 +22,15 @@ const MENU_SIGN_OUT := 0
 const MENU_OPEN := 1
 const MENU_CHECK := 2
 const MENU_PROJECT := 3
+const MENU_FEEDBACK := 4
 
 var controller: Controller
 ## The Library and History state, created with the dock.
 var library: Library
 ## "generate", "library" or "history"
 var view := "generate"
+## editor/usage_reporter.gd (opt-in usage data and feedback); set before bind.
+var reporter: Node
 
 var _connect_box: VBoxContainer
 var _sign_in_box: VBoxContainer
@@ -65,6 +69,8 @@ var _problem_label: Label
 var _generate_button: Button
 var _jobs_box: VBoxContainer
 var _account_label: Label
+var _consent_box: VBoxContainer
+var _feedback: FeedbackDialog
 var _confirm: ConfirmationDialog
 var _file_dialog: EditorFileDialog
 var _file_field := ""
@@ -118,6 +124,7 @@ func _build() -> void:
 	_main_box = VBoxContainer.new()
 	_main_box.add_theme_constant_override("separation", 6)
 	content.add_child(_main_box)
+	_build_consent()
 	var views := HBoxContainer.new()
 	var view_group := ButtonGroup.new()
 	for view in VIEWS:
@@ -202,11 +209,16 @@ func _build() -> void:
 	_menu.get_popup().add_item("Change team or project", MENU_PROJECT)
 	_menu.get_popup().add_item("Open Scenario", MENU_OPEN)
 	_menu.get_popup().add_item("Check unknown jobs", MENU_CHECK)
+	_menu.get_popup().add_item("Send feedback", MENU_FEEDBACK)
 	_menu.get_popup().add_item("Sign out", MENU_SIGN_OUT)
 	_menu.get_popup().id_pressed.connect(_on_menu)
 	footer.add_child(_menu)
 	_main_box.add_child(footer)
 
+	_feedback = FeedbackDialog.new()
+	_feedback.reporter = reporter
+	_feedback.sent.connect(_on_notified.bind("Thanks: your feedback reached Scenario.", "info"))
+	add_child(_feedback)
 	_confirm = ConfirmationDialog.new()
 	_confirm.title = "Confirm spend"
 	_confirm.confirmed.connect(func() -> void: controller.generate(true))
@@ -313,6 +325,29 @@ func _build_picker(content: VBoxContainer) -> void:
 	_picker_box.add_child(sign_out)
 
 
+## Asked once, after the first successful connection: opt-in usage data.
+func _build_consent() -> void:
+	_consent_box = VBoxContainer.new()
+	_main_box.add_child(_consent_box)
+	_consent_box.add_child(_wrap_label("Help improve Scenario for Godot? Share anonymous usage data: which Scenario requests "
+		+ "the dock makes and whether they work, and generations per lane with their CU. Never prompts, files, or account, "
+		+ "team or project details. Change it any time in Editor Settings > Scenario."))
+	var row := HFlowContainer.new()
+	row.add_child(_action("Share", _choose_sharing.bind(true)))
+	row.add_child(_action("No thanks", _choose_sharing.bind(false)))
+	var more := LinkButton.new()
+	more.text = "What is sent"
+	more.pressed.connect(OS.shell_open.bind(FeedbackDialog.PRIVACY_URL))
+	row.add_child(more)
+	_consent_box.add_child(row)
+	_consent_box.add_child(HSeparator.new())
+
+
+func _choose_sharing(share: bool) -> void:
+	reporter.choose(share)
+	_refresh()
+
+
 # --- Refresh ------------------------------------------------------------------
 
 func _refresh() -> void:
@@ -347,8 +382,10 @@ func _refresh() -> void:
 	_sync_field_values()
 	_refresh_price()
 	_refresh_jobs()
+	_consent_box.visible = reporter != null and reporter.should_ask()
 	var popup := _menu.get_popup()
 	popup.set_item_disabled(popup.get_item_index(MENU_PROJECT), not controller.is_oauth())
+	popup.set_item_disabled(popup.get_item_index(MENU_FEEDBACK), reporter == null)
 	if controller.is_oauth():
 		_account_label.text = controller.client.session.workspace_label()
 		_account_label.tooltip_text = "Signed in with Scenario. Generations go to this team and project."
@@ -685,6 +722,8 @@ func _on_menu(id: int) -> void:
 			controller.check_unresolved()
 		MENU_PROJECT:
 			controller.open_picker()
+		MENU_FEEDBACK:
+			_feedback.open()
 
 
 func _on_notified(text: String, level: String) -> void:
