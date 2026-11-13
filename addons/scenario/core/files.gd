@@ -148,11 +148,6 @@ static func upload_type(path: String) -> Dictionary:
 	return {}
 
 
-static func today() -> String:
-	var d := Time.get_date_dict_from_system()
-	return "%04d-%02d-%02d" % [d["year"], d["month"], d["day"]]
-
-
 ## The first bytes of a file, for sniff_extension.
 static func head(path: String) -> PackedByteArray:
 	var file := FileAccess.open(path, FileAccess.READ)
@@ -163,7 +158,7 @@ static func head(path: String) -> PackedByteArray:
 	return bytes
 
 
-## Writes the job's record next to its first file: what made it and for how much.
+## Writes the .scenario.json next to an import: which job, model and settings made it.
 static func write_provenance(row: Dictionary, assets: Array, path: String, generator: String) -> void:
 	var record := {
 		"generator": generator,
@@ -176,6 +171,11 @@ static func write_provenance(row: Dictionary, assets: Array, path: String, gener
 	if file != null:
 		file.store_string(JSON.stringify(record, "\t"))
 		file.close()
+
+
+static func today() -> String:
+	var d := Time.get_date_dict_from_system()
+	return "%04d-%02d-%02d" % [d["year"], d["month"], d["day"]]
 
 
 static func _ascii(bytes: PackedByteArray, start: int, length: int) -> String:

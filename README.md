@@ -56,6 +56,7 @@ Secrets (the sign-in's refresh token, or the API secret) never go into your proj
 | Material | PATINA Material | Scenario Texture | a `StandardMaterial3D` (albedo, normal, roughness, metallic, height) saved as `.tres` and set as `material_override` on the selected meshes; with no mesh selected, just saved |
 | Skybox | Scenario Skybox GPT | Scenario Skybox Flux | a `PanoramaSkyMaterial` sky on the scene's WorldEnvironment (created if missing) |
 | Sound | Sonilo V1.1 SFX | ElevenLabs Sound Effects 2, MM Audio 2 | a new AudioStreamPlayer3D, AudioStreamPlayer2D or AudioStreamPlayer to match the scene |
+| Workflow | your project's first ready workflow | its other ready workflows, then public ones | by file type: a GLB as on the 3D lane, a sound as on the Sound lane, otherwise images as on the Image lane |
 
 **More** (Image, 3D and Sound lanes) adds Scenario's recommendations for your prompt to the picker. Your project's own trained models follow under **Project models**; a LoRA or a composition runs on its base model, a LoRA with a **LoRA weight**. The form is built from each model's live schema; settings that change the price are marked "affects price".
 

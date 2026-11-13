@@ -29,9 +29,12 @@ In `addons/scenario/`:
     states, reconciles Unknown rows with `jobs_list`.
   - `schema_form.gd`: model schema to form fields, validation, payload;
     `prompt_name()` finds the prompt field by its flag.
-  - `lanes.gd`: the five lanes, their models, presets and restrictions.
+  - `lanes.gd`: the six lanes, their models, presets and restrictions.
   - `project_models.gd`: the project's trained models per lane; a LoRA or a
     composition runs on the base `model_schema_get` names (`run_with`).
+  - `workflows.gd`: Scenario workflows in the workflow lane: list rows to
+    picker entries, `workflow_get` inputs to a form schema, outputs to the
+    lane that places them.
   - `oauth.gd`: Sign in with Scenario as Godot's registered OAuth application
     on `clerk.scenario.com`: PKCE with a loopback redirect, device grant,
     refresh, revoke.
@@ -41,7 +44,8 @@ In `addons/scenario/`:
   - `credentials.gd`: environment, the system store (macOS Keychain, Windows
     Credential Manager, Linux `secret-tool`; secrets over stdin), or a 0600
     file in the editor config folder.
-  - `files.gd`: output names, roles from asset metadata, file type from bytes.
+  - `files.gd`: output names, roles from asset metadata, file type from bytes,
+    the `.scenario.json` provenance.
   - `errors.gd`: error kinds and user messages.
 - `editor/`:
   - `controller.gd`: state and actions (price, generate, poll, import,
@@ -60,8 +64,9 @@ Tests: GUT unit tests in `tests/unit/`, the headless editor test
 
 Every change keeps them.
 
-1. A price check is `model_run` with `dry_run: true`; if it returns a job id,
-   automatic checks stop.
+1. A price check is `model_run` (or `workflow_run`) with `dry_run: true`; if
+   it returns a job id, automatic checks stop. A workflow price check is never
+   retried.
 2. Generate needs an unused quote whose fingerprint matches the form now; it
    consumes it.
 3. A paid call (`model_run` without dry_run, `workflow_run`, uploads) is sent

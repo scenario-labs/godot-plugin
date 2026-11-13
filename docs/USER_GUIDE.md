@@ -14,7 +14,7 @@ With an API key instead: press **Use an API key instead**, paste a key (`api_...
 
 ## 2. Generate
 
-1. Pick a **lane**: Image, 3D, Material, Skybox or Sound.
+1. Pick a **lane**: Image, 3D, Material, Skybox, Sound or Workflow.
 2. Pick a **model**. Each lane opens on its default model; the line under the picker says what the model is good at. On the Image, 3D and Sound lanes, **More** adds Scenario's recommendations for your prompt, and the models trained in your Scenario project are listed under **Project models**. A trained LoRA or composition runs on the base model it was trained on (the price is that base's); a LoRA adds **LoRA weight** to Settings, 0.75 by default.
 3. Write the **prompt**. Fields marked `*` are required.
 4. Add **references** if the model takes them: **File...** picks an image from the project, **Viewport** captures the editor's 3D view, **Clear** removes it. References are uploaded to your Scenario project (free) and the price updates.
@@ -35,6 +35,8 @@ The price is checked again after each change, so the button always shows what th
 **Skybox.** Generates a 360 panorama and sets it as the sky of the scene's WorldEnvironment. If the scene has none, one is created with sky lighting and reflections.
 
 **Sound.** Sonilo makes short effects of an exact length (1 CU for 2 s on 2026-10-04); ElevenLabs Sound Effects 2 can loop. The sound is added as an AudioStreamPlayer3D in a 3D scene, AudioStreamPlayer2D in a 2D scene, AudioStreamPlayer otherwise. Only WAV, MP3 and OGG are offered, the formats Godot imports.
+
+**Workflow.** Runs a Scenario workflow: the picker lists the ready workflows of your project, then public ones (drafts cannot run). **Refresh** lists them again after you edit one on app.scenario.com. The form shows the workflow's inputs; one that takes a list of values or of models can only be set on Scenario, and a required one of those blocks the price. The price covers the whole run. Results are placed by type: a GLB as on the 3D lane (images next to it are kept as files), a sound as on the Sound lane, otherwise images as on the Image lane. A run that stops at an approval or a selection step waits until you answer it on app.scenario.com; the dock says so.
 
 ## 4. Jobs
 

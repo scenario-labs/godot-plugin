@@ -26,6 +26,8 @@ const DISMISSED := "dismissed"
 const ACTIVE_STATES := [QUEUED, RUNNING, CANCEL_REQUESTED]
 const UNRESOLVED_STATES := [SUBMITTING, UNKNOWN]
 const FINAL_STATES := [SUCCESS, FAILED, BLOCKED, CANCELED, REJECTED, DISMISSED]
+## The note on a workflow run paused at an approval or a selection step.
+const AWAITING := "Waiting for an approval or a selection on Scenario: answer it at app.scenario.com."
 const MAX_ROWS := 200
 ## A server job counts as the match of an unknown row if created this close after the intent.
 const RECONCILE_WINDOW_S := 180.0
@@ -159,6 +161,10 @@ func apply_job(job: Dictionary, now: float) -> Dictionary:
 		row["charged_cu"] = float(job["billing"]["cuCost"])
 	if not error_text.is_empty():
 		row["error"] = error_text
+	elif job.get("awaiting_input") and state in [QUEUED, RUNNING]:
+		row["error"] = AWAITING  # a workflow step waits for a person on Scenario
+	elif row["error"] == AWAITING:
+		row["error"] = ""
 	row.erase("unread")
 	row["updated_at"] = now
 	save()
@@ -177,7 +183,8 @@ func reconcile(server_jobs: Array, now: float, project_id: String = "") -> int:
 			continue
 		var candidates: Array = []
 		for job in server_jobs:
-			if not job is Dictionary or str(job.get("modelId", "")) != row["model_id"]:
+			# A workflow run is listed with its workflowId, a model run with its modelId.
+			if not job is Dictionary or not row["model_id"] in [str(job.get("modelId", "")), str(job.get("workflowId", ""))]:
 				continue
 			var job_id := str(job.get("jobId", ""))
 			if job_id.is_empty() or not find_by_job(job_id).is_empty():
@@ -245,6 +252,13 @@ func blocks_request(model_id: String, parameters: Dictionary, project_id: String
 				and Quote.fingerprint(str(row["model_id"]), row["parameters"]) == request:
 			return true
 	return false
+
+
+## Why a failed or blocked job ended, for the dock's notice.
+static func failure_text(row: Dictionary) -> String:
+	if row["state"] == BLOCKED:
+		return Errors.message_for(Errors.MODERATED)
+	return str(row["error"]) if not str(row["error"]).is_empty() else "the job failed on Scenario."
 
 
 static func state_for_status(status: String, error_text: String) -> String:

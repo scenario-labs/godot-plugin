@@ -4,7 +4,8 @@ extends RefCounted
 ## form fields, validates values, and builds the model_run payload.
 ##
 ## Field types: prompt, text, enum, number, integer, boolean, multi (a list
-## of allowed values), file (one asset id), files (a list of asset ids).
+## of allowed values), file (one asset id), files (a list of asset ids),
+## unsupported (a required workflow input the dock has no widget for).
 
 const _INTEGER_HINTS := ["seed", "num", "count", "steps", "face"]
 
@@ -60,7 +61,7 @@ static func _field(p: Dictionary) -> Dictionary:
 	var options: Array = p.get("allowed_values", []) if p.get("allowed_values") is Array else []
 	var field := {
 		"name": name,
-		"label": str(p.get("label", humanize(name))),
+		"label": str(p["label"]) if not str(p.get("label", "")).is_empty() else humanize(name),
 		"description": str(p.get("description", "")),
 		"required": truthy(p.get("required")),
 		"default": p.get("default"),
@@ -95,6 +96,8 @@ static func _field(p: Dictionary) -> Dictionary:
 			field["type"] = "file"
 		"file_array":
 			field["type"] = "files"
+		"unsupported":
+			field["type"] = "unsupported"
 		_:
 			field["type"] = "text"
 	return field
@@ -150,6 +153,9 @@ static func validate(fields: Array, values: Dictionary) -> PackedStringArray:
 	var problems: PackedStringArray = []
 	for field in fields:
 		var value: Variant = values.get(field["name"])
+		if field["type"] == "unsupported":
+			problems.append("%s cannot be set from the dock: run this workflow on Scenario." % field["label"])
+			continue
 		if field["required"] and _is_empty(value):
 			problems.append("%s: required." % field["label"])
 			continue

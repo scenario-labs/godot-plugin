@@ -7,6 +7,7 @@ const Controller := preload("res://addons/scenario/editor/controller.gd")
 const Lanes := preload("res://addons/scenario/core/lanes.gd")
 const Ledger := preload("res://addons/scenario/core/job_ledger.gd")
 const Form := preload("res://addons/scenario/core/schema_form.gd")
+const Workflows := preload("res://addons/scenario/core/workflows.gd")
 
 const KEYS_URL := "https://app.scenario.com"
 const DOCS_URL := "https://docs.scenario.com"
@@ -289,7 +290,10 @@ func _refresh() -> void:
 	for id in _lane_buttons:
 		_lane_buttons[id].set_pressed_no_signal(id == controller.lane_id)
 	_lane_hint.text = Lanes.lane(controller.lane_id)["hint"]
-	_more_button.visible = Lanes.lane(controller.lane_id).get("recommend", true)
+	var workflow_lane := controller.lane_id == Lanes.WORKFLOW
+	_more_button.visible = Lanes.lane(controller.lane_id).get("recommend", true) or workflow_lane
+	_more_button.text = "Refresh" if workflow_lane else "More"
+	_more_button.tooltip_text = "List this project's workflows again." if workflow_lane else "Ask Scenario which models fit this prompt best."
 	_refresh_models()
 	var form_key := "%s|%d" % [controller.model_id, controller.fields.size()]
 	if form_key != _built_for:
@@ -429,7 +433,7 @@ func _job_row(row: Dictionary) -> Control:
 	status.add_theme_color_override("font_color", _state_color(row["state"]))
 	top.add_child(status)
 	var title := Label.new()
-	title.text = "%s  %s" % [_short_model(row["model_id"]), str(row["prompt"]).left(48)]
+	title.text = "%s  %s" % [controller._model_name(row["model_id"]) if Workflows.is_workflow(row["model_id"]) else _short_model(row["model_id"]), str(row["prompt"]).left(48)]
 	title.clip_text = true
 	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	title.size_flags_horizontal = SIZE_EXPAND_FILL
@@ -541,6 +545,8 @@ func _widget_for(field: Dictionary) -> Control:
 				row.add_child(_action("Viewport", controller.attach_viewport.bind(name)))
 			row.add_child(_action("Clear", controller.clear_field.bind(name)))
 			return row
+		"unsupported":
+			return _dim_label("Set on Scenario only (a list of values or of models).")
 		_:
 			var line_edit := LineEdit.new()
 			line_edit.text_changed.connect(func(t: String) -> void: controller.set_value(name, t))
