@@ -9,6 +9,7 @@ extends RefCounted
 ## it is matched to a Scenario job or dismissed by the user.
 
 const Errors := preload("res://addons/scenario/core/errors.gd")
+const Quote := preload("res://addons/scenario/core/quote.gd")
 
 const SUBMITTING := "submitting"
 const QUEUED := "queued"
@@ -225,6 +226,18 @@ func unresolved() -> Array:
 func blocks(fingerprint: String) -> bool:
 	for row in jobs:
 		if row["state"] in UNRESOLVED_STATES and row["fingerprint"] == fingerprint:
+			return true
+	return false
+
+
+## The same check across ways of signing in: a row without a project (sent with
+## an API key) cannot be told apart from a project, so it blocks the same model
+## and parameters there, and the other way round (project_id "").
+func blocks_request(model_id: String, parameters: Dictionary, project_id: String) -> bool:
+	var request := Quote.fingerprint(model_id, parameters)
+	for row in unresolved():
+		if (project_id.is_empty() or str(row.get("project_id", "")).is_empty()) \
+				and Quote.fingerprint(str(row["model_id"]), row["parameters"]) == request:
 			return true
 	return false
 

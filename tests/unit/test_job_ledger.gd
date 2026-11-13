@@ -173,3 +173,16 @@ func test_rows_keep_their_project_and_reconcile_only_there() -> void:
 	assert_eq(ledger.reconcile(server, T0 + 10, "proj_other"), 0, "jobs listed in another project")
 	assert_eq(ledger.reconcile(server, T0 + 10), 0, "jobs listed with an API key")
 	assert_eq(ledger.reconcile(server, T0 + 10, "proj_a1"), 1)
+
+
+func test_an_unknown_send_blocks_across_an_api_key_and_a_sign_in() -> void:
+	var ledger := _ledger()
+	var keyed := ledger.add_intent("image", "model_a", {"prompt": "a chest", "seed": 4}, "fp_key", 2.0, T0)
+	ledger.mark_unknown(keyed, "timeout", T0)
+	assert_true(_ledger().blocks_request("model_a", {"seed": 4.0, "prompt": "a chest"}, "proj_a1"), "same request, signed in")
+	assert_false(ledger.blocks_request("model_a", {"prompt": "a chest", "seed": 5}, "proj_a1"))
+	ledger.dismiss(keyed, T0)
+	var scoped := ledger.add_intent("image", "model_a", {"prompt": "a chest"}, "fp_a1", 2.0, T0, "", {"team_id": "team_a", "project_id": "proj_a1"})
+	ledger.mark_unknown(scoped, "timeout", T0)
+	assert_true(ledger.blocks_request("model_a", {"prompt": "a chest"}, ""), "same request, with an API key")
+	assert_false(ledger.blocks_request("model_a", {"prompt": "a chest"}, "proj_b1"), "another project is told apart by its fingerprint")

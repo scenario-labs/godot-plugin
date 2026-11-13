@@ -692,16 +692,11 @@ func rerun(local_id: String) -> void:
 		return
 	lane_id = row["lane"]
 	await select_model(row["model_id"])
-	# References are assets of the project the row ran in: another project cannot use them.
+	# References are assets of the row's project: another project cannot use them.
 	var other_project := is_oauth() and str(row.get("project_id", "")) != client.session.project_id
-	var left_out := false
 	for key in row["parameters"]:
-		if other_project and _field(key).get("type", "") in ["file", "files"]:
-			left_out = true
-			continue
-		values[key] = row["parameters"][key]
-	if left_out:
-		notified.emit("The reference images were left out: they belong to another project.", "info")
+		if not (other_project and _field(key).get("type", "") in ["file", "files"]):
+			values[key] = row["parameters"][key]
 	schedule_estimate()
 	changed.emit()
 
@@ -715,8 +710,9 @@ func check_unresolved() -> void:
 	var scopes := {}  # project_id ("" with an API key) -> the scope to list it in
 	for row in ledger.unresolved():
 		var scope := _row_scope(row)
-		if is_oauth() == not scope.is_empty():
-			scopes[str(scope.get("project_id", ""))] = scope
+		if is_oauth() and scope.is_empty():
+			continue  # sent with an API key: its project is unknown here
+		scopes[str(scope.get("project_id", ""))] = scope
 	var linked := 0
 	for project_id in scopes:
 		var result: Dictionary = await client.list_jobs(50, scopes[project_id])
@@ -921,17 +917,9 @@ func load_recommendations() -> void:
 
 # --- Internals ----------------------------------------------------------------
 
-## An unknown send blocks the same request. A row without a project (sent with
-## an API key) cannot be told apart from a signed-in project, so it also blocks
-## the same model and parameters there, and the other way round.
+## An unknown send blocks the same request, also across an API key and a sign-in.
 func _blocked() -> bool:
-	if ledger.blocks(fingerprint()):
-		return true
-	var request := Quote.fingerprint(model_id, payload())
-	var project := client.session.project_id if is_oauth() else ""
-	return ledger.unresolved().any(func(row: Dictionary) -> bool:
-		return (project.is_empty() or str(row.get("project_id", "")).is_empty()) \
-			and Quote.fingerprint(str(row["model_id"]), row["parameters"]) == request)
+	return ledger.blocks(fingerprint()) or ledger.blocks_request(model_id, payload(), client.session.project_id if is_oauth() else "")
 
 
 ## Clears reference images: assets of the earlier project, unusable in the new one.
