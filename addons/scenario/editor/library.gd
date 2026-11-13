@@ -142,7 +142,7 @@ func import_job(job: Dictionary) -> Dictionary:
 	if not existing.is_empty():
 		if existing["state"] != Ledger.SUCCESS or existing["imported"]:
 			return _fail("This job is already in the Jobs list.")
-		if existing["asset_ids"].is_empty():  # linked by Check Scenario, outputs not read yet
+		if existing.get("unread", false):  # linked by Check Scenario, outputs not read yet
 			var linked: Dictionary = await controller.client.get_job(job_id)
 			if linked["ok"]:
 				controller.ledger.apply_job(linked["value"], Time.get_unix_time_from_system())
