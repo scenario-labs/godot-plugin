@@ -28,7 +28,7 @@ func run() -> Dictionary:
 	var file_text := FileAccess.get_file_as_string(path)
 	var loaded := store.load_credentials()
 	var session := store.save_session(ISSUER, CLIENT, "rt_dummy_1")
-	var rotated := store.save_refresh_token("rt_dummy_2")
+	var rotated := store.save_refresh_token(ISSUER, CLIENT, "rt_dummy_1", "rt_dummy_2")
 	var session_text := FileAccess.get_file_as_string(path)
 	var resumed := store.load_session(ISSUER, CLIENT)
 	var key_left := store._store_read(kind, KEY)
