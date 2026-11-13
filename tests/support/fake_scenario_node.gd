@@ -48,17 +48,17 @@ const MODEL_LANE := {
 ## (fields as the API names them: allowedValues, costImpact...).
 const WORKFLOWS := {
 	"private": [
-		{"id": "workflow_prop3d", "name": "Prop to 3D", "status": "ready", "description": "Concept image, then a textured GLB"},
-		{"id": "workflow_wip", "name": "Work in progress", "status": "draft"},
-		{"id": "workflow_kit", "name": "Prop Kit", "status": "ready", "description": "Image, model and sound"},
+		{"id": "wflow_prop3d", "name": "Prop to 3D", "status": "ready", "description": "Concept image, then a textured GLB"},
+		{"id": "wflow_wip", "name": "Work in progress", "status": "draft"},
+		{"id": "wflow_kit", "name": "Prop Kit", "status": "ready", "description": "Image, model and sound"},
 	],
 	"public": [
-		{"id": "workflow_pubsfx", "name": "Foley Pack", "status": "ready", "description": "Three takes of one sound"},
-		{"id": "workflow_pubbatch", "name": "Sprite Batch", "status": "ready"},
+		{"id": "wflow_pubsfx", "name": "Foley Pack", "status": "ready", "description": "Three takes of one sound"},
+		{"id": "wflow_pubbatch", "name": "Sprite Batch", "status": "ready"},
 	],
 }
 const WORKFLOW_INPUTS := {
-	"workflow_prop3d": [
+	"wflow_prop3d": [
 		{"name": "objectPrompt", "type": "string", "label": "Object", "required": true},
 		{"name": "style", "type": "string", "allowedValues": ["stylized", "realistic"], "default": "stylized"},
 		{"name": "referenceImage", "type": "file", "kind": "image"},
@@ -66,19 +66,19 @@ const WORKFLOW_INPUTS := {
 		{"name": "transparent", "type": "boolean", "default": true},
 		{"name": "extraSteps", "type": "inputs_array"},
 	],
-	"workflow_pubsfx": [{"name": "prompt", "type": "string", "required": true}],
+	"wflow_pubsfx": [{"name": "prompt", "type": "string", "required": true}],
 	# A negative prompt first, and inputs named like a LoRA's wiring: the workflow's own.
-	"workflow_kit": [
+	"wflow_kit": [
 		{"name": "negativePrompt", "type": "string"},
 		{"name": "prompt", "type": "string", "required": true},
 		{"name": "modelId", "type": "string", "default": "model_kit_base"},
 	],
-	"workflow_pubbatch": [
+	"wflow_pubbatch": [
 		{"name": "prompt", "type": "string", "required": true},
 		{"name": "sprites", "type": "inputs_array", "required": true},
 	],
 }
-const WORKFLOW_LANE := {"workflow_prop3d": "model3d", "workflow_pubsfx": "sound", "workflow_pubbatch": "image", "workflow_kit": "mixed"}
+const WORKFLOW_LANE := {"wflow_prop3d": "model3d", "wflow_pubsfx": "sound", "wflow_pubbatch": "image", "wflow_kit": "mixed"}
 
 ## What teams_list returns.
 var teams: Array = [
