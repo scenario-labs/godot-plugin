@@ -34,6 +34,7 @@ const PAID_MIN_TOKEN_S := 300.0
 const READ_TOOLS := [
 	"model_schema_get", "models_list", "job_get", "jobs_list", "asset_get", "asset_download",
 	"recommend", "search", "usage", "teams_list", "projects_list", "workflows_list", "workflow_get",
+	"scenario_tool_execute_read",  # runs read-class catalog tools only
 ]
 ## Calls that can spend Creative Units or create something.
 const SUBMIT_TOOLS := [
@@ -175,6 +176,20 @@ func get_job(job_id: String, scope: Dictionary = {}) -> Dictionary:
 
 func list_jobs(page_size: int = 20, scope: Dictionary = {}) -> Dictionary:
 	return _unwrap(await call_tool("jobs_list", _scoped({"limit": clampi(page_size, 1, 50)}, scope)), "jobs")
+
+
+## One page of the project's jobs, newest first: ok({"jobs", "nextPaginationToken"}). Free.
+func list_jobs_page(page_size: int, page_token: String = "") -> Dictionary:
+	var arguments := {"limit": clampi(page_size, 1, 50)}
+	if not page_token.is_empty():
+		arguments["page_token"] = page_token
+	return await call_tool("jobs_list", arguments)
+
+
+## ok({"assets", "nextPaginationToken"}): one page of assets_list, a catalog
+## tool run through the read executor (see LibraryQuery.list_args). Free.
+func list_assets(arguments: Dictionary) -> Dictionary:
+	return await call_tool("scenario_tool_execute_read", arguments)
 
 
 func cancel_job(job_id: String, scope: Dictionary = {}) -> Dictionary:

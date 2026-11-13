@@ -198,3 +198,31 @@ func test_a_row_linked_to_a_finished_job_is_read_for_its_outputs() -> void:
 	ledger.apply_job({"jobId": "job_1", "status": "success", "assetIds": []}, T0 + 20)
 	assert_eq(ledger.active().size(), 0, "one read is enough, even when the job had no outputs")
 	assert_eq(_ledger().active().size(), 0, "and it stays read after a restart")
+
+
+func test_adopted_results_are_finished_and_never_added_twice() -> void:
+	var ledger := _ledger()
+	var scope := {"team_id": "team_a", "project_id": "proj_a1"}
+	var from_history := ledger.adopt("image", "model_x", "a chest", "job_9", ["asset_1", "asset_2"], T0, scope)
+	var row := _ledger().find(from_history)
+	assert_eq([row["state"], row["job_id"], row["asset_ids"], row["project_id"], row["source"]],
+		[Ledger.SUCCESS, "job_9", ["asset_1", "asset_2"], "proj_a1", "history"])
+	assert_true(ledger.unresolved().is_empty() and ledger.active().is_empty(), "nothing to poll or reconcile")
+	assert_eq(ledger.adopt("image", "model_x", "a chest", "job_9", [], T0 + 1), from_history, "the same job reuses its row")
+	var asset := ledger.adopt("image", "", "logo.png", "", ["asset_7"], T0, scope, "library")
+	assert_eq(ledger.adopt("image", "", "logo.png", "", ["asset_7"], T0 + 1, scope, "library"), asset, "the same asset too")
+	assert_ne(ledger.adopt("image", "", "icon.png", "", ["asset_8"], T0, scope, "library"), asset)
+	assert_eq(ledger.jobs.size(), 3)
+
+
+func test_a_job_an_unknown_row_may_stand_for() -> void:
+	var ledger := _ledger()
+	var local_id := ledger.add_intent("image", "model_a", {}, "fp", 2.0, T0, "", {"team_id": "team_a", "project_id": "proj_a1"})
+	ledger.mark_unknown(local_id, "timeout", T0)
+	var job := {"jobId": "job_1", "modelId": "model_a", "createdAt": "2026-10-04T09:10:53.000Z"}
+	assert_true(ledger.could_be_unresolved(job, "proj_a1"))
+	assert_false(ledger.could_be_unresolved(job, "proj_b1"), "another project")
+	assert_false(ledger.could_be_unresolved({"jobId": "job_2", "modelId": "model_b", "createdAt": job["createdAt"]}, "proj_a1"), "another model")
+	assert_false(ledger.could_be_unresolved({"jobId": "job_3", "modelId": "model_a", "createdAt": "2026-10-05T09:00:00.000Z"}, "proj_a1"), "outside the window")
+	ledger.dismiss(local_id, T0)
+	assert_false(ledger.could_be_unresolved(job, "proj_a1"), "a dismissed row stands for nothing")

@@ -8,7 +8,11 @@ const Lanes := preload("res://addons/scenario/core/lanes.gd")
 const Ledger := preload("res://addons/scenario/core/job_ledger.gd")
 const Form := preload("res://addons/scenario/core/schema_form.gd")
 const Workflows := preload("res://addons/scenario/core/workflows.gd")
+const Library := preload("res://addons/scenario/editor/library.gd")
+const LibraryUI := preload("res://addons/scenario/editor/library_ui.gd")
 
+## The dock's views: generate in a lane, or browse the project's assets or jobs.
+const VIEWS := [["generate", "Generate"], ["library", "Library"], ["history", "History"]]
 const KEYS_URL := "https://app.scenario.com"
 const DOCS_URL := "https://docs.scenario.com"
 
@@ -19,6 +23,10 @@ const MENU_CHECK := 2
 const MENU_PROJECT := 3
 
 var controller: Controller
+## The Library and History state, created with the dock.
+var library: Library
+## "generate", "library" or "history"
+var view := "generate"
 
 var _connect_box: VBoxContainer
 var _sign_in_box: VBoxContainer
@@ -42,6 +50,9 @@ var _picker_team := ""
 var _picker_project := ""
 var _menu: MenuButton
 var _main_box: VBoxContainer
+var _view_buttons := {}
+var _generate_box: VBoxContainer
+var _library_ui: LibraryUI
 var _lane_buttons := {}
 var _lane_hint: Label
 var _model_option: OptionButton
@@ -68,10 +79,25 @@ func _init() -> void:
 
 func bind(p_controller: Controller) -> void:
 	controller = p_controller
+	library = Library.new()
+	library.name = "ScenarioLibrary"
+	add_child(library)
+	library.bind(controller)
 	_build()
+	_library_ui.bind(library)
 	controller.changed.connect(_refresh)
 	controller.notified.connect(_on_notified)
 	_refresh()
+
+
+func _show_view(p_view: String) -> void:
+	view = p_view
+	for id in _view_buttons:
+		_view_buttons[id].set_pressed_no_signal(id == view)
+	_generate_box.visible = view == "generate"
+	_library_ui.visible = view != "generate"
+	if view != "generate":
+		_library_ui.show_view(view)
 
 
 # --- Build --------------------------------------------------------------------
@@ -92,6 +118,25 @@ func _build() -> void:
 	_main_box = VBoxContainer.new()
 	_main_box.add_theme_constant_override("separation", 6)
 	content.add_child(_main_box)
+	var views := HBoxContainer.new()
+	var view_group := ButtonGroup.new()
+	for view in VIEWS:
+		var button := Button.new()
+		button.text = view[1]
+		button.toggle_mode = true
+		button.button_group = view_group
+		button.size_flags_horizontal = SIZE_EXPAND_FILL
+		button.button_pressed = view[0] == "generate"
+		button.pressed.connect(_show_view.bind(view[0]))
+		views.add_child(button)
+		_view_buttons[view[0]] = button
+	_main_box.add_child(views)
+	_generate_box = VBoxContainer.new()
+	_generate_box.add_theme_constant_override("separation", 6)
+	_main_box.add_child(_generate_box)
+	_library_ui = LibraryUI.new()
+	_library_ui.visible = false
+	_main_box.add_child(_library_ui)
 	var lanes_row := HFlowContainer.new()
 	var group := ButtonGroup.new()
 	for lane in Lanes.LANES:
@@ -102,9 +147,9 @@ func _build() -> void:
 		button.pressed.connect(controller.select_lane.bind(lane["id"]))
 		lanes_row.add_child(button)
 		_lane_buttons[lane["id"]] = button
-	_main_box.add_child(lanes_row)
+	_generate_box.add_child(lanes_row)
 	_lane_hint = _dim_label("")
-	_main_box.add_child(_lane_hint)
+	_generate_box.add_child(_lane_hint)
 
 	var model_row := HBoxContainer.new()
 	_model_option = OptionButton.new()
@@ -118,26 +163,26 @@ func _build() -> void:
 	more.pressed.connect(controller.load_recommendations)
 	model_row.add_child(more)
 	_more_button = more
-	_main_box.add_child(model_row)
+	_generate_box.add_child(model_row)
 	_model_note = _dim_label("")
-	_main_box.add_child(_model_note)
+	_generate_box.add_child(_model_note)
 
 	_fields_box = VBoxContainer.new()
-	_main_box.add_child(_fields_box)
+	_generate_box.add_child(_fields_box)
 	_settings = FoldableContainer.new()
 	_settings.title = "Settings"
 	_settings.folded = true
 	_settings_box = VBoxContainer.new()
 	_settings.add_child(_settings_box)
-	_main_box.add_child(_settings)
+	_generate_box.add_child(_settings)
 
 	_problem_label = _wrap_label("")
 	_problem_label.add_theme_color_override("font_color", Color(1.0, 0.55, 0.45))
-	_main_box.add_child(_problem_label)
+	_generate_box.add_child(_problem_label)
 	_generate_button = Button.new()
 	_generate_button.custom_minimum_size.y = _px(34)
 	_generate_button.pressed.connect(_on_generate)
-	_main_box.add_child(_generate_button)
+	_generate_box.add_child(_generate_button)
 
 	_main_box.add_child(HSeparator.new())
 	var jobs_title := Label.new()
@@ -433,7 +478,10 @@ func _job_row(row: Dictionary) -> Control:
 	status.add_theme_color_override("font_color", _state_color(row["state"]))
 	top.add_child(status)
 	var title := Label.new()
-	title.text = "%s  %s" % [controller._model_name(row["model_id"]) if Workflows.is_workflow(row["model_id"]) else _short_model(row["model_id"]), str(row["prompt"]).left(48)]
+	var origin := _short_model(row["model_id"]) if not str(row["model_id"]).is_empty() else "Library"
+	if Workflows.is_workflow(row["model_id"]):
+		origin = controller._model_name(row["model_id"])
+	title.text = "%s  %s" % [origin, str(row["prompt"]).left(48)]
 	title.clip_text = true
 	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	title.size_flags_horizontal = SIZE_EXPAND_FILL
@@ -450,7 +498,8 @@ func _job_row(row: Dictionary) -> Control:
 				actions.add_child(_action("Import", controller.import_job.bind(local_id)))
 			else:
 				actions.add_child(_action("Show", _show_files.bind(row["files"])))
-			actions.add_child(_action("Re-run", controller.rerun.bind(local_id)))
+			if not row.has("source"):  # brought in from the Library or History: its request is not kept here
+				actions.add_child(_action("Re-run", controller.rerun.bind(local_id)))
 		Ledger.QUEUED, Ledger.RUNNING:
 			actions.add_child(_action("Cancel", controller.cancel.bind(local_id)))
 		Ledger.UNKNOWN, Ledger.SUBMITTING:

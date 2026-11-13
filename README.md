@@ -60,6 +60,8 @@ Secrets (the sign-in's refresh token, or the API secret) never go into your proj
 
 **More** (Image, 3D and Sound lanes) adds Scenario's recommendations for your prompt to the picker. Your project's own trained models follow under **Project models**; a LoRA or a composition runs on its base model, a LoRA with a **LoRA weight**. The form is built from each model's live schema; settings that change the price are marked "affects price".
 
+**Library** and **History** browse the project's assets (with thumbnails and filters) and its earlier jobs on Scenario, and import any of them into the scene the same way. Browsing is free.
+
 Prices measured on 2026-10-04, as examples: Flare at low quality 1024x1024, 2 CU; Rodin Extreme-Low PBR, 80 CU; PATINA 512x512, 6 CU; Skybox GPT at low quality, 2 CU; Sonilo 2 s, 1 CU. Scenario sets the prices; the dock always shows the current one.
 
 ## Spending rules

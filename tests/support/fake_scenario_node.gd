@@ -125,8 +125,12 @@ var drop_next_paid := false
 var no_workflows := false
 ## The next workflow dry run comes back with this job id (a run it may have started).
 var estimate_job := ""
-## jobs_list answers per project: {project_id: [job, ...]}.
+## jobs_list answers per project: {project_id: [job, ...]}, newest first, in
+## pages of the call's limit.
 var listed := {}
+## assets_list answers per project ("" with an API key): {project_id: [row, ...]}
+## (see library_asset).
+var library := {}
 var _jobs := {}
 
 
@@ -196,13 +200,23 @@ func post(url: String, headers: PackedStringArray, body: String, _timeout_s: flo
 			var ids: Array = OUTPUTS[lane].map(func(o: Dictionary) -> String: return o["id"])
 			return _reply(payload["id"], _tool({"job": {"jobId": args["job_id"], "status": "success", "progress": 1, "assetIds": ids, "cuCost": price}}))
 		"jobs_list":
-			return _reply(payload["id"], _tool({"jobs": listed.get(str(args.get("project_id", "")), [])}))
+			var all_jobs: Array = listed.get(str(args.get("project_id", "")), [])
+			var start := int(str(args.get("page_token", "0")))
+			var size := int(args.get("limit", 20))
+			var page := {"jobs": all_jobs.slice(start, start + size)}
+			if start + size < all_jobs.size():
+				page["nextPaginationToken"] = str(start + size)
+			return _reply(payload["id"], _tool(page))
 		"models_list":
 			var start := 3 if str(args.get("page_token", "")) == "page2" else 0
 			var page := {"models": project_models.slice(start, start + 3)}
 			if start + 3 < project_models.size():
 				page["nextPaginationToken"] = "page2"
 			return _reply(payload["id"], _tool(page))
+		"scenario_tool_execute_read":
+			var found := _catalog_read(args)
+			if not found.is_empty():
+				return _reply(payload["id"], _tool(found))
 		"asset_get":
 			var output := _output(str(args["asset_id"]))
 			return _reply(payload["id"], _tool({"asset": {"id": args["asset_id"], "mimeType": output["mime"], "metadata": {"type": output["type"]}}}))
@@ -222,10 +236,12 @@ func post(url: String, headers: PackedStringArray, body: String, _timeout_s: flo
 	return _reply(payload["id"], {"content": [{"type": "text", "text": "unknown tool " + tool}], "isError": true})
 
 
-func download(url: String, dest_path: String, _timeout_s: float = 600.0) -> Dictionary:
-	var asset_id := url.get_file()
+func download(url: String, dest_path: String, _timeout_s: float = 600.0, max_bytes: int = 0) -> Dictionary:
+	var asset_id := url.get_file().get_slice("?", 0)
 	var output := _output(asset_id)
 	var bytes := FileAccess.get_file_as_bytes(ASSETS + output["file"])
+	if max_bytes > 0 and bytes.size() > max_bytes:
+		return {"ok": false, "path": "", "error": "Download failed (HTTP 200)."}
 	var absolute := ProjectSettings.globalize_path(dest_path)
 	DirAccess.make_dir_recursive_absolute(absolute.get_base_dir())
 	var file := FileAccess.open(absolute, FileAccess.WRITE)
@@ -241,6 +257,47 @@ func put_bytes(url: String, bytes: PackedByteArray, _timeout_s: float = 300.0) -
 
 func sleep(_seconds: float) -> void:
 	pass
+
+
+## A job job_get answers for, with the outputs of lane.
+func add_job(job_id: String, lane: String) -> void:
+	_jobs[job_id] = lane
+
+
+## An assets_list row as Scenario returns it with include_urls (live reply,
+## 2026-11-13): no name, a caption in description, kind and source at the top,
+## images on the transform URL; a generation's prompt may be a text asset's id.
+static func library_asset(asset_id: String, kind: String, mime: String, created_at: String, description: String,
+		model_id: String = "", prompt: String = "") -> Dictionary:
+	var source: String = {"image": "txt2img", "3d": "txt23d", "audio": "txt2audio", "text": "uploaded-text"}.get(kind, "txt2img")
+	if model_id.is_empty() and kind != "text":
+		source = "uploaded" if kind == "image" else "uploaded-" + kind
+	var row := {"id": asset_id, "kind": kind, "source": source, "mimeType": mime, "createdAt": created_at,
+		"ownerId": "proj_fake", "status": "success"}
+	row["url"] = ("https://cdn.cloud.scenario.com/assets-transform/%s?p=100&Policy=x&Signature=y" if kind == "image"
+		else "https://cdn.cloud.scenario.com/assets/%s?Policy=x&Signature=y") % asset_id
+	if not description.is_empty():
+		row["description"] = description
+	if not model_id.is_empty():
+		row["modelId"] = model_id
+		row["prompt"] = prompt
+	return row
+
+
+## scenario_tool_execute_read: assets_list over library (newest first, pages
+## of the limit, the page token an index); any other catalog tool is unknown.
+func _catalog_read(args: Dictionary) -> Dictionary:
+	var parameters: Dictionary = args.get("parameters", {})
+	if args.get("name") != "assets_list":
+		return {}
+	var rows: Array = library.get(str(parameters.get("project_id", "")), []).duplicate()
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return str(a["createdAt"]) > str(b["createdAt"]))
+	var start := int(str(parameters.get("page_token", "0")))
+	var size := int(parameters.get("limit", 20))
+	var page := {"assets": rows.slice(start, start + size)}
+	if start + size < rows.size():
+		page["nextPaginationToken"] = str(start + size)
+	return page
 
 
 func _output(asset_id: String) -> Dictionary:

@@ -330,3 +330,19 @@ func test_signed_in_errors_speak_of_the_account() -> void:
 	fake.replies.append({"http": 403, "body": "forbidden"})
 	var result: Dictionary = await client.get_job("job_1")
 	assert_string_contains(result["error"]["message"], "Scenario account")
+
+
+func test_job_and_asset_listings_are_free_reads_with_the_tools_arguments() -> void:
+	fake.replies.append(Fake.tool_result({"jobs": []}))
+	fake.replies.append(Fake.tool_result({"jobs": [], "nextPaginationToken": "t2"}))
+	fake.replies.append(Fake.tool_result({"assets": [], "estimatedTotalHits": 0}))
+	await client.list_jobs(80)
+	var page: Dictionary = await client.list_jobs_page(30, "t1")
+	await client.list_assets({"name": "assets_list", "parameters": {"limit": 50}})
+	var calls := fake.tool_calls().map(func(r: Dictionary) -> Dictionary: return r["payload"]["params"])
+	assert_eq(calls[0]["arguments"], {"limit": 50.0}, "jobs_list takes limit (max 50), not page_size")
+	assert_eq(calls[1]["arguments"], {"limit": 30.0, "page_token": "t1"})
+	assert_eq(page["value"]["nextPaginationToken"], "t2")
+	assert_eq([calls[2]["name"], calls[2]["arguments"]["name"]], ["scenario_tool_execute_read", "assets_list"])
+	assert_false(Client.is_submission("scenario_tool_execute_read", {}) or Client.is_submission("jobs_list", {}))
+	assert_true(Client.is_retryable("scenario_tool_execute_read", {}), "the read executor runs read-class tools only")
