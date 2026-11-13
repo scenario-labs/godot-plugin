@@ -123,6 +123,11 @@ func run() -> Dictionary:
 	await _until(func() -> bool: return not resumed.teams_loading and resumed.is_connected_account())
 	check("restart: signed in to the same project", resumed.is_oauth() and resumed.client.session.project_id == "proj_b1" and not resumed.picking)
 	check("restart: the token was refreshed", fake.oauth_requests.back()["form"].get("grant_type") == "refresh_token")
+	var headless := Controller.new()
+	root.add_child(headless)
+	headless.setup(fake, run_dir + "/jobs.json", run_dir + "/credentials.json", false)
+	check("a headless editor does not resume the saved sign-in", not headless.is_signed_in())
+	headless.queue_free()
 	check("restart: the rotated token was saved", resumed.credentials.load_session(OAuth.PRODUCTION_ISSUER, OAuth.PRODUCTION_CLIENT_ID)["refresh_token"] == fake.refresh_token)
 	resumed.queue_free()
 

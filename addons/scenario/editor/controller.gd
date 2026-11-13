@@ -97,7 +97,7 @@ func _exit_tree() -> void:
 		cancel_sign_in()
 
 
-func setup(p_transport: Node, ledger_path: String, credentials_path: String) -> void:
+func setup(p_transport: Node, ledger_path: String, credentials_path: String, resume: bool = true) -> void:
 	transport = p_transport
 	if transport.get_parent() == null:
 		add_child(transport)
@@ -117,7 +117,7 @@ func setup(p_transport: Node, ledger_path: String, credentials_path: String) -> 
 	var saved := credentials.load_credentials()
 	if not saved["api_secret"].is_empty():
 		_use_account(saved["api_key"], saved["api_secret"], saved["source"])
-	else:
+	elif resume:
 		_resume_session()
 
 

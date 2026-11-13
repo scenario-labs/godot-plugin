@@ -70,7 +70,7 @@ Editor Settings > Scenario:
 
 Environment variables, read when Godot starts:
 
-- `SCENARIO_API_KEY`, `SCENARIO_API_SECRET`: use this key instead of the saved sign-in or key.
+- `SCENARIO_API_KEY`, `SCENARIO_API_SECRET`: use this key instead of the saved sign-in or key. A headless editor (CI, scripts) never resumes the saved sign-in, so it needs these.
 - `SCENARIO_OAUTH_ISSUER`, `SCENARIO_OAUTH_CLIENT_ID`, `SCENARIO_MCP_URL`: sign in to a development instance of Scenario (for Scenario developers; set the first two together).
 - `SCENARIO_NO_SPEND=1`: refuse every paid request and upload inside the editor. Price checks, cancels and imports still work.
 
