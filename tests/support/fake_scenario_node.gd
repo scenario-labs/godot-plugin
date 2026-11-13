@@ -117,6 +117,8 @@ var awaiting := {}
 var drop_next_paid := false
 ## workflows_list finds nothing (a project without workflows).
 var no_workflows := false
+## The next workflow dry run comes back with this job id (a run it may have started).
+var estimate_job := ""
 ## jobs_list answers per project: {project_id: [job, ...]}.
 var listed := {}
 var _jobs := {}
@@ -168,7 +170,9 @@ func post(url: String, headers: PackedStringArray, body: String, _timeout_s: flo
 		"workflow_run":
 			if args.get("dry_run", false):
 				estimates += 1
-				return _reply(payload["id"], _tool({"creativeUnitsCost": price * 3, "creativeUnitsDiscount": 0}))
+				var surprise := {"job": {"jobId": estimate_job}} if not estimate_job.is_empty() else {}
+				estimate_job = ""
+				return _reply(payload["id"], _tool(surprise.merged({"creativeUnitsCost": price * 3, "creativeUnitsDiscount": 0})))
 			paid_calls.append(args)
 			if drop_next_paid:
 				drop_next_paid = false
