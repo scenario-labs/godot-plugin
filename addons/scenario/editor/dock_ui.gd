@@ -498,7 +498,7 @@ func _job_row(row: Dictionary) -> Control:
 				actions.add_child(_action("Import", controller.import_job.bind(local_id)))
 			else:
 				actions.add_child(_action("Show", _show_files.bind(row["files"])))
-			if not str(row["model_id"]).is_empty():  # an asset from the Library has no model to run again
+			if not row.has("source"):  # brought in from the Library or History: its request is not kept here
 				actions.add_child(_action("Re-run", controller.rerun.bind(local_id)))
 		Ledger.QUEUED, Ledger.RUNNING:
 			actions.add_child(_action("Cancel", controller.cancel.bind(local_id)))

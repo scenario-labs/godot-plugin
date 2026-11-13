@@ -15,6 +15,10 @@ const Ledger := preload("res://addons/scenario/core/job_ledger.gd")
 
 const THUMBNAILS := "res://.godot/scenario/thumbnails"
 const THUMBNAIL_PX := 96
+## Pages History reads in one go when they hold no generation (uploads only).
+const HISTORY_MAX_PAGES := 5
+## Outputs whose type is read to pick a job's lane.
+const MAX_OUTPUTS_READ := 10
 
 var controller: Controller
 var kind := "all"
@@ -22,7 +26,8 @@ var source := "all"
 var query := ""
 ## Rows from LibraryQuery.asset_row, newest first.
 var assets: Array = []
-var total := 0
+## How many assets match, or -1 when Scenario does not say.
+var total := -1
 var loading := false
 var loaded := false
 var error := ""
@@ -39,6 +44,8 @@ var busy := {}
 var _scope := ""  # the account and project the caches belong to
 var _generation := 0  # bumped when the caches are dropped: late replies are ignored
 var _page_serial := 0
+var _more := false
+var _next_offset := 0
 var _thumbnail_queue: Array = []
 var _thumbnails_running := false
 
@@ -60,17 +67,19 @@ func set_filter(p_kind: String, p_source: String, p_query: String) -> void:
 func refresh() -> void:
 	_page_serial += 1
 	assets = []
-	total = 0
+	total = -1
+	_more = false
+	_next_offset = 0
 	await _load_page(0)
 
 
 func can_load_more() -> bool:
-	return loaded and not loading and assets.size() < total
+	return loaded and not loading and _more
 
 
 func load_more() -> void:
 	if can_load_more():
-		await _load_page(assets.size())
+		await _load_page(_next_offset)
 
 
 func load_history(more: bool = false) -> void:
@@ -80,19 +89,26 @@ func load_history(more: bool = false) -> void:
 	history_loading = true
 	history_error = ""
 	changed.emit()
-	var result: Dictionary = await controller.client.list_jobs_page(Query.HISTORY_PAGE_SIZE, history_next if more else "")
-	if generation != _generation:
-		return
-	history_loading = false
-	history_loaded = true
-	if result["ok"]:
+	if not more:
+		history = []
+		history_next = ""
+	var found := 0
+	# A page of uploads only shows nothing: read on, a few pages at most.
+	for attempt in HISTORY_MAX_PAGES:
+		var result: Dictionary = await controller.client.list_jobs_page(Query.HISTORY_PAGE_SIZE, history_next)
+		if generation != _generation:
+			return
+		if not result["ok"]:
+			history_error = result["error"]["message"]
+			break
 		var page := Query.parse_history(result["value"])
-		if not more:
-			history = []
 		history.append_array(page["jobs"])
 		history_next = page["next"]
-	else:
-		history_error = result["error"]["message"]
+		found += page["jobs"].size()
+		if found > 0 or history_next.is_empty():
+			break
+	history_loading = false
+	history_loaded = true
 	changed.emit()
 
 
@@ -103,7 +119,7 @@ func ledger_row(job_id: String) -> Dictionary:
 
 ## Downloads the asset into the project and places it like its lane's output.
 func import_asset(asset: Dictionary) -> Dictionary:
-	var lane := Query.lane_for(str(asset["model_id"]), str(asset["kind"]), str(asset["mime"]), true)
+	var lane := Query.lane_for(str(asset["model_id"]), str(asset["kind"]), str(asset["mime"]))
 	if lane.is_empty():
 		return _fail("The dock cannot place this kind of file: " + str(asset["name"]))
 	var id := str(asset["id"])
@@ -115,31 +131,40 @@ func import_asset(asset: Dictionary) -> Dictionary:
 
 
 ## Imports a finished job's outputs. A job already in the Jobs list is
-## imported from there, never added twice.
+## imported from there, never added twice; one an Unknown row may stand for
+## is linked to that row first, as Check Scenario would.
 func import_job(job: Dictionary) -> Dictionary:
 	var job_id := str(job["job_id"])
 	if busy.has(job_id):
 		return {"ok": false, "message": "Already importing."}
+	controller.ledger.reconcile([{"jobId": job_id, "modelId": job["model_id"], "status": job["status"], "createdAt": job["created_at"]}],
+		Time.get_unix_time_from_system(), controller.client.session.project_id if controller.is_oauth() else "")
 	var existing := ledger_row(job_id)
 	if not existing.is_empty():
 		if existing["state"] != Ledger.SUCCESS or existing["imported"]:
 			return _fail("This job is already in the Jobs list.")
+		if existing["asset_ids"].is_empty():  # just linked to an Unknown row: read its outputs
+			var linked: Dictionary = await controller.client.get_job(job_id)
+			if linked["ok"]:
+				controller.ledger.apply_job(linked["value"], Time.get_unix_time_from_system())
 		return await _import(job_id, existing["local_id"])
 	var generation := _generation
 	busy[job_id] = true
 	changed.emit()
 	var read: Dictionary = await controller.client.get_job(job_id)
 	var asset_ids: Array = read["value"].get("assetIds", []) if read["ok"] and read["value"].get("assetIds") is Array else []
-	var mime := ""
-	if read["ok"] and not asset_ids.is_empty():
-		var first: Dictionary = await controller.client.get_asset(str(asset_ids[0]))
-		mime = str(first["value"].get("mimeType", "")) if first["ok"] else ""
+	var mimes: Array = []
+	if read["ok"] and Query.model_lane(str(job["model_id"])).is_empty():
+		for asset_id in asset_ids.slice(0, MAX_OUTPUTS_READ):
+			var asset: Dictionary = await controller.client.get_asset(str(asset_id))
+			if asset["ok"]:
+				mimes.append(Query.text(asset["value"].get("mimeType")))
 	busy.erase(job_id)
 	if generation != _generation:
 		return {"ok": false, "message": "The project changed."}
 	if not read["ok"]:
 		return _fail(read["error"]["message"])
-	var lane := Query.lane_for(str(job["model_id"]), "", mime)
+	var lane := Query.lane_for_job(str(job["model_id"]), mimes)
 	if asset_ids.is_empty() or lane.is_empty():
 		return _fail("This job has no output the dock can place.")
 	var local_id := controller.ledger.adopt(lane, str(job["model_id"]), str(job["prompt"]), job_id, asset_ids,
@@ -180,7 +205,9 @@ func clear() -> void:
 	_generation += 1
 	_page_serial += 1
 	assets = []
-	total = 0
+	total = -1
+	_more = false
+	_next_offset = 0
 	loading = false
 	loaded = false
 	error = ""
@@ -215,7 +242,10 @@ func _load_page(offset: int) -> void:
 				assets.append(row)
 				if not row["thumbnail"].is_empty() and not thumbnails.has(row["id"]):
 					_thumbnail_queue.append(row)
-		total = maxi(page["total"], assets.size())
+		_next_offset = offset + page["hits"]
+		total = maxi(page["total"], assets.size()) if page["total"] >= 0 else -1
+		# Without a total, a full page means more may follow; a short one ends the list.
+		_more = _next_offset < page["total"] if page["total"] >= 0 else page["hits"] >= Query.PAGE_SIZE
 		_fetch_thumbnails()
 	else:
 		error = result["error"]["message"]

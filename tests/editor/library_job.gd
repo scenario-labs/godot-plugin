@@ -91,7 +91,10 @@ func run() -> Dictionary:
 	check("3D model imported as a GLB", crate.get("ok", false) and _row_with(controller, "asset_glb001").get("lane") == "model3d"
 		and _last_call(fake, "asset_download")["arguments"].get("format") == "glb")
 	await wait_frames(1)
-	check("Jobs list names the Library", ui._jobs_box.get_child_count() > 0)
+	check("imported rows are listed without Re-run", ui._jobs_box.get_child_count() > 0 and not _has_button(ui._jobs_box, "Re-run"))
+	var preview := Fake.library_hit("asset_glbprv", "image", "image/png", "2026-10-02T09:00:00.000Z", "", "model_rodin-hyper3d-v2-5-text-to-3d", "a crate")
+	var preview_import: Dictionary = await library.import_asset(Query.asset_row(preview))
+	check("a 3D model's preview alone imports as an image", preview_import.get("ok", false) and _row_with(controller, "asset_glbprv").get("lane") == "image")
 
 	# An image of the project as a reference: no upload.
 	var fields: Array = library.reference_fields()
@@ -103,16 +106,21 @@ func run() -> Dictionary:
 	check("audio is never a reference", not library.use_as_reference(_asset(library, "asset_snd001"), "mask"))
 
 	# History: pages of the project's jobs, import a finished one once.
-	fake.listed["proj_a1"] = _jobs()
+	var now := Time.get_unix_time_from_system()
+	fake.listed["proj_a1"] = _jobs(now)
 	fake.add_job("job_h01", "model3d")
+	fake.add_job("job_team3d", "model3d")
+	var lost := controller.ledger.add_intent("image", FLARE, {"prompt": "a lantern"}, "fp_lantern", 2.0, now - 2.0, "a lantern", controller.client.session.workspace())
+	controller.ledger.mark_unknown(lost, "dropped", now)
 	controller.ledger.adopt("image", FLARE, "already here", "job_h02", ["asset_img001"], Time.get_unix_time_from_system(), controller.client.session.workspace())
 	controller.ledger.mark_imported(controller.ledger.find_by_job("job_h02")["local_id"], [], Time.get_unix_time_from_system())
 	ui._show_view("history")
 	await _until(func() -> bool: return library.history_loaded and not library.history_loading)
 	await wait_frames(1)
-	check("history: first page", library.history.size() == Query.HISTORY_PAGE_SIZE and library_ui._older_button.visible)
+	check("history: first page, uploads left out", library.history.size() == Query.HISTORY_PAGE_SIZE - 2 and library_ui._older_button.visible
+		and library.history.all(func(j: Dictionary) -> bool: return not str(j["job_id"]).begins_with("job_up")))
 	await library.load_history(true)
-	check("history: older page", library.history.size() == 35 and library.history_next.is_empty())
+	check("history: older page", library.history.size() == 36 and library.history_next.is_empty())
 	await wait_frames(1)
 	check("history: a job already in Jobs is not offered again", _row_text(library_ui, 2).contains("In the Jobs list"))
 	check("history: a running job cannot be imported", _row_text(library_ui, 3).contains("In Progress"))
@@ -123,6 +131,13 @@ func run() -> Dictionary:
 		and job_row.get("charged_cu") == 2.0 and job_row.get("imported") == true and controller.ledger.jobs.size() == rows_before + 1)
 	await library.import_job(library.history[1])
 	check("history: no second row for the same job", controller.ledger.jobs.size() == rows_before + 1)
+	var linked: Dictionary = await library.import_job(library.history[0])
+	check("history: a job an Unknown row stands for is linked to it, not added", linked.get("ok", false)
+		and controller.ledger.find(lost).get("job_id") == "job_h00" and controller.ledger.find(lost).get("imported") == true
+		and controller.ledger.jobs.size() == rows_before + 1)
+	var unlisted: Dictionary = await library.import_job(library.history[4])
+	check("history: an unlisted model's 3D job goes to the 3D lane", unlisted.get("ok", false)
+		and controller.ledger.find_by_job("job_team3d").get("lane") == "model3d")
 
 	# Another project: everything read for the first one is dropped.
 	controller.choose_project("team_a", "proj_a2")
@@ -163,14 +178,19 @@ static func _assets() -> Array:
 	return hits
 
 
-## 35 jobs, newest first: a finished image, a finished 3D model, one already
-## in the Jobs list, one running, then older finished ones.
-static func _jobs() -> Array:
+## 38 jobs, newest first: a finished image sent just now (an Unknown row may
+## stand for it), a finished 3D model, one already in the Jobs list, one
+## running, a 3D job of a model the dock does not list, two uploads, then
+## older finished ones.
+static func _jobs(now: float) -> Array:
 	var jobs: Array = [
-		{"jobId": "job_h00", "status": "success", "modelId": FLARE, "prompt": "a lantern", "createdAt": "2026-11-13T12:00:00.000Z"},
+		{"jobId": "job_h00", "status": "success", "modelId": FLARE, "prompt": "a lantern", "createdAt": Time.get_datetime_string_from_unix_time(int(now)) + "Z"},
 		{"jobId": "job_h01", "status": "success", "modelId": "model_rodin-hyper3d-v2-5-text-to-3d", "prompt": "a barrel", "createdAt": "2026-11-13T11:00:00.000Z"},
 		{"jobId": "job_h02", "status": "success", "modelId": FLARE, "prompt": "already here", "createdAt": "2026-11-13T10:00:00.000Z"},
 		{"jobId": "job_h03", "status": "in-progress", "modelId": FLARE, "prompt": "still going", "createdAt": "2026-11-13T09:00:00.000Z"},
+		{"jobId": "job_team3d", "status": "success", "modelId": "model_team-3d", "prompt": "a statue", "createdAt": "2026-11-13T08:00:00.000Z"},
+		{"jobId": "job_up1", "jobType": "upload", "status": "success", "createdAt": "2026-11-13T07:00:00.000Z"},
+		{"jobId": "job_up2", "jobType": "upload", "status": "success", "createdAt": "2026-11-13T06:00:00.000Z"},
 	]
 	for i in 31:
 		jobs.append({"jobId": "job_old%02d" % i, "status": "success", "modelId": FLARE, "prompt": "old %d" % i, "createdAt": "2026-10-01T09:00:00.000Z"})
@@ -182,6 +202,13 @@ static func _asset(library: Node, id: String) -> Dictionary:
 		if asset["id"] == id:
 			return asset
 	return {}
+
+
+static func _has_button(box: Node, text: String) -> bool:
+	for node in box.find_children("*", "Button", true, false):
+		if node.text == text and not node.is_queued_for_deletion():
+			return true
+	return false
 
 
 static func _row_with(controller: Controller, asset_id: String) -> Dictionary:

@@ -45,35 +45,46 @@ static func search_args(kind: String, source: String, query: String, offset: int
 
 
 ## {"assets": [row], "total": int, "offset": int} from a search reply.
+## total is -1 when the reply gives none: a full page then means more may follow.
 static func parse_page(value: Variant) -> Dictionary:
-	var page := {"assets": [], "total": 0, "offset": 0}
+	var page := {"assets": [], "total": -1, "offset": 0, "hits": 0}
 	if not value is Dictionary:
 		return page
-	for hit in value.get("assets", value.get("hits", [])):
+	var hits: Variant = value.get("assets", value.get("hits", []))
+	for hit in hits if hits is Array else []:
+		page["hits"] += 1
 		var row := asset_row(hit)
 		if not row.is_empty():
 			page["assets"].append(row)
-	page["total"] = int(value.get("estimatedTotalHits", value.get("totalHits", page["assets"].size())))
-	page["offset"] = int(value.get("offset", 0))
+	for key in ["estimatedTotalHits", "totalHits"]:
+		if value.get(key) is float or value.get(key) is int:
+			page["total"] = int(value[key])
+			break
+	page["offset"] = int(value.get("offset", 0)) if value.get("offset") != null else 0
 	return page
 
 
 ## One asset as the dock shows it, or {} for a hit without an id:
 ## {"id", "kind", "name", "prompt", "model_id", "mime", "created_at", "thumbnail", "generated"}
 static func asset_row(hit: Variant) -> Dictionary:
-	if not hit is Dictionary or str(hit.get("id", "")).is_empty():
+	if not hit is Dictionary or text(hit.get("id")).is_empty():
 		return {}
 	var metadata: Dictionary = hit.get("metadata") if hit.get("metadata") is Dictionary else {}
-	var model_id := str(hit.get("modelId", metadata.get("modelId", "")))
-	var prompt := str(hit.get("prompt", metadata.get("prompt", "")))
-	var name := str(hit.get("name", ""))
-	if name.is_empty() or name == "<null>":
-		name = prompt if not prompt.is_empty() else str(hit["id"])
+	var model_id := text(hit.get("modelId", metadata.get("modelId")))
+	var prompt := text(hit.get("prompt", metadata.get("prompt")))
+	var name := text(hit.get("name"))
+	if name.is_empty():
+		name = prompt if not prompt.is_empty() else text(hit["id"])
 	return {
-		"id": str(hit["id"]), "kind": str(hit.get("kind", "")), "name": name, "prompt": prompt,
-		"model_id": model_id, "mime": str(hit.get("mimeType", "")), "created_at": str(hit.get("createdAt", "")),
+		"id": text(hit["id"]), "kind": text(hit.get("kind")), "name": name, "prompt": prompt,
+		"model_id": model_id, "mime": text(hit.get("mimeType")), "created_at": text(hit.get("createdAt")),
 		"thumbnail": thumbnail_url(hit), "generated": not model_id.is_empty(),
 	}
+
+
+## A reply's optional string: "" for a missing or null value (str(null) is "<null>").
+static func text(value: Variant) -> String:
+	return "" if value == null else str(value)
 
 
 ## The hit's thumbnail URL ("" if none). Images without a thumbnail use the
@@ -90,43 +101,63 @@ static func thumbnail_url(hit: Dictionary) -> String:
 	return ""
 
 
-## The lane whose importer places this output: the lane of a known model,
-## else by kind or MIME type ("" when the dock cannot place it). single: one
-## asset on its own, which a material (a set of maps) cannot be built from.
-static func lane_for(model_id: String, kind: String, mime: String = "", single: bool = false) -> String:
+## The lane that places one asset on its own, by its kind or MIME type ("" when
+## the dock cannot place it). A material or a 3D model needs the job's other
+## files, so a map or a preview image goes to the Image lane; a skybox model's
+## panorama still goes to the sky.
+static func lane_for(model_id: String, kind: String, mime: String = "") -> String:
+	var by_kind := ""
+	if kind == "3d" or mime.begins_with("model/"):
+		by_kind = "model3d"
+	elif kind == "audio" or mime.begins_with("audio/"):
+		by_kind = "sound"
+	elif kind == "image-hdr" or mime in ["image/x-exr", "image/vnd.radiance"]:
+		by_kind = "skybox"
+	elif kind == "image" or mime.begins_with("image/"):
+		by_kind = "image"
+	return "skybox" if by_kind == "image" and model_lane(model_id) == "skybox" else by_kind
+
+
+## The lane that places a whole job: its model's, else from all its outputs
+## (a 3D job lists a preview image before the model).
+static func lane_for_job(model_id: String, mimes: Array) -> String:
+	if not model_lane(model_id).is_empty():
+		return model_lane(model_id)
+	var lanes: Array = mimes.map(func(mime: String) -> String: return lane_for("", "", mime))
+	for preferred in ["model3d", "sound", "skybox", "image"]:
+		if preferred in lanes:
+			return preferred
+	return ""
+
+
+## The lane listing this model, or "".
+static func model_lane(model_id: String) -> String:
 	for lane in Lanes.LANES:
-		if single and lane["importer"] == "material":
-			continue
 		for model in lane["models"]:
 			if model["id"] == model_id and not model_id.is_empty():
 				return lane["id"]
-	if kind == "3d" or mime.begins_with("model/"):
-		return "model3d"
-	if kind == "audio" or mime.begins_with("audio/"):
-		return "sound"
-	if kind == "image-hdr" or mime in ["image/x-exr", "image/vnd.radiance"]:
-		return "skybox"
-	if kind == "image" or mime.begins_with("image/"):
-		return "image"
 	return ""
 
 
 ## {"jobs": [row], "next": token} from a jobs_list reply. A row:
-## {"job_id", "model_id", "prompt", "status", "created_at", "finished"}
+## {"job_id", "model_id", "prompt", "status", "created_at", "finished"}.
+## Only generations are kept: uploads and other jobs without a model are not
+## results to import.
 static func parse_history(value: Variant) -> Dictionary:
 	var page := {"jobs": [], "next": ""}
 	if not value is Dictionary:
 		return page
-	for job in value.get("jobs", []):
-		if not job is Dictionary or str(job.get("jobId", "")).is_empty():
+	var jobs: Variant = value.get("jobs", [])
+	for job in jobs if jobs is Array else []:
+		if not job is Dictionary or text(job.get("jobId")).is_empty() or text(job.get("modelId")).is_empty():
 			continue
-		var status := str(job.get("status", ""))
+		var status := text(job.get("status"))
 		page["jobs"].append({
-			"job_id": str(job["jobId"]), "model_id": str(job.get("modelId", "")), "prompt": str(job.get("prompt", "")),
-			"status": status, "created_at": str(job.get("createdAt", "")),
+			"job_id": text(job["jobId"]), "model_id": text(job["modelId"]), "prompt": text(job.get("prompt")),
+			"status": status, "created_at": text(job.get("createdAt")),
 			"finished": status.to_lower() in ["success", "succeeded", "completed"],
 		})
-	page["next"] = str(value.get("nextPaginationToken", ""))
+	page["next"] = text(value.get("nextPaginationToken"))
 	return page
 
 
