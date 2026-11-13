@@ -121,7 +121,8 @@ func _refresh_library() -> void:
 	elif library.loaded and library.assets.is_empty():
 		_library_status.text = "Nothing here yet. Generations and uploads of this project appear here."
 	else:
-		_library_status.text = "%d of %d assets in this project" % [library.assets.size(), library.total] if library.loaded else ""
+		var count := "%d of %d" % [library.assets.size(), library.total] if library.total >= 0 else str(library.assets.size())
+		_library_status.text = "%s assets in this project" % count if library.loaded else ""
 	for asset in library.assets:
 		_cards.add_child(_card(asset))
 	_more_button.visible = library.can_load_more()

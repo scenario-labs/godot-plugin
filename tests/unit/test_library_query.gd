@@ -43,26 +43,43 @@ func test_page_rows_from_search_hits() -> void:
 	assert_eq(Query.parse_page("nonsense")["assets"], [])
 
 
-func test_lane_for_an_output() -> void:
-	assert_eq(Query.lane_for("model_scenario-skybox-gpt", "image"), "skybox", "a known model's lane")
-	assert_eq(Query.lane_for("model_patina-material", "image"), "material")
-	assert_eq(Query.lane_for("model_patina-material", "image", "image/png", true), "image", "one map alone is not a material")
-	assert_eq(Query.lane_for("", "3d"), "model3d")
+func test_lane_for_one_asset() -> void:
+	assert_eq(Query.lane_for("model_scenario-skybox-gpt", "image"), "skybox", "a skybox model's panorama goes to the sky")
+	assert_eq(Query.lane_for("model_patina-material", "image", "image/png"), "image", "one map alone is not a material")
+	assert_eq(Query.lane_for("model_rodin-hyper3d-v2-5-text-to-3d", "image", "image/png"), "image", "a 3D model's preview alone is an image")
+	assert_eq(Query.lane_for("model_rodin-hyper3d-v2-5-text-to-3d", "3d"), "model3d")
 	assert_eq(Query.lane_for("model_other", "", "model/gltf-binary"), "model3d")
 	assert_eq(Query.lane_for("", "audio"), "sound")
 	assert_eq(Query.lane_for("", "image-hdr"), "skybox")
-	assert_eq(Query.lane_for("", "image"), "image")
 	assert_eq(Query.lane_for("", "video", "video/mp4"), "", "nothing places a video")
+
+
+func test_lane_for_a_whole_job() -> void:
+	assert_eq(Query.lane_for_job("model_patina-material", []), "material", "a listed model's lane")
+	assert_eq(Query.lane_for_job("model_team-3d", ["image/png", "model/gltf-binary"]), "model3d", "a preview listed before the GLB")
+	assert_eq(Query.lane_for_job("model_team-sfx", ["audio/mpeg"]), "sound")
+	assert_eq(Query.lane_for_job("model_team-style", ["image/png", "image/png"]), "image")
+	assert_eq(Query.lane_for_job("model_team-video", ["video/mp4"]), "")
+
+
+func test_null_fields_and_a_missing_total() -> void:
+	var page := Query.parse_page({"assets": [{"id": "asset_n", "kind": "image", "name": null, "metadata": {"modelId": null, "prompt": null}}]})
+	var row: Dictionary = page["assets"][0]
+	assert_eq([row["name"], row["model_id"], row["prompt"], row["generated"]], ["asset_n", "", "", false])
+	assert_eq(page["total"], -1, "no total: paging goes by full pages")
+	assert_eq(page["hits"], 1)
 
 
 func test_history_rows() -> void:
 	var page := Query.parse_history({"jobs": [
 		{"jobId": "job_1", "status": "success", "modelId": "model_x", "prompt": "a chest", "createdAt": "2026-11-13T10:05:09.000Z"},
-		{"jobId": "job_2", "status": "in-progress"},
+		{"jobId": "job_2", "status": "in-progress", "modelId": "model_x", "prompt": null},
+		{"jobId": "job_up", "jobType": "upload", "status": "success"},
 		{"status": "success"},
 	], "nextPaginationToken": "tok"})
 	assert_eq(page["next"], "tok")
-	assert_eq(page["jobs"].size(), 2)
+	assert_eq(page["jobs"].size(), 2, "uploads and rows without an id are left out")
+	assert_eq(page["jobs"][1]["prompt"], "")
 	assert_true(page["jobs"][0]["finished"])
 	assert_false(page["jobs"][1]["finished"])
 	assert_eq(Query.date_text(page["jobs"][0]["created_at"]), "2026-11-13 10:05")
