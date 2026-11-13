@@ -93,3 +93,21 @@ func test_history_rows() -> void:
 	assert_eq(Query.date_text(page["jobs"][0]["created_at"]), "2026-11-13 10:05")
 	assert_eq(Query.model_name("model_openai-gpt-image-2-5-flare"), "GPT Image 2.5 Flare")
 	assert_eq(Query.model_name("model_team-custom"), "team-custom")
+
+
+func test_image_size_is_read_from_the_header_without_decoding() -> void:
+	var image := Image.create(37, 21, false, Image.FORMAT_RGBA8)
+	assert_eq(Query.image_size(image.save_png_to_buffer()), Vector2i(37, 21), "PNG")
+	assert_eq(Query.image_size(image.save_jpg_to_buffer()), Vector2i(37, 21), "JPEG")
+	assert_eq(Query.image_size(image.save_webp_to_buffer(false)), Vector2i(37, 21), "WebP lossless")
+	assert_eq(Query.image_size(image.save_webp_to_buffer(true, 0.5)), Vector2i(37, 21), "WebP lossy")
+	assert_eq(Query.image_size(PackedByteArray([1, 2, 3])), Vector2i.ZERO, "not an image")
+
+
+func test_an_oversized_header_is_over_the_thumbnail_budget() -> void:
+	# A PNG header claiming 100000 x 100000 pixels: what a decompression bomb looks like.
+	var png := PackedByteArray([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52,
+		0, 1, 0x86, 0xA0, 0, 1, 0x86, 0xA0])
+	var size := Query.image_size(png)
+	assert_eq(size, Vector2i(100000, 100000))
+	assert_gt(size.x * size.y, Query.MAX_THUMBNAIL_PIXELS)

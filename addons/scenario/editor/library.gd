@@ -280,7 +280,7 @@ func _fetch_thumbnails() -> void:
 		var row: Dictionary = _thumbnail_queue.pop_front()
 		_thumbnail_tried[row["id"]] = true
 		var path := "%s/%s.thumb" % [THUMBNAILS, row["id"]]
-		var downloaded: Dictionary = await controller.transport.download(row["thumbnail"], path, 60.0)
+		var downloaded: Dictionary = await controller.transport.download(row["thumbnail"], path, 60.0, Query.MAX_THUMBNAIL_BYTES)
 		if downloaded["ok"] and generation == _generation:
 			var texture := thumbnail_texture(FileAccess.get_file_as_bytes(path))
 			if texture != null:
@@ -290,8 +290,13 @@ func _fetch_thumbnails() -> void:
 	_thumbnails_running = false
 
 
-## A small texture from PNG, JPEG or WebP bytes, or null.
+## A small texture from PNG, JPEG or WebP bytes, or null. Its size is read from
+## the header first: a file over the byte or pixel budget is never decoded.
 static func thumbnail_texture(bytes: PackedByteArray) -> Texture2D:
+	var size := Query.image_size(bytes)
+	if bytes.size() > Query.MAX_THUMBNAIL_BYTES or size.x <= 0 or size.y <= 0 \
+			or size.x * size.y > Query.MAX_THUMBNAIL_PIXELS:
+		return null
 	var image := Image.new()
 	var loaded_ok := ERR_FILE_UNRECOGNIZED
 	match Files.sniff_extension(bytes.slice(0, 16)):

@@ -37,7 +37,8 @@ func put_bytes(url: String, bytes: PackedByteArray, timeout_s: float = 300.0) ->
 
 
 ## Downloads to dest_path through a .part file. {"ok", "path", "error"}
-func download(url: String, dest_path: String, timeout_s: float = 600.0) -> Dictionary:
+## max_bytes > 0 refuses a larger body (a thumbnail must stay small).
+func download(url: String, dest_path: String, timeout_s: float = 600.0, max_bytes: int = 0) -> Dictionary:
 	if not url.begins_with("https://") or not host_of(url) in DOWNLOAD_HOSTS:
 		return {"ok": false, "path": "", "error": "Refused to download from an unexpected host."}
 	var absolute := ProjectSettings.globalize_path(dest_path)
@@ -45,6 +46,8 @@ func download(url: String, dest_path: String, timeout_s: float = 600.0) -> Dicti
 	var part := absolute + ".part"
 	var request := _request(timeout_s)
 	request.download_file = part
+	if max_bytes > 0:
+		request.body_size_limit = max_bytes
 	if request.request(url) != OK:
 		request.queue_free()
 		return {"ok": false, "path": "", "error": "Could not start the download."}
