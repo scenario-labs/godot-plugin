@@ -198,7 +198,15 @@ func save_session(issuer: String, client_id: String, refresh_token: String) -> D
 func save_refresh_token(issuer: String, client_id: String, previous: String, refresh_token: String) -> bool:
 	var data := _read_config()
 	var oauth: Variant = data.get("oauth")
-	if not oauth is Dictionary or refresh_token.is_empty() or load_session(issuer, client_id)["refresh_token"] != previous:
+	if not oauth is Dictionary or refresh_token.is_empty():
+		return false
+	var saved: String = load_session(issuer, client_id)["refresh_token"]
+	# A system store that does not answer (a keyring prompt dismissed) reads as
+	# "": the rotated token is kept rather than lost. Another editor's token
+	# reads as itself, and a forgotten one leaves no store behind.
+	var unreadable: bool = saved.is_empty() and oauth.get("issuer") == issuer and oauth.get("client_id") == client_id \
+		and oauth.get("secret_store", FILE) != FILE
+	if saved != previous and not unreadable:
 		return false
 	var account := _session_account(str(oauth.get("client_id", "")))
 	var in_store: bool = oauth.get("secret_store", FILE) != FILE
