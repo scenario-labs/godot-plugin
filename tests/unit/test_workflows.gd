@@ -34,7 +34,8 @@ func _arguments(index: int = 0) -> Dictionary:
 
 func test_entries_keep_ready_workflows_only() -> void:
 	var entries := Workflows.entries(FakeNode.WORKFLOWS["private"])
-	assert_eq(entries, [{"id": "workflow_prop3d", "name": "Prop to 3D", "note": "Concept image, then a textured GLB"}], "a draft cannot run")
+	assert_eq(entries, [{"id": "workflow_prop3d", "name": "Prop to 3D", "note": "Concept image, then a textured GLB"},
+		{"id": "workflow_kit", "name": "Prop Kit", "note": "Image, model and sound"}], "a draft cannot run")
 	var public := Workflows.entries(FakeNode.WORKFLOWS["public"], true)
 	assert_eq(public[0]["note"], "public, Three takes of one sound")
 	assert_eq(public[1]["note"], "public")
@@ -84,11 +85,31 @@ func test_inputs_given_as_a_map_and_file_arrays() -> void:
 
 
 func test_outputs_are_placed_by_file_type() -> void:
-	var model := [{"path": "res://a/x.png", "role": "main"}, {"path": "res://a/y.glb", "role": "main"}]
-	assert_eq(Workflows.place_lane(model), "model3d")
-	assert_eq(model[0]["role"], "preview", "an image next to a GLB is its preview")
-	assert_eq(Workflows.place_lane([{"path": "res://a/z.mp3", "role": "main"}]), "sound")
-	assert_eq(Workflows.place_lane([{"path": "res://a/x.webp", "role": "main"}]), "image")
+	var png := {"path": "res://a/x.png", "role": "main"}
+	var glb := {"path": "res://a/y.glb", "role": "main"}
+	var mp3 := {"path": "res://a/z.mp3", "role": "main"}
+	assert_eq(Workflows.groups([png, glb, mp3]), {"model3d": [glb, png], "sound": [mp3]}, "the sound is placed too")
+	assert_eq(png["role"], "preview", "an image next to a GLB is its preview")
+	var image := {"path": "res://a/x.webp", "role": "main"}
+	assert_eq(Workflows.groups([image, mp3]), {"image": [image], "sound": [mp3]}, "an image first never reaches the sound player")
+	assert_eq(Workflows.groups([]), {})
+
+
+func test_3d_outputs_are_downloaded_as_glb() -> void:
+	assert_eq(Workflows.download_format({"mimeType": "model/gltf-binary"}), "glb")
+	assert_eq(Workflows.download_format({"mimeType": "application/octet-stream", "metadata": {"type": "inference-txt23d"}}), "glb")
+	assert_eq(Workflows.download_format({"mimeType": "image/png", "metadata": {"type": "inference-txt2img"}}), "")
+	assert_eq(Workflows.download_format({"metadata": null}), "")
+
+
+func test_flags_sent_as_null_or_text_are_read() -> void:
+	var schema := Workflows.schema_from({"inputs_definition": [
+		{"name": "refs", "type": "file", "array": "true"},
+		{"name": "steps", "type": "inputs_array", "required": null},
+		{"name": "models", "type": "model_array", "required": "true"},
+	]})
+	assert_eq(schema["parameters"][0]["type"], "file_array")
+	assert_eq(schema["unsupported"], PackedStringArray(["models"]))
 
 
 func test_a_workflow_is_priced_with_a_dry_run_and_never_retried() -> void:
@@ -138,7 +159,7 @@ func test_workflow_form_and_listing_through_the_client() -> void:
 	fake.replies.append(FakeTransport.tool_result({"workflows": FakeNode.WORKFLOWS["private"]}))
 	fake.replies.append(FakeTransport.tool_result({"workflows": FakeNode.WORKFLOWS["public"]}))
 	var listed: Dictionary = await client.list_workflows()
-	assert_eq(listed["value"].map(func(e: Dictionary) -> String: return e["id"]), ["workflow_prop3d", "workflow_pubsfx", "workflow_pubbatch"])
+	assert_eq(listed["value"].map(func(e: Dictionary) -> String: return e["id"]), ["workflow_prop3d", "workflow_kit", "workflow_pubsfx", "workflow_pubbatch"])
 	assert_eq(_arguments(1), {"privacy": "private", "status": "ready", "limit": 100.0}, "JSON numbers read back as floats")
 	assert_eq(_arguments(2)["privacy"], "public")
 
@@ -148,7 +169,7 @@ func test_listing_keeps_the_project_when_the_public_catalog_fails() -> void:
 	fake.replies.append({"rpc_error": {"code": -32000, "message": "catalog down"}})
 	var listed: Dictionary = await client.list_workflows()
 	assert_true(listed["ok"])
-	assert_eq(listed["value"].size(), 1)
+	assert_eq(listed["value"].size(), 2)
 
 
 func test_a_workflow_job_reconciles_by_its_workflow_id() -> void:

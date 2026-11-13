@@ -7,6 +7,8 @@ extends RefCounted
 ## inputs_definition -> a schema_form schema; finished outputs -> the lane
 ## whose importer places them.
 
+const Form := preload("res://addons/scenario/core/schema_form.gd")
+
 ## Input types the dock has no widget for. An optional one is left to the
 ## workflow's default; a required one blocks the price check.
 const UNSUPPORTED := ["inputs_array", "number_array", "model_array"]
@@ -60,10 +62,11 @@ static func schema_from(record: Dictionary) -> Dictionary:
 		for key in input:
 			parameter[_KEYS.get(key, key)] = input[key]
 		var type := str(parameter.get("type", "string"))
-		if type == "file" and bool(parameter.get("array", false)):
+		# truthy(): the API may send these flags as null or as strings.
+		if type == "file" and Form.truthy(parameter.get("array")):
 			parameter["type"] = "file_array"
 		if type in UNSUPPORTED:
-			if not bool(parameter.get("required", false)):
+			if not Form.truthy(parameter.get("required")):
 				continue
 			unsupported.append(str(parameter["name"]))
 			parameter["type"] = "unsupported"
@@ -76,16 +79,36 @@ static func schema_from(record: Dictionary) -> Dictionary:
 	return {"model_id": str(record.get("id", "")), "parameters": parameters, "unsupported": unsupported}
 
 
-## The lane whose importer places a workflow's files: a GLB or glTF makes it
-## 3D (images then are its previews), sound makes it audio, else images.
-## Sets each file's role to match.
-static func place_lane(files: Array) -> String:
-	var exts: Array = files.map(func(f: Dictionary) -> String: return str(f["path"]).get_extension().to_lower())
-	if exts.has("glb") or exts.has("gltf"):
-		for file in files:
-			if not str(file["path"]).get_extension().to_lower() in ["glb", "gltf"]:
-				file["role"] = "preview"
-		return "model3d"
-	if exts.any(func(e: String) -> bool: return e in ["wav", "mp3", "ogg"]):
-		return "sound"
-	return "image"
+## A workflow's files by the lane that places them: a GLB or glTF on the 3D
+## lane with the images as its previews (else the images on the Image lane),
+## and sounds on the Sound lane. {lane_id: [file, ...]}
+static func groups(files: Array) -> Dictionary:
+	var models: Array = []
+	var sounds: Array = []
+	var images: Array = []
+	for file in files:
+		match str(file["path"]).get_extension().to_lower():
+			"glb", "gltf":
+				models.append(file)
+			"wav", "mp3", "ogg":
+				sounds.append(file)
+			_:
+				images.append(file)
+	var out := {}
+	if not models.is_empty():
+		for image in images:
+			image["role"] = "preview"
+		out["model3d"] = models + images
+	elif not images.is_empty():
+		out["image"] = images
+	if not sounds.is_empty():
+		out["sound"] = sounds
+	return out
+
+
+## The download format to ask for: GLB for a 3D asset, as the 3D lane does;
+## "" keeps the original.
+static func download_format(asset: Dictionary) -> String:
+	var metadata: Variant = asset.get("metadata")
+	var type := str(metadata.get("type", "")) if metadata is Dictionary else ""
+	return "glb" if str(asset.get("mimeType", "")).begins_with("model/") or type.contains("3d") else ""

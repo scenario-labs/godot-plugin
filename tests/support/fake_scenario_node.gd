@@ -28,6 +28,12 @@ const OUTPUTS := {
 	],
 	"skybox": [{"id": "asset_sky001", "file": "sky.bin", "mime": "image/jpeg", "type": "skybox-base-360"}],
 	"sound": [{"id": "asset_snd001", "file": "sound.bin", "mime": "audio/mpeg", "type": "txt2audio"}],
+	# A workflow returning an image, a model and a sound.
+	"mixed": [
+		{"id": "asset_mixprv", "file": "image.bin", "mime": "image/png", "type": "inference-txt2img"},
+		{"id": "asset_mixglb", "file": "model.bin", "mime": "model/gltf-binary", "type": "inference-txt23d"},
+		{"id": "asset_mixsnd", "file": "sound.bin", "mime": "audio/mpeg", "type": "txt2audio"},
+	],
 }
 const MODEL_LANE := {
 	"model_openai-gpt-image-2-5-flare": "image",
@@ -43,6 +49,7 @@ const WORKFLOWS := {
 	"private": [
 		{"id": "workflow_prop3d", "name": "Prop to 3D", "status": "ready", "description": "Concept image, then a textured GLB"},
 		{"id": "workflow_wip", "name": "Work in progress", "status": "draft"},
+		{"id": "workflow_kit", "name": "Prop Kit", "status": "ready", "description": "Image, model and sound"},
 	],
 	"public": [
 		{"id": "workflow_pubsfx", "name": "Foley Pack", "status": "ready", "description": "Three takes of one sound"},
@@ -59,12 +66,13 @@ const WORKFLOW_INPUTS := {
 		{"name": "extraSteps", "type": "inputs_array"},
 	],
 	"workflow_pubsfx": [{"name": "prompt", "type": "string", "required": true}],
+	"workflow_kit": [{"name": "prompt", "type": "string", "required": true}],
 	"workflow_pubbatch": [
 		{"name": "prompt", "type": "string", "required": true},
 		{"name": "sprites", "type": "inputs_array", "required": true},
 	],
 }
-const WORKFLOW_LANE := {"workflow_prop3d": "model3d", "workflow_pubsfx": "sound", "workflow_pubbatch": "image"}
+const WORKFLOW_LANE := {"workflow_prop3d": "model3d", "workflow_pubsfx": "sound", "workflow_pubbatch": "image", "workflow_kit": "mixed"}
 
 ## What teams_list returns.
 var teams: Array = [
@@ -107,6 +115,8 @@ var tool_log: Array = []
 var awaiting := {}
 ## The next paid workflow run reaches Scenario but its reply is lost (a timeout).
 var drop_next_paid := false
+## workflows_list finds nothing (a project without workflows).
+var no_workflows := false
 ## jobs_list answers per project: {project_id: [job, ...]}.
 var listed := {}
 var _jobs := {}
@@ -149,7 +159,7 @@ func post(url: String, headers: PackedStringArray, body: String, _timeout_s: flo
 			_jobs[job_id] = MODEL_LANE.get(str(args["model_id"]), "image")
 			return _reply(payload["id"], _tool({"model_id": args["model_id"], "job_id": job_id, "status": "queued"}))
 		"workflows_list":
-			return _reply(payload["id"], _tool({"workflows": WORKFLOWS.get(str(args.get("privacy", "private")), [])}))
+			return _reply(payload["id"], _tool({"workflows": [] if no_workflows else WORKFLOWS.get(str(args.get("privacy", "private")), [])}))
 		"workflow_get":
 			var workflow_id := str(args["workflow_id"])
 			# As MCP returns it: the API's inputs renamed inputs_definition.
