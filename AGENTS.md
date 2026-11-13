@@ -36,8 +36,9 @@ In `addons/scenario/`:
   - `loopback.gd`: one-shot listener on a free 127.0.0.1 port for the redirect.
   - `oauth_session.gd`: access token in memory, one refresh at a time, the
     chosen team and project that every MCP call carries.
-  - `credentials.gd`: environment, macOS Keychain (`security -i` over stdin),
-    or a 0600 file in the editor config folder.
+  - `credentials.gd`: environment, the system store (macOS Keychain, Windows
+    Credential Manager, Linux `secret-tool`; secrets over stdin), or a 0600
+    file in the editor config folder.
   - `files.gd`: output names, roles from asset metadata, file type from bytes.
   - `errors.gd`: error kinds and user messages.
 - `editor/`:
