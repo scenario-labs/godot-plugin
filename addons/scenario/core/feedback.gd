@@ -12,6 +12,9 @@ const MAX_EMAIL := 254
 
 ## Kept until a send succeeds, so trying again is the same submission.
 var submission_id := ""
+## What the submission is tied to: "email", "install" or "". A retry that changes
+## it is a new submission, so an address and the install ID never share one.
+var _carries := ""
 
 
 ## What is wrong with the form, or "".
@@ -30,12 +33,14 @@ static func problem(rating: int, message: String, email: String) -> String:
 ## install_id: the usage install ID while sharing is on, else "" (left out). It is
 ## also left out when an email is given, so no address is ever tied to usage data.
 func payload(rating: int, message: String, email: String, install_id: String = "") -> Dictionary:
-	if submission_id.is_empty():
+	var carries := "email" if not email.strip_edges().is_empty() else ("install" if not install_id.is_empty() else "")
+	if submission_id.is_empty() or carries != _carries:
 		submission_id = Usage.new_id()
+		_carries = carries
 	var body := {"submission_id": submission_id, "context": Usage.context(), "rating": rating, "message": message.strip_edges()}
-	if not email.strip_edges().is_empty():
+	if carries == "email":
 		body["email"] = email.strip_edges()
-	elif not install_id.is_empty():
+	elif carries == "install":
 		body["install_id"] = install_id
 	return body
 
