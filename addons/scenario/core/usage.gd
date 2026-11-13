@@ -17,9 +17,9 @@ const MAX_QUEUE := 500
 const MAX_BATCH := 100
 ## A batch goes out when this many events wait, else on the reporter's timer.
 const FLUSH_AT := 50
-const LANES := ["image", "model3d", "material", "skybox", "sound"]
+const LANES := ["image", "model3d", "material", "skybox", "sound", "workflow"]
 const REQUESTS := ["price_check", "generate", "cancel", "import", "upload_reference", "recommend",
-	"list_teams", "check_unknown", "check_key", "model_settings"]
+	"list_teams", "list_jobs", "check_key", "model_settings", "list_workflows", "list_project_models", "browse_library"]
 const ERROR_KINDS := [Errors.AUTH, Errors.FORBIDDEN, Errors.QUOTA, Errors.MODERATED, Errors.RATE_LIMIT,
 	Errors.NOT_FOUND, Errors.INVALID, Errors.TRANSPORT, Errors.TIMEOUT, Errors.HTTP_5XX, Errors.PROTOCOL,
 	Errors.LOCAL, Errors.ESTIMATE_JOB, Errors.SCENARIO]

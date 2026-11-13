@@ -80,7 +80,7 @@ func run() -> Dictionary:
 	controller.client.set_credentials("api_bad", "sec_bad")
 	controller.account = {"api_key": "api_bad", "source": "test", "method": "api_key"}
 	controller.changed.emit()
-	reporter._on_called("jobs_list", {"page_size": 1}, false, "auth", 40)
+	reporter._on_called("jobs_list", {"limit": 1}, false, "auth", 40)
 	var connections: Array = reporter.usage.queue.filter(func(e: Dictionary) -> bool: return e["event"] == "connected")
 	var key_checks: Array = reporter.usage.queue.filter(func(e: Dictionary) -> bool:
 		return e["event"] == "scenario_request" and e["properties"]["request"] == "check_key")

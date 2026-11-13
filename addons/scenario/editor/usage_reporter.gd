@@ -20,9 +20,10 @@ const SEND_TIMEOUT_S := 10.0
 ## Tool -> what the dock was doing. Calls not listed (job polling, asset reads)
 ## are not recorded.
 const REQUESTS := {
-	"model_run": "generate", "job_cancel": "cancel", "asset_download": "import",
+	"model_run": "generate", "workflow_run": "generate", "job_cancel": "cancel", "asset_download": "import",
 	"upload_asset": "upload_reference", "recommend": "recommend", "teams_list": "list_teams",
-	"jobs_list": "check_unknown", "model_schema_get": "model_settings",
+	"jobs_list": "list_jobs", "model_schema_get": "model_settings", "workflow_get": "model_settings",
+	"workflows_list": "list_workflows", "models_list": "list_project_models", "scenario_tool_execute_read": "browse_library",
 }
 
 var usage: Usage
@@ -134,9 +135,9 @@ func _on_called(tool: String, arguments: Dictionary, ok: bool, error_kind: Strin
 	if not REQUESTS.has(tool):
 		return
 	var request: String = REQUESTS[tool]
-	if tool == "model_run" and bool(arguments.get("dry_run", false)):
+	if tool in ["model_run", "workflow_run"] and bool(arguments.get("dry_run", false)):
 		request = "price_check"
-	elif tool == "jobs_list" and int(arguments.get("page_size", 0)) == 1:
+	elif tool == "jobs_list" and int(arguments.get("limit", 0)) == 1:
 		request = "check_key"  # connect_account's free check of a new key
 	var properties := {"request": request, "outcome": "ok" if ok else "error", "duration_ms": duration_ms}
 	if not ok:
