@@ -172,6 +172,15 @@ test("is unavailable without the project token or the survey id", async () => {
   assert.deepEqual(received, []);
 });
 
+test("a table full of addresses still lets a new one in", async () => {
+  for (let i = 0; i < 10_000; i++) {
+    await send("/telemetry/v1/feedback", undefined, { headers: { "x-forwarded-for": `10.${(i >> 16) & 255}.${(i >> 8) & 255}.${i & 255}` } });
+  }
+  const late = await send("/telemetry/v1/feedback", { submission_id: SUBMISSION, rating: 3, message: "" },
+    { headers: { "x-forwarded-for": "198.51.100.9" } });
+  assert.equal(late.status, 200, "one sender with many addresses cannot lock everyone out");
+});
+
 test("answers only POST on the two endpoints", async () => {
   assert.equal((await send("/telemetry/v1/events", undefined, { method: "GET" })).status, 405);
   assert.equal((await send("/telemetry/v1/other", {})).status, 404);
