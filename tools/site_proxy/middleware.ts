@@ -132,7 +132,7 @@ const count = (max: number): Check => (value) => Number.isInteger(value) && (val
 const amount: Check = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1_000_000;
 const text = (pattern: RegExp): Check => (value) => typeof value === "string" && pattern.test(value);
 
-const LANES = oneOf("image", "model3d", "material", "skybox", "sound");
+const LANES = oneOf("image", "model3d", "material", "skybox", "sound", "workflow");
 const ERROR_KINDS = oneOf("auth", "forbidden", "quota", "moderated", "rate_limit", "not_found", "invalid", "transport",
   "timeout", "http_5xx", "protocol", "local", "estimate_job", "scenario");
 // Each event the plugin may send, with the only properties kept and their checks.
@@ -141,7 +141,7 @@ export const EVENTS: Record<string, Record<string, Check>> = {
   connected: { method: oneOf("sign_in", "api_key", "environment") },
   scenario_request: {
     request: oneOf("price_check", "generate", "cancel", "import", "upload_reference", "recommend", "list_teams",
-      "check_unknown", "check_key", "model_settings"),
+      "list_jobs", "check_key", "model_settings", "list_workflows", "list_project_models", "browse_library"),
     outcome: oneOf("ok", "error"),
     error_kind: ERROR_KINDS,
     duration_ms: count(3_600_000),

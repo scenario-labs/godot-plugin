@@ -109,7 +109,7 @@ While it is on, the plugin keeps a random install ID in the editor settings fold
 
 - that the plugin started;
 - that the dock is connected, and how (Sign in with Scenario, a saved key or environment variables), once Scenario accepts it: at startup, on each sign-in and when sharing starts;
-- which Scenario requests the dock makes (price check, generate, cancel, import, reference upload, recommendations, team list, unknown-job check, key check, model settings), whether each worked, the error type and how long it took;
+- which Scenario requests the dock makes (price check, generate, cancel, import, reference upload, recommendations, team list, job list, key check, model settings, workflow list, project models list, Library browsing), whether each worked, the error type and how long it took;
 - each generation's lane, its quoted CU when sent, and its end state (done, failed, blocked, canceled, rejected or dismissed) and charged CU.
 
 Each batch adds the plugin and Godot versions, the operating system and the processor type. It never sends prompts, file paths, scene or node names, model, asset, job, team or project IDs, or your key. Events go to `https://godot.scenario.com/telemetry/v1/events`, which adds the country Vercel derives from your address, drops any other event or field, and forwards the rest to Scenario's PostHog project without your address. Turning the setting off discards unsent events and deletes the ID. A headless editor (scripts, CI) never sends them.
