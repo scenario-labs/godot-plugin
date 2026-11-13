@@ -43,6 +43,10 @@ const SUBMIT_TOOLS := [
 ## Calls that find the team and project, so they never carry one.
 const UNSCOPED_TOOLS := ["teams_list", "projects_list"]
 
+## Every tool call's outcome, for opt-in usage data (editor/usage_reporter.gd).
+## Only the tool name and outcome: never its arguments or result.
+signal called(tool: String, dry_run: bool, ok: bool, error_kind: String, duration_ms: int)
+
 ## SCENARIO_MCP_URL names a development instance's MCP, with SCENARIO_OAUTH_*.
 var endpoint := _endpoint_from_environment()
 var transport: Object
@@ -302,6 +306,14 @@ func upload_complete(arguments: Dictionary) -> Dictionary:
 # --- Tool call core -----------------------------------------------------------
 
 func call_tool(tool: String, arguments: Dictionary = {}, timeout_s: float = DEFAULT_TIMEOUT_S) -> Dictionary:
+	var started := Time.get_ticks_msec()
+	var result: Dictionary = await _call_tool(tool, arguments, timeout_s)
+	var kind := "" if result["ok"] else str(result["error"].get("kind", ""))
+	called.emit(tool, bool(arguments.get("dry_run", false)), result["ok"], kind, Time.get_ticks_msec() - started)
+	return result
+
+
+func _call_tool(tool: String, arguments: Dictionary, timeout_s: float) -> Dictionary:
 	if not has_credentials():
 		return Errors.fail(Errors.AUTH, "Sign in to Scenario first.")
 	var submit_call := is_submission(tool, arguments)

@@ -80,8 +80,8 @@ async function visit(path: string, headers: Record<string, string> = {}, method 
 
 const propertiesOf = (index: number) => received[index].body.properties as Record<string, unknown>;
 
-test("runs only for the download directory", () => {
-  assert.equal(config.matcher, "/download/:path*");
+test("runs only for the download directory and the telemetry relay", () => {
+  assert.deepEqual(config.matcher, ["/download/:path*", "/telemetry/:path*"]);
   assert.equal(config.runtime, "nodejs");
 });
 
