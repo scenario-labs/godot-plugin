@@ -6,12 +6,15 @@ extends EditorPlugin
 const Controller := preload("res://addons/scenario/editor/controller.gd")
 const DockUI := preload("res://addons/scenario/editor/dock_ui.gd")
 const HttpTransport := preload("res://addons/scenario/editor/http_transport.gd")
+const UsageReporter := preload("res://addons/scenario/editor/usage_reporter.gd")
 
 const LEDGER_PATH := "res://.godot/scenario/jobs.json"
 const SETTING_CONFIRM := "scenario/confirm_above_cu"
 const SETTING_AUTO_IMPORT := "scenario/auto_import"
+const SETTING_SHARE_USAGE := "scenario/share_anonymous_usage_data"
 
 var controller: Controller
+var reporter: UsageReporter
 var dock: EditorDock
 var ui: DockUI
 
@@ -23,10 +26,17 @@ func _enter_tree() -> void:
 	add_child(controller)
 	var config_dir := EditorInterface.get_editor_paths().get_config_dir()
 	controller.setup(HttpTransport.new(), LEDGER_PATH, config_dir.path_join("scenario/credentials.json"))
+	reporter = UsageReporter.new()
+	add_child(reporter)
+	reporter.setup(controller, controller.transport, config_dir.path_join("scenario/usage.json"))
+	reporter.sharing_chosen.connect(func(share: bool) -> void:
+		EditorInterface.get_editor_settings().set_setting(SETTING_SHARE_USAGE, share))
 	_apply_settings()
+	reporter.start()
 	EditorInterface.get_editor_settings().settings_changed.connect(_apply_settings)
 
 	ui = DockUI.new()
+	ui.reporter = reporter
 	ui.bind(controller)
 	dock = EditorDock.new()
 	dock.title = "Scenario"
@@ -52,6 +62,9 @@ func _exit_tree() -> void:
 		remove_dock(dock)
 		dock.queue_free()
 		dock = null
+	if reporter != null:
+		reporter.queue_free()
+		reporter = null
 	if controller != null:
 		controller.queue_free()
 		controller = null
@@ -67,9 +80,17 @@ func _register_settings() -> void:
 		settings.set_setting(SETTING_AUTO_IMPORT, true)
 	settings.set_initial_value(SETTING_AUTO_IMPORT, true, false)
 	settings.add_property_info({"name": SETTING_AUTO_IMPORT, "type": TYPE_BOOL})
+	# Off until the person opts in: the dock asks once after the first connection.
+	if not settings.has_setting(SETTING_SHARE_USAGE):
+		settings.set_setting(SETTING_SHARE_USAGE, false)
+	settings.set_initial_value(SETTING_SHARE_USAGE, false, false)
+	settings.add_property_info({"name": SETTING_SHARE_USAGE, "type": TYPE_BOOL})
 
 
 func _apply_settings() -> void:
 	var settings := EditorInterface.get_editor_settings()
 	controller.confirm_above_cu = float(settings.get_setting(SETTING_CONFIRM))
 	controller.auto_import = bool(settings.get_setting(SETTING_AUTO_IMPORT))
+	var share := bool(settings.get_setting(SETTING_SHARE_USAGE))
+	if share != reporter.usage.enabled:
+		reporter.set_sharing(share)
