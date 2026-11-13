@@ -21,7 +21,7 @@ const _KEYS := {"allowedValues": "allowed_values", "maxLength": "max_length", "c
 
 
 static func is_workflow(id: String) -> bool:
-	return id.begins_with("workflow_")
+	return id.begins_with("wflow_")
 
 
 ## Ready workflows from workflows_list rows, as model picker entries.

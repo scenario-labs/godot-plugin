@@ -65,8 +65,8 @@ func run() -> Dictionary:
 
 	# The lane lists the project's ready workflows, then public ones.
 	var ids: Array = controller.lane_models().map(func(m: Dictionary) -> String: return m["id"])
-	check("ready workflows listed, drafts left out", ids == ["workflow_prop3d", "workflow_kit", "workflow_pubsfx", "workflow_pubbatch"])
-	check("first workflow selected", controller.model_id == "workflow_prop3d")
+	check("ready workflows listed, drafts left out", ids == ["wflow_prop3d", "wflow_kit", "wflow_pubsfx", "wflow_pubbatch"])
+	check("first workflow selected", controller.model_id == "wflow_prop3d")
 	await wait_frames(1)
 	check("dock: Refresh in place of More", ui._more_button.visible and ui._more_button.text == "Refresh")
 	check("dock: the workflow's inputs as fields", ui._field_widgets.get("objectPrompt") is TextEdit
@@ -80,12 +80,12 @@ func run() -> Dictionary:
 		and priced.get("arguments", {}).get("dry_run") == true)
 	check("dry run carries the inputs", priced.get("arguments", {}).get("inputs", {}).get("objectPrompt") == "a brass lantern")
 	var sent: Dictionary = await controller.generate()
-	check("one paid run", sent.get("ok", false) and fake.paid_calls.size() == 1 and fake.paid_calls[0].get("workflow_id") == "workflow_prop3d"
+	check("one paid run", sent.get("ok", false) and fake.paid_calls.size() == 1 and fake.paid_calls[0].get("workflow_id") == "wflow_prop3d"
 		and not fake.paid_calls[0].has("dry_run"))
 	var again: Dictionary = await controller.generate()
 	check("no second run without a new quote", not again.get("ok", false) and fake.paid_calls.size() == 1)
 	var row := controller.ledger.find(sent.get("local_id", ""))
-	check("ledger row for the workflow", row.get("lane") == "workflow" and row.get("model_id") == "workflow_prop3d" and row.get("prompt") == "a brass lantern")
+	check("ledger row for the workflow", row.get("lane") == "workflow" and row.get("model_id") == "wflow_prop3d" and row.get("prompt") == "a brass lantern")
 
 	# A pause for a person is reported once, then the run finishes.
 	fake.awaiting[str(row.get("job_id", ""))] = 2
@@ -114,7 +114,7 @@ func run() -> Dictionary:
 	check("files under the workflow folder", row.get("files", []).all(func(f: String) -> bool: return f.contains("/scenario/workflow/")))
 
 	# A sound workflow: placed as a player.
-	await controller.select_model("workflow_pubsfx")
+	await controller.select_model("wflow_pubsfx")
 	controller.set_value("prompt", "door creak")
 	await controller.estimate_now()
 	var sound: Dictionary = await controller.generate()
@@ -128,7 +128,7 @@ func run() -> Dictionary:
 	# Image, model and sound from one run: each placed by its lane, the model asked for as GLB.
 	var players_before := scene.find_children("*", "AudioStreamPlayer3D", true, false).size()
 	var models_before := _models(scene)
-	await controller.select_model("workflow_kit")
+	await controller.select_model("wflow_kit")
 	controller.set_value("prompt", "camp kit")
 	await controller.estimate_now()
 	var kit: Dictionary = await controller.generate()
@@ -147,19 +147,19 @@ func run() -> Dictionary:
 		str(kit_placed.get("message", "")).contains("1 file(s) Godot cannot import"))
 	check("the prompt box is the prompt, not the negative prompt", controller.Form.prompt_name(controller.fields) == "prompt")
 	await controller.rerun(kit.get("local_id", ""))
-	check("re-run keeps the workflow, even with a modelId input", controller.model_id == "workflow_kit")
+	check("re-run keeps the workflow, even with a modelId input", controller.model_id == "wflow_kit")
 
 	# Refresh lists again and reads the chosen workflow's inputs again, keeping it chosen.
 	var gets_before := fake.calls.filter(func(c: Dictionary) -> bool: return c["tool"] == "workflow_get").size()
 	await controller.load_recommendations()
-	check("Refresh re-reads the inputs and keeps the workflow", controller.model_id == "workflow_kit"
+	check("Refresh re-reads the inputs and keeps the workflow", controller.model_id == "wflow_kit"
 		and fake.calls.filter(func(c: Dictionary) -> bool: return c["tool"] == "workflow_get").size() == gets_before + 1)
 
 	# Another account: its own workflows are listed, the old choice is dropped.
 	var lists_before := fake.calls.filter(func(c: Dictionary) -> bool: return c["tool"] == "workflows_list").size()
 	controller._use_account("api_other", "sec_other", "test")
 	await wait_frames(5)
-	check("another account lists again and starts from its first workflow", controller.model_id == "workflow_prop3d"
+	check("another account lists again and starts from its first workflow", controller.model_id == "wflow_prop3d"
 		and fake.calls.filter(func(c: Dictionary) -> bool: return c["tool"] == "workflows_list").size() > lists_before)
 
 	# A project with no workflow: guidance, and no price check for an empty model.
@@ -174,14 +174,14 @@ func run() -> Dictionary:
 
 	# An input the dock cannot fill: no price, nothing sent.
 	var estimates_before := fake.estimates
-	await controller.select_model("workflow_pubbatch")
+	await controller.select_model("wflow_pubbatch")
 	controller.set_value("prompt", "slimes")
 	await controller.estimate_now()
 	check("unfillable input blocks the price", controller.price_state == Controller.PRICE_INVALID
 		and controller.price_message.contains("run this workflow on Scenario") and fake.estimates == estimates_before)
 
 	# A price check that returns a job stops automatic checks, and one already debounced sends nothing.
-	await controller.select_model("workflow_prop3d")
+	await controller.select_model("wflow_prop3d")
 	controller.set_value("objectPrompt", "a tin cup")
 	fake.estimate_job = "job_surprise"
 	await controller.estimate_now()
@@ -192,7 +192,7 @@ func run() -> Dictionary:
 	check("a debounced check after that sends nothing", fake.estimates == dry_runs_before and controller.price_state == Controller.PRICE_OFF)
 
 	# SCENARIO_NO_SPEND: priced, never run.
-	await controller.select_model("workflow_prop3d")
+	await controller.select_model("wflow_prop3d")
 	controller.set_value("objectPrompt", "a copper kettle")
 	await controller.estimate_now()
 	controller.client.spending_disabled = true
