@@ -190,7 +190,8 @@ function allowed(endpoint: Endpoint, request: Request, now: number): boolean {
   }
   if (!entry && rateWindows.size >= MAX_CLIENTS) {
     for (const [old, window] of rateWindows) if (now - window.start >= RATE_WINDOW_MS) rateWindows.delete(old);
-    if (rateWindows.size >= MAX_CLIENTS) return false;
+    // Still full: forget the oldest window rather than refuse every new address.
+    if (rateWindows.size >= MAX_CLIENTS) rateWindows.delete(rateWindows.keys().next().value as string);
   }
   rateWindows.set(key, { start: now, count: 1 });
   return true;
