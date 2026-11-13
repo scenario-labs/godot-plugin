@@ -95,6 +95,16 @@ func test_outputs_are_placed_by_file_type() -> void:
 	assert_eq(Workflows.groups([]), {})
 
 
+func test_panoramas_maps_and_unlabelled_images_reach_a_lane_that_places_them() -> void:
+	var sky := {"path": "res://a/sky.jpg", "role": "panorama"}
+	var albedo := {"path": "res://a/al.png", "role": "albedo"}
+	var normal := {"path": "res://a/no.png", "role": "normal"}
+	assert_eq(Workflows.groups([sky, albedo, normal]), {"skybox": [sky], "material": [albedo, normal]})
+	var odd := {"path": "res://a/x.png", "role": "preview"}
+	assert_eq(Workflows.groups([odd]), {"image": [odd]})
+	assert_eq(odd["role"], "main", "the Image lane places a main image")
+
+
 func test_3d_outputs_are_downloaded_as_glb() -> void:
 	assert_eq(Workflows.download_format({"mimeType": "model/gltf-binary"}), "glb")
 	assert_eq(Workflows.download_format({"mimeType": "application/octet-stream", "metadata": {"type": "inference-txt23d"}}), "glb")
