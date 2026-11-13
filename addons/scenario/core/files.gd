@@ -153,5 +153,30 @@ static func today() -> String:
 	return "%04d-%02d-%02d" % [d["year"], d["month"], d["day"]]
 
 
+## The first bytes of a file, for sniff_extension.
+static func head(path: String) -> PackedByteArray:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return PackedByteArray()
+	var bytes := file.get_buffer(16)
+	file.close()
+	return bytes
+
+
+## Writes the job's record next to its first file: what made it and for how much.
+static func write_provenance(row: Dictionary, assets: Array, path: String, generator: String) -> void:
+	var record := {
+		"generator": generator,
+		"job_id": row["job_id"], "model_id": row["model_id"], "lane": row["lane"],
+		"prompt": row["prompt"], "parameters": row["parameters"],
+		"quoted_cu": row["quoted_cu"], "charged_cu": row["charged_cu"],
+		"assets": assets, "imported_at": Time.get_datetime_string_from_system(true) + "Z",
+	}
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file != null:
+		file.store_string(JSON.stringify(record, "\t"))
+		file.close()
+
+
 static func _ascii(bytes: PackedByteArray, start: int, length: int) -> String:
 	return bytes.slice(start, start + length).get_string_from_ascii()

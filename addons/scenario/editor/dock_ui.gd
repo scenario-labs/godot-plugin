@@ -371,12 +371,19 @@ func _refresh_models() -> void:
 	var models := controller.lane_models()
 	_model_option.clear()
 	var note := ""
-	for i in models.size():
-		_model_option.add_item(models[i]["name"], i)
-		_model_option.set_item_metadata(i, models[i]["id"])
-		if models[i]["id"] == controller.model_id:
-			_model_option.select(i)
-			note = models[i].get("note", "")
+	var picked := controller.picked_model()
+	var grouped := false
+	for model in models:
+		if model.has("lanes") and not grouped:  # the project's own models follow
+			_model_option.add_separator("Project models")
+			grouped = true
+		_model_option.add_item(model["name"])
+		_model_option.set_item_metadata(_model_option.item_count - 1, model["id"])
+		if model["id"] == picked:
+			_model_option.select(_model_option.item_count - 1)
+			note = model.get("note", "")
+	if controller.project_models.loading:
+		note += ("\n" if not note.is_empty() else "") + "Reading this project's models..."
 	_model_note.text = "Loading the model's settings..." if controller.model_loading else note
 
 
