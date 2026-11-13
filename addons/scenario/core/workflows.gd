@@ -12,7 +12,9 @@ const Form := preload("res://addons/scenario/core/schema_form.gd")
 ## Input types the dock has no widget for. An optional one is left to the
 ## workflow's default; a required one blocks the price check.
 const UNSUPPORTED := ["inputs_array", "number_array", "model_array"]
-## Roles of PBR maps (Files.ROLES): a set of them is a material.
+## The group of files saved in the project but placed nowhere.
+const FILES_ONLY := "files"
+## Roles of PBR maps (Files.ROLES): with a color map, they make a material.
 const MAP_ROLES := ["normal", "roughness", "metallic", "height", "ao"]
 ## API input keys (camelCase) renamed to the schema_form ones.
 const _KEYS := {"allowedValues": "allowed_values", "maxLength": "max_length", "costImpact": "cost_impact"}
@@ -107,8 +109,12 @@ static func groups(files: Array) -> Dictionary:
 		var rest := images.filter(func(f: Dictionary) -> bool: return f["role"] != "panorama")
 		if not panoramas.is_empty():
 			out["skybox"] = panoramas
-		if rest.any(func(f: Dictionary) -> bool: return f["role"] in MAP_ROLES):
+		var has_color := rest.any(func(f: Dictionary) -> bool: return f["role"] in ["main", "base", "albedo"])
+		var has_maps := rest.any(func(f: Dictionary) -> bool: return f["role"] in MAP_ROLES)
+		if has_maps and has_color:
 			out["material"] = rest
+		elif has_maps:
+			out[FILES_ONLY] = rest  # maps without a color map make no material: saved, not placed
 		elif not rest.is_empty():
 			if not rest.any(func(f: Dictionary) -> bool: return f["role"] in ["main", "base", "albedo"]):
 				rest[0]["role"] = "main"  # the Image lane places a main, base or albedo image

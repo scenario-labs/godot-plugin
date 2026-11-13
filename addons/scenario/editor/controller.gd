@@ -826,7 +826,8 @@ func import_job(local_id: String) -> Dictionary:
 	var placed := {"ok": true, "message": "", "resource_paths": []}
 	for place_lane in groups:
 		await placer.import_files(place_lane, groups[place_lane])
-		var one := placer.place(place_lane, groups[place_lane], Files.node_name(row["prompt"]))
+		var one := placer.place(place_lane, groups[place_lane], Files.node_name(row["prompt"])) if place_lane != Workflows.FILES_ONLY \
+			else {"ok": true, "message": "Saved %d texture maps (no color map to make a material)." % groups[place_lane].size(), "resource_paths": []}
 		placed = {"ok": placed["ok"] and one["ok"], "message": (placed["message"] + " " + one["message"]).strip_edges(),
 			"resource_paths": placed["resource_paths"] + one["resource_paths"]}
 	var paths: Array = files.map(func(f: Dictionary) -> String: return f["path"])
