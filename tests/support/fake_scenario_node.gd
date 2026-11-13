@@ -56,6 +56,8 @@ var project_models: Array = [
 	{"id": "model_projsdxl01", "name": "Old SDXL LoRA", "type": "sd-xl-lora", "privacy": "private", "status": "trained",
 		"capabilities": ["txt2img"]},
 ]
+## Tools whose next call fails (model_schema_get, models_list), once each.
+var failing: Array = []
 ## Polls of the device grant answered "authorization_pending" before the tokens.
 var device_pending := 0
 ## Every tool call: {"tool", "arguments", "authorization"}.
@@ -97,7 +99,13 @@ func post(url: String, headers: PackedStringArray, body: String, _timeout_s: flo
 		"teams_list":
 			return _reply(payload["id"], _tool({"teams": teams}))
 		"model_schema_get":
+			if failing.has(tool):
+				failing.erase(tool)
+				return _reply(payload["id"], {"content": [{"type": "text", "text": "Model not found."}], "isError": true})
 			return _reply(payload["id"], _tool(_schema(str(args["model_id"]))))
+		"models_list" when failing.has(tool):
+			failing.erase(tool)
+			return _reply(payload["id"], {"content": [{"type": "text", "text": "Project not found."}], "isError": true})
 		"model_run":
 			if args.get("dry_run", false):
 				estimates += 1

@@ -46,10 +46,10 @@ func load(client: Object) -> void:
 	if serial != _serial:
 		return
 	loading = false
-	loaded = true
 	if not result["ok"]:
-		error = str(result["error"]["message"])
+		error = str(result["error"]["message"])  # loaded stays false: the next start reads again
 		return
+	loaded = true
 	entries = []
 	for record in result["value"]:
 		var entry := entry_for(record)
