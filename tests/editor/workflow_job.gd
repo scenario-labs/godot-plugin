@@ -31,8 +31,8 @@ func run() -> Dictionary:
 	DirAccess.copy_absolute(ProjectSettings.globalize_path("res://main.tscn"), ProjectSettings.globalize_path(scene_path))
 	var scene := await open_scratch_scene(scene_path)
 	check("scratch scene open", scene != null and scene.scene_file_path == scene_path)
-	if scene == null:
-		return {"ok": false, "failures": failures}
+	if scene == null or scene.scene_file_path != scene_path:
+		return {"ok": false, "failures": failures}  # never place into, or save, another scene
 
 	var fake := Fake.new()
 	root.add_child(fake)
@@ -50,10 +50,22 @@ func run() -> Dictionary:
 	root.add_child(ui)
 	ui.bind(controller)
 
-	# The lane lists the project's ready workflows, then public ones.
+	# Entering the lane from a priced model: nothing stays priced while the list loads.
+	await controller.select_lane("image")
+	controller.set_value("prompt", "a chest")
+	await controller.estimate_now()
+	var first_seen: Array = []
+	var probe := func() -> void:
+		if first_seen.is_empty():
+			first_seen.append_array([controller.model_id, controller.price_state, controller.quotes.usable(controller.fingerprint(), Time.get_unix_time_from_system()).is_empty()])
+	controller.changed.connect(probe)
 	await controller.select_lane("workflow")
+	controller.changed.disconnect(probe)
+	check("previous form not priced while listing", first_seen == ["", Controller.PRICE_IDLE, true])
+
+	# The lane lists the project's ready workflows, then public ones.
 	var ids: Array = controller.lane_models().map(func(m: Dictionary) -> String: return m["id"])
-	check("ready workflows listed, drafts left out", ids == ["workflow_prop3d", "workflow_pubsfx", "workflow_pubbatch"])
+	check("ready workflows listed, drafts left out", ids == ["workflow_prop3d", "workflow_kit", "workflow_pubsfx", "workflow_pubbatch"])
 	check("first workflow selected", controller.model_id == "workflow_prop3d")
 	await wait_frames(1)
 	check("dock: Refresh in place of More", ui._more_button.visible and ui._more_button.text == "Refresh")
@@ -107,6 +119,45 @@ func run() -> Dictionary:
 	await controller.import_job(sound.get("local_id", ""))
 	check("sound output placed as a player", _first_of(scene, "AudioStreamPlayer3D") != null or _first_of(scene, "AudioStreamPlayer") != null)
 
+	# Image, model and sound from one run: each placed by its lane, the model asked for as GLB.
+	var players_before := scene.find_children("*", "AudioStreamPlayer3D", true, false).size()
+	var models_before := _models(scene)
+	await controller.select_model("workflow_kit")
+	controller.set_value("prompt", "camp kit")
+	await controller.estimate_now()
+	var kit: Dictionary = await controller.generate()
+	await controller.poll()
+	EditorInterface.get_selection().clear()
+	var kit_placed: Dictionary = await controller.import_job(kit.get("local_id", ""))
+	check("mixed run: model and sound both placed", kit_placed.get("ok", false) and _models(scene) == models_before + 1
+		and scene.find_children("*", "AudioStreamPlayer3D", true, false).size() == players_before + 1)
+	var glb_download := fake.calls.filter(func(c: Dictionary) -> bool: return c["tool"] == "asset_download" and c["arguments"]["asset_id"] == "asset_mixglb")
+	check("mixed run: the model downloaded as GLB, the rest as is", glb_download.size() == 1 and glb_download[0]["arguments"].get("format") == "glb"
+		and not _last_call(fake, "asset_download").get("arguments", {}).has("format"))
+
+	# Refresh lists again and reads the chosen workflow's inputs again, keeping it chosen.
+	var gets_before := fake.calls.filter(func(c: Dictionary) -> bool: return c["tool"] == "workflow_get").size()
+	await controller.load_recommendations()
+	check("Refresh re-reads the inputs and keeps the workflow", controller.model_id == "workflow_kit"
+		and fake.calls.filter(func(c: Dictionary) -> bool: return c["tool"] == "workflow_get").size() == gets_before + 1)
+
+	# Another account: its own workflows are listed, the old choice is dropped.
+	var lists_before := fake.calls.filter(func(c: Dictionary) -> bool: return c["tool"] == "workflows_list").size()
+	controller._use_account("api_other", "sec_other", "test")
+	await wait_frames(5)
+	check("another account lists again and starts from its first workflow", controller.model_id == "workflow_prop3d"
+		and fake.calls.filter(func(c: Dictionary) -> bool: return c["tool"] == "workflows_list").size() > lists_before)
+
+	# A project with no workflow: guidance, and no price check for an empty model.
+	fake.no_workflows = true
+	await controller.load_recommendations()
+	var checks_before := fake.estimates
+	await controller.estimate_now()
+	check("no workflow: guidance stays, nothing priced", controller.model_id == "" and controller.price_message.contains("No ready workflow")
+		and fake.estimates == checks_before)
+	fake.no_workflows = false
+	await controller.load_recommendations()
+
 	# An input the dock cannot fill: no price, nothing sent.
 	var estimates_before := fake.estimates
 	await controller.select_model("workflow_pubbatch")
@@ -120,8 +171,9 @@ func run() -> Dictionary:
 	controller.set_value("objectPrompt", "a copper kettle")
 	await controller.estimate_now()
 	controller.client.spending_disabled = true
+	var paid_before := fake.paid_calls.size()
 	var refused: Dictionary = await controller.generate()
-	check("no-spend refuses the run", not refused.get("ok", true) and fake.paid_calls.size() == 2)
+	check("no-spend refuses the run", not refused.get("ok", true) and fake.paid_calls.size() == paid_before)
 	controller.client.spending_disabled = false
 
 	# A transport failure on the run: Unknown, and the same request is blocked.
@@ -143,6 +195,11 @@ static func _last_call(fake: Fake, tool: String) -> Dictionary:
 		if fake.calls[i]["tool"] == tool:
 			return fake.calls[i]
 	return {}
+
+
+## Instanced GLB scenes anywhere under node (a placement goes under the selection).
+static func _models(node: Node) -> int:
+	return node.find_children("*", "Node3D", true, false).filter(func(n: Node) -> bool: return n.scene_file_path.ends_with(".glb")).size()
 
 
 static func _first_of(node: Node, type: String) -> Node:
