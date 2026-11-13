@@ -228,7 +228,9 @@ static func _first_of(node: Node, type: String) -> Node:
 
 
 func _abort(label: String) -> Dictionary:
-	check(label, false)
+	var current := EditorInterface.get_edited_scene_root()
+	check("%s (editing %s, open: %s)" % [label, current.scene_file_path if current != null else "nothing",
+		", ".join(EditorInterface.get_open_scenes())], false)
 	return {"ok": false, "checks": checks, "failures": failures}
 
 
