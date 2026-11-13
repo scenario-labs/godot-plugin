@@ -172,7 +172,7 @@ func run() -> Dictionary:
 	var kept: Dictionary = solo.credentials._read_config()
 	check("ended session: the dead token is forgotten, the project kept", solo.credentials.load_session(OAuth.PRODUCTION_ISSUER, OAuth.PRODUCTION_CLIENT_ID)["refresh_token"] == ""
 		and kept.get("workspace", {}).get("project_id") == "proj_solo")
-	ended_session.on_rotate.call("rt_late")
+	ended_session.on_rotate.call("", "rt_late")
 	check("a replaced session's late rotation is not saved", solo.credentials.load_session(OAuth.PRODUCTION_ISSUER, OAuth.PRODUCTION_CLIENT_ID)["refresh_token"] == "")
 	check("ended session: the dock shows sign-in", device_ui._connect_box.visible)
 

@@ -389,9 +389,9 @@ func _new_session(app: Dictionary, tokens: Dictionary) -> OAuthSession:
 
 ## Saves a rotated refresh token only for the session in use: a refresh that
 ## finishes after a sign-out or another sign-in must not replace the saved one.
-func _save_rotated(refresh_token: String, session: OAuthSession) -> void:
+func _save_rotated(previous: String, refresh_token: String, session: OAuthSession) -> void:
 	if client.session == session:
-		credentials.save_refresh_token(refresh_token)
+		credentials.save_refresh_token(session.oauth.issuer, session.oauth.client_id, previous, refresh_token)
 
 
 func _use_session(session: OAuthSession, source: String) -> void:

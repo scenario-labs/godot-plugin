@@ -28,7 +28,7 @@ var team_id := ""
 var team_name := ""
 var project_id := ""
 var project_name := ""
-## Called with the new refresh token after a rotation: (refresh_token: String) -> void
+## Called after a rotation: (previous: String, refresh_token: String) -> void
 var on_rotate := Callable()
 ## Returns the refresh token saved now ("" if none): () -> String
 var load_saved := Callable()
@@ -71,7 +71,7 @@ func refresh() -> Dictionary:
 		var rotated := str(result["value"]["refresh_token"]) != refresh_token()
 		tokens = result["value"]
 		if rotated and on_rotate.is_valid():
-			on_rotate.call(refresh_token())
+			on_rotate.call(sent, refresh_token())
 	elif result["error"].get("session_ended", false):
 		tokens = {}
 	_last_refresh = result

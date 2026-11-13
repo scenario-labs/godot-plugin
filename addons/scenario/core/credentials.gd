@@ -103,11 +103,14 @@ func save_session(issuer: String, client_id: String, refresh_token: String) -> D
 	return {"ok": ok, "store": oauth["secret_store"], "message": "" if ok else "Could not save the settings file."}
 
 
-## Saves the refresh token the provider rotated, where the session keeps it.
-func save_refresh_token(refresh_token: String) -> bool:
+## Saves the refresh token the provider rotated from previous, where the
+## session keeps it. Only over that same token of the same application: another
+## editor may have signed in since (to another instance, or another account),
+## and its session must not receive this one.
+func save_refresh_token(issuer: String, client_id: String, previous: String, refresh_token: String) -> bool:
 	var data := _read_config()
 	var oauth: Variant = data.get("oauth")
-	if not oauth is Dictionary or refresh_token.is_empty():
+	if not oauth is Dictionary or refresh_token.is_empty() or load_session(issuer, client_id)["refresh_token"] != previous:
 		return false
 	var account := _session_account(str(oauth.get("client_id", "")))
 	if oauth.get("secret_store") == "keychain" and _safe(refresh_token) and _keychain_write(account, refresh_token):

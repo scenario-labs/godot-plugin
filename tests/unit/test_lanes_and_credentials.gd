@@ -113,7 +113,11 @@ func test_session_round_trip_in_the_file_store() -> void:
 	assert_eq(saved["store"], "file")
 	assert_eq(store.load_credentials()["api_key"], "", "one way of signing in at a time")
 	assert_eq(store.load_session(ISSUER, "client_godot")["refresh_token"], "rt_1")
-	assert_true(store.save_refresh_token("rt_2"))
+	assert_true(store.save_refresh_token(ISSUER, "client_godot", "rt_1", "rt_2"))
+	assert_eq(store.load_session(ISSUER, "client_godot")["refresh_token"], "rt_2")
+	assert_false(store.save_refresh_token(ISSUER, "client_godot", "rt_1", "rt_9"), "the saved token moved on: another editor's")
+	assert_false(store.save_refresh_token(ISSUER, "client_dev", "rt_2", "rt_9"), "another application's session")
+	assert_false(store.save_refresh_token("https://dev.example.test", "client_godot", "rt_2", "rt_9"), "another issuer's session")
 	assert_eq(store.load_session(ISSUER, "client_godot")["refresh_token"], "rt_2")
 	if OS.get_name() != "Windows":
 		var mode := FileAccess.get_unix_permissions(ProjectSettings.globalize_path(config_path)) & 0x1FF

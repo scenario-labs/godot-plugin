@@ -140,11 +140,11 @@ func test_revoke_is_best_effort() -> void:
 func test_session_refreshes_an_expired_token_and_saves_the_rotation() -> void:
 	var saved: Array = []
 	var session := OAuthSession.new(oauth, {"access_token": "", "refresh_token": "rt_1", "expires_at": 0.0})
-	session.on_rotate = func(token: String) -> void: saved.append(token)
+	session.on_rotate = func(previous: String, token: String) -> void: saved.append([previous, token])
 	fake.replies.append(_json(200, {"access_token": "at_2", "refresh_token": "rt_2", "expires_in": 3600}))
 	var header: Dictionary = await session.authorization()
 	assert_eq(header["value"], "Bearer at_2")
-	assert_eq(saved, ["rt_2"])
+	assert_eq(saved, [["rt_1", "rt_2"]])
 	assert_eq(session.refresh_token(), "rt_2")
 	# Fresh enough: no second refresh.
 	assert_eq((await session.authorization())["value"], "Bearer at_2")
