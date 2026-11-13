@@ -100,6 +100,8 @@ func test_panoramas_maps_and_unlabelled_images_reach_a_lane_that_places_them() -
 	var albedo := {"path": "res://a/al.png", "role": "albedo"}
 	var normal := {"path": "res://a/no.png", "role": "normal"}
 	assert_eq(Workflows.groups([sky, albedo, normal]), {"skybox": [sky], "material": [albedo, normal]})
+	var roughness := {"path": "res://a/ro.png", "role": "roughness"}
+	assert_eq(Workflows.groups([normal, roughness]), {Workflows.FILES_ONLY: [normal, roughness]}, "maps without a color map are saved, not placed")
 	var odd := {"path": "res://a/x.png", "role": "preview"}
 	assert_eq(Workflows.groups([odd]), {"image": [odd]})
 	assert_eq(odd["role"], "main", "the Image lane places a main image")
