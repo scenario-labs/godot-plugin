@@ -22,7 +22,11 @@ func _enter_tree() -> void:
 	controller.name = "ScenarioController"
 	add_child(controller)
 	var config_dir := EditorInterface.get_editor_paths().get_config_dir()
-	controller.setup(HttpTransport.new(), LEDGER_PATH, config_dir.path_join("scenario/credentials.json"))
+	# A headless editor (tests, CI, scripts) does not resume the saved sign-in:
+	# its refresh would rotate the token under the person's open editor, and
+	# overlapping runs sending the same token make the provider end the session.
+	controller.setup(HttpTransport.new(), LEDGER_PATH, config_dir.path_join("scenario/credentials.json"),
+		DisplayServer.get_name() != "headless")
 	_apply_settings()
 	EditorInterface.get_editor_settings().settings_changed.connect(_apply_settings)
 

@@ -1,8 +1,10 @@
 extends Node
 ## A fake Scenario backend for editor tests: routes MCP tools by name, serves
-## downloads from tests/assets, and counts every paid call. Same interface as
-## addons/scenario/editor/http_transport.gd.
+## downloads from tests/assets, and counts every paid call. Answers the
+## identity provider's OAuth endpoints too (any URL with /oauth/). Same
+## interface as addons/scenario/editor/http_transport.gd.
 
+const Loopback := preload("res://addons/scenario/core/loopback.gd")
 const FIXTURES := "res://tests/fixtures/"
 const ASSETS := "res://tests/assets/"
 
@@ -35,15 +37,34 @@ const MODEL_LANE := {
 	"model_sonilo-v1-1-text-to-sound-effects": "sound",
 }
 
+## What teams_list returns.
+var teams: Array = [
+	{"id": "team_a", "name": "Team A", "projects": [{"id": "proj_a1", "name": "Game A"}, {"id": "proj_a2", "name": "Game B"}]},
+	{"id": "team_b", "name": "Team B", "projects": [{"id": "proj_b1", "name": "Jam"}]},
+]
+## Polls of the device grant answered "authorization_pending" before the tokens.
+var device_pending := 0
+## Every tool call: {"tool", "arguments", "authorization"}.
+var calls: Array = []
+## Every OAuth request: {"endpoint": "token" | "device" | "revoke", "form"}.
+var oauth_requests: Array = []
+var revoked: Array = []
+var refresh_token := ""
+var _token_count := 0
+
 var paid_calls: Array = []
 var uploads := 0
 var puts: Array = []
 var estimates := 0
 var tool_log: Array = []
+## jobs_list answers per project: {project_id: [job, ...]}.
+var listed := {}
 var _jobs := {}
 
 
-func post(_url: String, _headers: PackedStringArray, body: String, _timeout_s: float) -> Dictionary:
+func post(url: String, headers: PackedStringArray, body: String, _timeout_s: float) -> Dictionary:
+	if url.contains("/oauth/"):
+		return _oauth(url, Loopback.parse_query(body))
 	var payload: Dictionary = JSON.parse_string(body)
 	var method := str(payload.get("method", ""))
 	if method == "initialize":
@@ -53,7 +74,14 @@ func post(_url: String, _headers: PackedStringArray, body: String, _timeout_s: f
 	var tool: String = payload["params"]["name"]
 	var args: Dictionary = payload["params"]["arguments"]
 	tool_log.append(tool)
+	var authorization := ""
+	for line in headers:
+		if line.begins_with("Authorization: "):
+			authorization = line.substr(15)
+	calls.append({"tool": tool, "arguments": args, "authorization": authorization})
 	match tool:
+		"teams_list":
+			return _reply(payload["id"], _tool({"teams": teams}))
 		"model_schema_get":
 			return _reply(payload["id"], _tool(_schema(str(args["model_id"]))))
 		"model_run":
@@ -69,7 +97,7 @@ func post(_url: String, _headers: PackedStringArray, body: String, _timeout_s: f
 			var ids: Array = OUTPUTS[lane].map(func(o: Dictionary) -> String: return o["id"])
 			return _reply(payload["id"], _tool({"job": {"jobId": args["job_id"], "status": "success", "progress": 1, "assetIds": ids, "cuCost": price}}))
 		"jobs_list":
-			return _reply(payload["id"], _tool({"jobs": []}))
+			return _reply(payload["id"], _tool({"jobs": listed.get(str(args.get("project_id", "")), [])}))
 		"asset_get":
 			var output := _output(str(args["asset_id"]))
 			return _reply(payload["id"], _tool({"asset": {"id": args["asset_id"], "mimeType": output["mime"], "metadata": {"type": output["type"]}}}))
@@ -138,6 +166,40 @@ func _schema(model_id: String) -> Dictionary:
 		{"name": "prompt", "type": "string", "required": true, "prompt": true},
 		{"name": "seed", "type": "number"},
 	]}
+
+
+func _oauth(url: String, form: Dictionary) -> Dictionary:
+	if url.ends_with("/oauth/device_authorization"):
+		oauth_requests.append({"endpoint": "device", "form": form})
+		return _json(200, {"device_code": "dev_1", "user_code": "WDJB-MJHT", "interval": 1, "expires_in": 600,
+			"verification_uri": "https://accounts.example.test/device",
+			"verification_uri_complete": "https://accounts.example.test/device?user_code=WDJB-MJHT"})
+	if url.ends_with("/oauth/token/revoke"):
+		oauth_requests.append({"endpoint": "revoke", "form": form})
+		revoked.append(form.get("token", ""))
+		return {"status": 200, "headers": {}, "body": "", "error": ""}  # empty, as the provider answers
+	oauth_requests.append({"endpoint": "token", "form": form})
+	match str(form.get("grant_type", "")):
+		"authorization_code":
+			if form.get("code") != "code_ok" or str(form.get("code_verifier", "")).length() < 43:
+				return _json(400, {"error": "invalid_grant"})
+		"refresh_token":
+			if form.get("refresh_token") != refresh_token or form.get("refresh_token") in revoked:
+				return _json(400, {"error": "invalid_grant"})
+		"urn:ietf:params:oauth:grant-type:device_code":
+			if device_pending > 0:
+				device_pending -= 1
+				return _json(400, {"error": "authorization_pending"})
+		_:
+			return _json(400, {"error": "unsupported_grant_type"})
+	_token_count += 1
+	refresh_token = "rt_%d" % _token_count
+	return _json(200, {"access_token": "at_%d" % _token_count, "refresh_token": refresh_token,
+		"token_type": "Bearer", "expires_in": 3600})
+
+
+static func _json(status: int, data: Dictionary) -> Dictionary:
+	return {"status": status, "headers": {"content-type": "application/json"}, "body": JSON.stringify(data), "error": ""}
 
 
 static func _tool(structured: Dictionary) -> Dictionary:

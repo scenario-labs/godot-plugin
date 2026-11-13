@@ -1,6 +1,8 @@
 @tool
 extends RefCounted
-## Scenario MCP client: JSON-RPC over HTTP with SSE replies, Basic auth.
+## Scenario MCP client: JSON-RPC over HTTP with SSE replies. Authenticated by
+## a signed-in session (Bearer token; every call carries the chosen team and
+## project) or by an API key and secret (Basic auth; the key fixes the project).
 ##
 ## Money rules (spec section 3): a paid call is sent once and never retried; a
 ## transport failure on a paid call is "ambiguous" (Scenario may have started
@@ -15,6 +17,7 @@ extends RefCounted
 
 const Errors := preload("res://addons/scenario/core/errors.gd")
 const Sse := preload("res://addons/scenario/core/sse.gd")
+const OAuthSession := preload("res://addons/scenario/core/oauth_session.gd")
 
 const DEFAULT_ENDPOINT := "https://mcp.scenario.com/mcp?toolsets=full"
 const PROTOCOL_VERSION := "2025-03-26"
@@ -22,6 +25,9 @@ const VERSION := "0.2.1"  # x-release-please-version
 const READ_ATTEMPTS := 3
 const MAX_RETRY_AFTER_S := 30.0
 const DEFAULT_TIMEOUT_S := 60.0
+## A paid call goes out with at least this much token validity left, so the
+## token never expires between the price check and the send.
+const PAID_MIN_TOKEN_S := 300.0
 
 ## Idempotent reads: the only calls ever retried.
 const READ_TOOLS := [
@@ -32,11 +38,16 @@ const READ_TOOLS := [
 const SUBMIT_TOOLS := [
 	"model_run", "prompt_spark", "upload_asset", "upload_asset_complete", "job_cancel", "workflow_run",
 ]
+## Calls that find the team and project, so they never carry one.
+const UNSCOPED_TOOLS := ["teams_list", "projects_list"]
 
-var endpoint := DEFAULT_ENDPOINT
+## SCENARIO_MCP_URL names a development instance's MCP, with SCENARIO_OAUTH_*.
+var endpoint := _endpoint_from_environment()
 var transport: Object
 var api_key := ""
 var api_secret := ""
+## A signed-in session; null with an API key.
+var session: OAuthSession = null
 ## SCENARIO_NO_SPEND=1 refuses every paid call before any request is made.
 var spending_disabled := OS.get_environment("SCENARIO_NO_SPEND") == "1"
 var session_id := ""
@@ -52,12 +63,30 @@ func _init(p_transport: Object = null, p_key: String = "", p_secret: String = ""
 func set_credentials(key: String, secret: String) -> void:
 	api_key = key.strip_edges()
 	api_secret = secret.strip_edges()
+	session = null
+	session_id = ""
+	_initialized = false
+
+
+func set_session(p_session: OAuthSession) -> void:
+	api_key = ""
+	api_secret = ""
+	session = p_session
 	session_id = ""
 	_initialized = false
 
 
 func has_credentials() -> bool:
-	return not api_key.is_empty() and not api_secret.is_empty()
+	return session != null or (not api_key.is_empty() and not api_secret.is_empty())
+
+
+func signed_in() -> bool:
+	return session != null
+
+
+static func _endpoint_from_environment() -> String:
+	var url := OS.get_environment("SCENARIO_MCP_URL").strip_edges()
+	return url if url.begins_with("https://") else DEFAULT_ENDPOINT
 
 
 ## "ScenarioGodot/0.1.1 (Godot 4.7.2-stable; macOS)": the plugin, engine and OS
@@ -124,28 +153,67 @@ func submit(model_id: String, parameters: Dictionary) -> Dictionary:
 	return Errors.ok({"job_id": job_id, "status": str(result["value"].get("status", "queued"))})
 
 
-func get_job(job_id: String) -> Dictionary:
-	return _unwrap(await call_tool("job_get", {"job_id": job_id}), "job")
+## scope: {"team_id", "project_id"} of the project the job ran in, when it is
+## not the one chosen now (a signed-in session only; {} otherwise).
+func get_job(job_id: String, scope: Dictionary = {}) -> Dictionary:
+	return _unwrap(await call_tool("job_get", _scoped({"job_id": job_id}, scope)), "job")
 
 
-func list_jobs(page_size: int = 20) -> Dictionary:
-	return _unwrap(await call_tool("jobs_list", {"page_size": clampi(page_size, 1, 100)}), "jobs")
+func list_jobs(page_size: int = 20, scope: Dictionary = {}) -> Dictionary:
+	return _unwrap(await call_tool("jobs_list", _scoped({"limit": clampi(page_size, 1, 50)}, scope)), "jobs")
 
 
-func cancel_job(job_id: String) -> Dictionary:
-	return await call_tool("job_cancel", {"job_id": job_id})
+func cancel_job(job_id: String, scope: Dictionary = {}) -> Dictionary:
+	return await call_tool("job_cancel", _scoped({"job_id": job_id}, scope))
 
 
-func get_asset(asset_id: String) -> Dictionary:
-	return _unwrap(await call_tool("asset_get", {"asset_id": asset_id}), "asset")
+func get_asset(asset_id: String, scope: Dictionary = {}) -> Dictionary:
+	return _unwrap(await call_tool("asset_get", _scoped({"asset_id": asset_id}, scope)), "asset")
 
 
 ## ok(url). format converts 3D (glb, fbx, obj) and images; "" keeps the original.
-func download_url(asset_id: String, format: String = "") -> Dictionary:
+func download_url(asset_id: String, format: String = "", scope: Dictionary = {}) -> Dictionary:
 	var arguments := {"asset_id": asset_id}
 	if not format.is_empty():
 		arguments["format"] = format
-	return _unwrap(await call_tool("asset_download", arguments), "url")
+	return _unwrap(await call_tool("asset_download", _scoped(arguments, scope)), "url")
+
+
+## ok([{"id", "name", "projects": [{"id", "name"}]}]): every team the account
+## can use, with its projects. Free.
+func list_teams() -> Dictionary:
+	var result := _unwrap(await call_tool("teams_list", {}), "teams")
+	if not result["ok"]:
+		return result
+	var teams: Array = []
+	for team in result["value"]:
+		if not team is Dictionary or str(team.get("id", "")).is_empty():
+			continue
+		if not team.get("projects") is Array:
+			var projects: Dictionary = await list_projects(str(team["id"]))
+			if not projects["ok"]:
+				return projects
+			team["projects"] = projects["value"]
+		teams.append(team)
+	return Errors.ok(teams)
+
+
+## ok([{"id", "name"}]): the team's projects, every page. Free.
+func list_projects(team_id: String) -> Dictionary:
+	var projects: Array = []
+	var token := ""
+	for page in 20:
+		var arguments := {"team_id": team_id, "limit": 100}
+		if not token.is_empty():
+			arguments["page_token"] = token
+		var result: Dictionary = await call_tool("projects_list", arguments)
+		if not result["ok"]:
+			return result
+		projects.append_array(result["value"].get("projects", []))
+		token = str(result["value"].get("nextPaginationToken", ""))
+		if token.is_empty():
+			break
+	return Errors.ok(projects)
 
 
 func get_schema(model_id: String) -> Dictionary:
@@ -171,15 +239,34 @@ func upload_complete(arguments: Dictionary) -> Dictionary:
 
 func call_tool(tool: String, arguments: Dictionary = {}, timeout_s: float = DEFAULT_TIMEOUT_S) -> Dictionary:
 	if not has_credentials():
-		return Errors.fail(Errors.AUTH, "Connect a Scenario API key and secret first.")
+		return Errors.fail(Errors.AUTH, "Sign in to Scenario first.")
 	var submit_call := is_submission(tool, arguments)
 	# Cancelling can only lower spend, so the switch lets it through.
 	if submit_call and spending_disabled and tool != "job_cancel":
 		return Errors.fail(Errors.LOCAL, "Spending is turned off (SCENARIO_NO_SPEND=1), so nothing was sent.")
+	if session != null:
+		if not tool in UNSCOPED_TOOLS:
+			if not session.has_project() and not arguments.has("project_id"):
+				return Errors.fail(Errors.LOCAL, "Choose a Scenario team and project first.")
+			arguments = _scoped(arguments, session.workspace())
+		if submit_call:
+			var fresh: Dictionary = await session.authorization(PAID_MIN_TOKEN_S)
+			if not fresh["ok"]:
+				return fresh  # nothing was sent
 	var attempts := READ_ATTEMPTS if is_retryable(tool, arguments) else 1
 	var result: Dictionary = {}
+	var refreshed := false
 	for attempt in attempts:
 		result = await _call_once(tool, arguments, timeout_s, submit_call)
+		if not result["ok"] and result["error"].get("unauthorized", false) and session != null and not refreshed:
+			# The token was refused, so the request did not run. A read is sent
+			# again with a new token; a paid call never is: the next Generate gets it.
+			refreshed = true
+			var renewed: Dictionary = await session.refresh()
+			if renewed["ok"] and not submit_call:
+				result = await _call_once(tool, arguments, timeout_s, submit_call)
+			elif renewed["ok"]:
+				result["error"]["message"] = "Scenario refused the sign-in token, so nothing was sent. The sign-in is renewed: try again."
 		if result["ok"]:
 			if tool == "model_run" and bool(arguments.get("dry_run", false)):
 				var job_id := created_job_id(result["value"])
@@ -213,7 +300,7 @@ func _call_once(tool: String, arguments: Dictionary, timeout_s: float, submit_ca
 		if structured is Dictionary and not structured.is_empty():
 			detail = JSON.stringify(structured)
 		var kind := Errors.classify(detail)
-		return Errors.fail(kind, Errors.message_for(kind, detail), {"detail": detail})
+		return Errors.fail(kind, Errors.message_for(kind, detail, signed_in()), {"detail": detail})
 	if structured is Dictionary:
 		if submit_call and structured.is_empty():
 			return Errors.fail(Errors.PROTOCOL, "Scenario returned an empty reply.", {"ambiguous": true})
@@ -254,7 +341,7 @@ func _rpc(method: String, params: Dictionary, timeout_s: float) -> Dictionary:
 		var rpc_error: Variant = envelope["error"]
 		var detail := JSON.stringify(rpc_error) if not rpc_error is String else rpc_error
 		var kind := Errors.classify(detail)
-		return Errors.fail(kind, Errors.message_for(kind, detail), {"detail": detail})
+		return Errors.fail(kind, Errors.message_for(kind, detail, signed_in()), {"detail": detail})
 	if not envelope.get("result") is Dictionary:
 		return Errors.fail(Errors.PROTOCOL, "Scenario returned an unexpected reply structure.")
 	return Errors.ok(envelope["result"])
@@ -271,7 +358,7 @@ func _initialize(timeout_s: float) -> Dictionary:
 	if reply["value"].has("error"):
 		var detail := JSON.stringify(reply["value"]["error"])
 		var kind := Errors.classify(detail)
-		return Errors.fail(kind, Errors.message_for(kind, detail))
+		return Errors.fail(kind, Errors.message_for(kind, detail, signed_in()))
 	var notified: Dictionary = await _post("notifications/initialized", {}, null, timeout_s, false)
 	if not notified["ok"]:
 		return notified
@@ -285,9 +372,15 @@ func _post(method: String, params: Dictionary, request_id: Variant, timeout_s: f
 		payload["id"] = request_id
 	if not params.is_empty():
 		payload["params"] = params
-	var token := Marshalls.utf8_to_base64("%s:%s" % [api_key, api_secret])
+	var authorization := "Basic " + Marshalls.utf8_to_base64("%s:%s" % [api_key, api_secret])
+	if session != null:
+		var bearer: Dictionary = await session.authorization()
+		if not bearer["ok"]:
+			bearer["error"]["not_sent"] = true
+			return bearer
+		authorization = bearer["value"]
 	var headers := PackedStringArray([
-		"Authorization: Basic " + token,
+		"Authorization: " + authorization,
 		"Content-Type: application/json",
 		"Accept: application/json, text/event-stream",
 		"MCP-Protocol-Version: " + PROTOCOL_VERSION,
@@ -315,8 +408,9 @@ func _post(method: String, params: Dictionary, request_id: Variant, timeout_s: f
 			if body.to_lower().contains("session") or (status == 404 and not session_used.is_empty()):
 				return Errors.fail(Errors.PROTOCOL, "Session expired.", {"session_expired": true, "status": status})
 		var kind := Errors.classify(body, status)
-		return Errors.fail(kind, Errors.message_for(kind, body), {
+		return Errors.fail(kind, Errors.message_for(kind, body, signed_in()), {
 			"status": status, "retry_after": _retry_after(response_headers), "detail": body,
+			"unauthorized": status == 401, "not_sent": status == 401,
 		})
 	return Sse.parse(body, str(response_headers.get("content-type", "")), request_id)
 
@@ -347,6 +441,13 @@ static func _first_text(content: Variant) -> String:
 			if item is Dictionary and item.get("type") == "text":
 				return str(item.get("text", ""))
 	return ""
+
+
+## arguments plus the scope's ids, without replacing ids already there.
+static func _scoped(arguments: Dictionary, scope: Dictionary) -> Dictionary:
+	var out := arguments.duplicate()
+	out.merge(scope, false)
+	return out
 
 
 static func _unwrap(result: Dictionary, key: String) -> Dictionary:

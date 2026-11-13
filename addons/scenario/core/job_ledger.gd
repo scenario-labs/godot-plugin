@@ -1,6 +1,7 @@
 @tool
 extends RefCounted
-## Durable job ledger: survives editor restarts.
+## Durable job ledger: survives editor restarts. Each row keeps the team and
+## project its request went to, so its job is read back there.
 ##
 ## The intent is written with state "submitting" BEFORE the paid request is
 ## sent. A row still "submitting" when the ledger loads means the editor
@@ -8,6 +9,7 @@ extends RefCounted
 ## it is matched to a Scenario job or dismissed by the user.
 
 const Errors := preload("res://addons/scenario/core/errors.gd")
+const Quote := preload("res://addons/scenario/core/quote.gd")
 
 const SUBMITTING := "submitting"
 const QUEUED := "queued"
@@ -72,8 +74,9 @@ func save() -> bool:
 
 
 ## prompt: the text that names the files and the node; defaults to parameters.prompt.
+## scope: {"team_id", "project_id"} the request goes to ({} with an API key).
 func add_intent(lane: String, model_id: String, parameters: Dictionary, fingerprint: String,
-		quoted_cu: float, now: float, prompt: String = "") -> String:
+		quoted_cu: float, now: float, prompt: String = "", scope: Dictionary = {}) -> String:
 	_counter += 1
 	var local_id := "local_%d_%d" % [int(now * 1000.0), _counter]
 	var row := {
@@ -81,6 +84,7 @@ func add_intent(lane: String, model_id: String, parameters: Dictionary, fingerpr
 		"prompt": prompt if not prompt.is_empty() else str(parameters.get("prompt", "")), "parameters": parameters, "fingerprint": fingerprint,
 		"quoted_cu": quoted_cu, "charged_cu": null, "asset_ids": [], "files": [], "imported": false,
 		"error": "", "created_at": now, "updated_at": now,
+		"team_id": str(scope.get("team_id", "")), "project_id": str(scope.get("project_id", "")),
 	}
 	jobs.push_front(row)
 	_trim()
@@ -155,6 +159,7 @@ func apply_job(job: Dictionary, now: float) -> Dictionary:
 		row["charged_cu"] = float(job["billing"]["cuCost"])
 	if not error_text.is_empty():
 		row["error"] = error_text
+	row.erase("unread")
 	row["updated_at"] = now
 	save()
 	return row
@@ -163,10 +168,12 @@ func apply_job(job: Dictionary, now: float) -> Dictionary:
 ## Links unresolved rows to jobs found on Scenario. Returns how many were linked.
 ## Only an unambiguous match (exactly one untracked job of the same model in the
 ## window after the intent) is linked; anything else stays for the user.
-func reconcile(server_jobs: Array, now: float) -> int:
+## project_id: the project server_jobs were listed in; rows sent to another
+## project are left alone ("" with an API key, whose rows carry none).
+func reconcile(server_jobs: Array, now: float, project_id: String = "") -> int:
 	var linked := 0
 	for row in jobs:
-		if not row["state"] in UNRESOLVED_STATES:
+		if not row["state"] in UNRESOLVED_STATES or str(row.get("project_id", "")) != project_id:
 			continue
 		var candidates: Array = []
 		for job in server_jobs:
@@ -185,6 +192,7 @@ func reconcile(server_jobs: Array, now: float) -> int:
 			row["job_id"] = str(candidates[0]["jobId"])
 			row["error"] = ""
 			row["state"] = state_for_status(str(candidates[0].get("status", "")), str(candidates[0].get("error", "")))
+			row["unread"] = true  # a listing has no outputs: the poll reads the job once
 			row["updated_at"] = now
 			linked += 1
 	if linked > 0:
@@ -208,8 +216,11 @@ func find_by_job(job_id: String) -> Dictionary:
 	return {}
 
 
+## Rows to read on Scenario: jobs still running, and an Unknown row reconcile
+## linked to a job, until one read of that job has been applied.
 func active() -> Array:
-	return jobs.filter(func(row: Dictionary) -> bool: return row["state"] in ACTIVE_STATES and not str(row["job_id"]).is_empty())
+	return jobs.filter(func(row: Dictionary) -> bool:
+		return not str(row["job_id"]).is_empty() and (row["state"] in ACTIVE_STATES or row.get("unread", false)))
 
 
 func unresolved() -> Array:
@@ -220,6 +231,18 @@ func unresolved() -> Array:
 func blocks(fingerprint: String) -> bool:
 	for row in jobs:
 		if row["state"] in UNRESOLVED_STATES and row["fingerprint"] == fingerprint:
+			return true
+	return false
+
+
+## The same check across ways of signing in: a row without a project (sent with
+## an API key) cannot be told apart from a project, so it blocks the same model
+## and parameters there, and the other way round (project_id "").
+func blocks_request(model_id: String, parameters: Dictionary, project_id: String) -> bool:
+	var request := Quote.fingerprint(model_id, parameters)
+	for row in unresolved():
+		if (project_id.is_empty() or str(row.get("project_id", "")).is_empty()) \
+				and Quote.fingerprint(str(row["model_id"]), row["parameters"]) == request:
 			return true
 	return false
 
