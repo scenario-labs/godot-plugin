@@ -946,7 +946,7 @@ func _load_project_models() -> void:
 func _forget_project_models() -> void:
 	for entry in project_models.entries:
 		schemas.erase(entry["id"])
-	if project_models.entries.any(func(e: Dictionary) -> bool: return e["id"] == picked_model()):
+	if not trained.is_empty() or project_models.entries.any(func(e: Dictionary) -> bool: return e["id"] == picked_model()):
 		trained = {}
 		model_id = ""
 		fields = []
