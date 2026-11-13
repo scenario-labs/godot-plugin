@@ -177,6 +177,19 @@ func list_jobs(page_size: int = 20, scope: Dictionary = {}) -> Dictionary:
 	return _unwrap(await call_tool("jobs_list", _scoped({"limit": clampi(page_size, 1, 50)}, scope)), "jobs")
 
 
+## One page of the project's jobs, newest first: ok({"jobs", "nextPaginationToken"}). Free.
+func list_jobs_page(page_size: int, page_token: String = "") -> Dictionary:
+	var arguments := {"limit": clampi(page_size, 1, 50)}
+	if not page_token.is_empty():
+		arguments["page_token"] = page_token
+	return await call_tool("jobs_list", arguments)
+
+
+## ok(reply) of the search tool (see LibraryQuery.search_args). Free.
+func search_assets(arguments: Dictionary) -> Dictionary:
+	return await call_tool("search", arguments)
+
+
 func cancel_job(job_id: String, scope: Dictionary = {}) -> Dictionary:
 	return await call_tool("job_cancel", _scoped({"job_id": job_id}, scope))
 

@@ -94,6 +94,28 @@ func add_intent(lane: String, model_id: String, parameters: Dictionary, fingerpr
 	return local_id
 
 
+## A finished result brought in from the Library or History, not sent from
+## here: no quote, nothing to reconcile. Rows of the same job are reused, so
+## importing it twice adds no second row. source: "library" | "history".
+func adopt(lane: String, model_id: String, prompt: String, job_id: String, asset_ids: Array,
+		now: float, scope: Dictionary = {}, source: String = "history") -> String:
+	var existing := find_by_job(job_id)
+	if job_id.is_empty():
+		for row in jobs:
+			if row.get("source") == source and row["asset_ids"] == asset_ids and row["state"] == SUCCESS:
+				existing = row
+	if not existing.is_empty():
+		return existing["local_id"]
+	var local_id := add_intent(lane, model_id, {}, "", 0.0, now, prompt, scope)
+	var row := find(local_id)
+	row["job_id"] = job_id
+	row["state"] = SUCCESS
+	row["asset_ids"] = asset_ids.duplicate()
+	row["source"] = source
+	save()
+	return local_id
+
+
 func mark_submitted(local_id: String, job_id: String, server_status: String, now: float) -> void:
 	var row := find(local_id)
 	if row.is_empty():

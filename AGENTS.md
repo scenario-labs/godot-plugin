@@ -47,12 +47,17 @@ In `addons/scenario/`:
   - `files.gd`: output names, roles from asset metadata, file type from bytes,
     the `.scenario.json` provenance.
   - `errors.gd`: error kinds and user messages.
+  - `library_query.gd`: Library `search` arguments, asset and History rows,
+    the lane that places an asset.
 - `editor/`:
   - `controller.gd`: state and actions (price, generate, poll, import,
     references, recommendations); emits `changed`.
   - `downloads.gd`: a finished job's outputs into the project, named and
     typed, for the controller's import; a reference file's upload.
   - `dock_ui.gd`: the dock, built in code, no logic.
+  - `library.gd`, `library_ui.gd`: the Library and History views (the
+    project's assets and jobs, cached per project), imports through the
+    controller.
   - `placer.gd`: import with `.import` sidecars, then placement per lane
     through `EditorUndoRedoManager`.
   - `http_transport.gd`: `HTTPRequest` wrapper; uploads only to

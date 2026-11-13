@@ -56,6 +56,15 @@ Each request appears under **Jobs**, newest first. The list survives editor rest
 
 **Unknown** jobs block the same request until resolved, so a dropped connection cannot make you pay twice. **Check Scenario** looks for the job among your recent Scenario jobs and links it when exactly one matches. **Dismiss** clears the row when you have checked yourself.
 
+### Library and History
+
+The buttons at the top of the dock switch between **Generate**, **Library** and **History**. Both read the project in the footer; nothing there costs CU.
+
+- **Library** shows the project's images, 3D models and sounds, newest first, with thumbnails. Filter by kind, by Generated or Uploaded, or search names and prompts; **Show more** reads the next page. **Import** downloads the file and places it like a result of its lane (an image on the selected node, a model in the scene, a sound as a player). **Reference** puts an image in one of the form's reference fields without uploading it again.
+- **History** lists the project's jobs on Scenario, newest first, including those sent from the web app or another editor. **Import** brings a finished job's results in. **Load older** reads the next page.
+
+Imports from either view join the **Jobs** list, once: importing the same asset or job again reuses its row. The views are emptied when you change project or sign out.
+
 ## 5. Files
 
 - Results: `res://scenario/<lane>/<date>-<prompt>-<asset>[-<map>].<ext>`.

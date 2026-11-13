@@ -125,8 +125,12 @@ var drop_next_paid := false
 var no_workflows := false
 ## The next workflow dry run comes back with this job id (a run it may have started).
 var estimate_job := ""
-## jobs_list answers per project: {project_id: [job, ...]}.
+## jobs_list answers per project: {project_id: [job, ...]}, newest first, in
+## pages of the call's limit.
 var listed := {}
+## search answers per project ("" with an API key): {project_id: [hit, ...]},
+## hits shaped like Scenario's search index (see library_hit).
+var library := {}
 var _jobs := {}
 
 
@@ -196,13 +200,21 @@ func post(url: String, headers: PackedStringArray, body: String, _timeout_s: flo
 			var ids: Array = OUTPUTS[lane].map(func(o: Dictionary) -> String: return o["id"])
 			return _reply(payload["id"], _tool({"job": {"jobId": args["job_id"], "status": "success", "progress": 1, "assetIds": ids, "cuCost": price}}))
 		"jobs_list":
-			return _reply(payload["id"], _tool({"jobs": listed.get(str(args.get("project_id", "")), [])}))
+			var all_jobs: Array = listed.get(str(args.get("project_id", "")), [])
+			var start := int(str(args.get("page_token", "0")))
+			var size := int(args.get("limit", 20))
+			var page := {"jobs": all_jobs.slice(start, start + size)}
+			if start + size < all_jobs.size():
+				page["nextPaginationToken"] = str(start + size)
+			return _reply(payload["id"], _tool(page))
 		"models_list":
 			var start := 3 if str(args.get("page_token", "")) == "page2" else 0
 			var page := {"models": project_models.slice(start, start + 3)}
 			if start + 3 < project_models.size():
 				page["nextPaginationToken"] = "page2"
 			return _reply(payload["id"], _tool(page))
+		"search":
+			return _reply(payload["id"], _tool(_search(args)))
 		"asset_get":
 			var output := _output(str(args["asset_id"]))
 			return _reply(payload["id"], _tool({"asset": {"id": args["asset_id"], "mimeType": output["mime"], "metadata": {"type": output["type"]}}}))
@@ -241,6 +253,46 @@ func put_bytes(url: String, bytes: PackedByteArray, _timeout_s: float = 300.0) -
 
 func sleep(_seconds: float) -> void:
 	pass
+
+
+## A job job_get answers for, with the outputs of lane.
+func add_job(job_id: String, lane: String) -> void:
+	_jobs[job_id] = lane
+
+
+## A search hit as Scenario's index returns it (include_urls on).
+static func library_hit(asset_id: String, kind: String, mime: String, created_at: String, name: String,
+		model_id: String = "", prompt: String = "") -> Dictionary:
+	var hit := {"id": asset_id, "kind": kind, "mimeType": mime, "createdAt": created_at, "name": name,
+		"metadata": {"type": "inference-txt2img" if not model_id.is_empty() else "uploaded"},
+		"url": "https://cdn.cloud.scenario.com/file/" + asset_id}
+	if not model_id.is_empty():
+		hit["metadata"]["modelId"] = model_id
+		hit["metadata"]["prompt"] = prompt
+	if kind in ["image", "3d"]:
+		hit["thumbnail"] = {"url": "https://cdn.cloud.scenario.com/thumb/" + asset_id}
+	return hit
+
+
+## The search tool over library: the filter's kinds and source, the query in
+## names and prompts, newest first, one page.
+func _search(args: Dictionary) -> Dictionary:
+	var filter := str(args.get("filter", ""))
+	var query := str(args.get("query", "")).to_lower()
+	var hits: Array = []
+	for hit in library.get(str(args.get("project_id", "")), []):
+		if not ("\"%s\"" % hit["kind"]) in filter:
+			continue
+		var generated: bool = hit["metadata"].has("modelId")
+		if (filter.contains("NOT modelId EXISTS") and generated) or (filter.contains(" modelId EXISTS") and not filter.contains("NOT") and not generated):
+			continue
+		if not query.is_empty() and not (str(hit["name"]).to_lower().contains(query) or str(hit["metadata"].get("prompt", "")).to_lower().contains(query)):
+			continue
+		hits.append(hit)
+	hits.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return str(a["createdAt"]) > str(b["createdAt"]))
+	var offset := int(args.get("offset", 0))
+	var limit := int(args.get("limit", 20))
+	return {"assets": hits.slice(offset, offset + limit), "estimatedTotalHits": hits.size(), "offset": offset, "limit": limit}
 
 
 func _output(asset_id: String) -> Dictionary:
