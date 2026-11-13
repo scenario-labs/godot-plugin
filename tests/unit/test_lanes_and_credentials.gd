@@ -105,6 +105,15 @@ func test_error_classification() -> void:
 const ISSUER := "https://idp.example.test"
 
 
+func test_a_rotation_is_kept_when_the_system_store_does_not_answer() -> void:
+	var store := _store()  # use_keychain off: a store-backed record reads as "", as a dismissed keyring prompt does
+	store._write_config({"oauth": {"issuer": ISSUER, "client_id": "client_godot", "secret_store": "keychain"}})
+	assert_true(store.save_refresh_token(ISSUER, "client_godot", "rt_1", "rt_2"), "kept in the file rather than lost")
+	assert_eq(store.load_session(ISSUER, "client_godot")["refresh_token"], "rt_2")
+	store.forget_session("rt_2")
+	assert_false(store.save_refresh_token(ISSUER, "client_godot", "rt_2", "rt_3"), "a forgotten session stays forgotten")
+
+
 func test_session_round_trip_in_the_file_store() -> void:
 	var store := _store()
 	store.save_credentials("api_abc", "sec_123")
