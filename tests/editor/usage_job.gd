@@ -66,12 +66,29 @@ func run() -> Dictionary:
 	controller.changed.emit()
 	await wait_frames(1)
 	check("asked after the first connection", reporter.should_ask() and ui._consent_box.visible)
+	await controller.client.list_jobs(1)  # connect_account's key check: the connection is confirmed
 	# Turned on in Editor Settings while the card shows: the card goes, the connection is recorded.
 	reporter.set_sharing(true)
 	await wait_frames(1)
 	check("on from Editor Settings: the card goes", not ui._consent_box.visible and not reporter.should_ask())
 	check("sharing on while connected: the connection is recorded", reporter.usage.queue.any(func(e: Dictionary) -> bool:
 		return e["event"] == "connected" and e["properties"] == {"method": "api_key"}))
+	# A key Scenario rejects: its check is recorded, a connection is not.
+	controller.client.set_credentials("", "")
+	controller.account = {"api_key": "", "source": "", "method": ""}
+	controller.changed.emit()
+	controller.client.set_credentials("api_bad", "sec_bad")
+	controller.account = {"api_key": "api_bad", "source": "test", "method": "api_key"}
+	controller.changed.emit()
+	reporter._on_called("jobs_list", {"page_size": 1}, false, "auth", 40)
+	var connections: Array = reporter.usage.queue.filter(func(e: Dictionary) -> bool: return e["event"] == "connected")
+	var key_checks: Array = reporter.usage.queue.filter(func(e: Dictionary) -> bool:
+		return e["event"] == "scenario_request" and e["properties"]["request"] == "check_key")
+	check("a rejected key is not counted as a connection", connections.size() == 1 and key_checks.size() == 1
+		and key_checks[0]["properties"]["error_kind"] == "auth")
+	controller.client.set_credentials("api_test", "sec_test")
+	controller.account = {"api_key": "api_test", "source": "test", "method": "api_key"}
+	controller.changed.emit()
 	reporter.set_sharing(false)
 	var answers: Array = []
 	reporter.sharing_chosen.connect(func(share: bool) -> void: answers.append(share))

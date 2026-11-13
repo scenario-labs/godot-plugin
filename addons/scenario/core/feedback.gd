@@ -18,22 +18,24 @@ var submission_id := ""
 static func problem(rating: int, message: String, email: String) -> String:
 	if rating < 1 or rating > 5:
 		return "Choose a rating from 1 to 5."
-	if message.length() > MAX_MESSAGE:
+	# Counted in UTF-16 units, as the relay counts them.
+	if message.strip_edges().to_utf16_buffer().size() / 2 > MAX_MESSAGE:
 		return "Shorten the message to %d characters." % MAX_MESSAGE
 	email = email.strip_edges()
-	if not email.is_empty() and (email.length() > MAX_EMAIL or not _looks_like_email(email)):
+	if not email.is_empty() and (email.to_utf16_buffer().size() / 2 > MAX_EMAIL or not _looks_like_email(email)):
 		return "Check the email address, or leave it empty."
 	return ""
 
 
-## install_id: the usage install ID while sharing is on, else "" (left out).
+## install_id: the usage install ID while sharing is on, else "" (left out). It is
+## also left out when an email is given, so no address is ever tied to usage data.
 func payload(rating: int, message: String, email: String, install_id: String = "") -> Dictionary:
 	if submission_id.is_empty():
 		submission_id = Usage.new_id()
 	var body := {"submission_id": submission_id, "context": Usage.context(), "rating": rating, "message": message.strip_edges()}
 	if not email.strip_edges().is_empty():
 		body["email"] = email.strip_edges()
-	if not install_id.is_empty():
+	elif not install_id.is_empty():
 		body["install_id"] = install_id
 	return body
 
@@ -43,10 +45,7 @@ func sent() -> void:
 	submission_id = ""
 
 
+## The relay's pattern (tools/site_proxy/middleware.ts EMAIL).
 static func _looks_like_email(email: String) -> bool:
-	var at := email.find("@")
-	if at < 1 or at != email.rfind("@") or email.contains(" "):
-		return false
-	var domain := email.substr(at + 1)
-	var dot := domain.rfind(".")
-	return dot > 0 and domain.length() - dot > 2
+	var pattern := RegEx.create_from_string("^[^\\s@]{1,64}@[^\\s@]{1,190}\\.[^\\s@]{2,}$")
+	return pattern.search(email) != null

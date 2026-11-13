@@ -116,6 +116,12 @@ func test_feedback_form_checks() -> void:
 	for email in ["not an address", "a@b", "@example.com", "a@@example.com", "a b@example.com"]:
 		assert_string_contains(Feedback.problem(3, "", email), "email", email)
 	assert_eq(Feedback.problem(3, "", " me@example.com "), "")
+	assert_string_contains(Feedback.problem(3, "", "me\t@example.com"), "email", "any whitespace, as the relay")
+	assert_string_contains(Feedback.problem(3, "", "a".repeat(65) + "@example.com"), "email", "local part over 64")
+	assert_eq(Feedback.problem(3, "", "a".repeat(64) + "@example.com"), "")
+	# An emoji is two UTF-16 units: the relay's limit counts those, not characters.
+	assert_string_contains(Feedback.problem(3, "\U01F600".repeat(Feedback.MAX_MESSAGE / 2 + 1), ""), "Shorten")
+	assert_eq(Feedback.problem(3, "\U01F600".repeat(Feedback.MAX_MESSAGE / 2), ""), "")
 
 
 func test_feedback_keeps_its_submission_id_until_sent() -> void:
@@ -129,5 +135,7 @@ func test_feedback_keeps_its_submission_id_until_sent() -> void:
 	assert_eq(retry["submission_id"], first["submission_id"], "a retry is the same submission")
 	assert_false(retry.has("email"))
 	assert_eq(retry["install_id"], "0123456789abcdef0123456789abcdef")
+	var with_email := feedback.payload(4, "Works well", "me@example.com", "0123456789abcdef0123456789abcdef")
+	assert_false(with_email.has("install_id"), "an address is never tied to the usage install ID")
 	feedback.sent()
 	assert_ne(feedback.payload(5, "", "")["submission_id"], first["submission_id"])

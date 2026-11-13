@@ -141,7 +141,7 @@ export const EVENTS: Record<string, Record<string, Check>> = {
   connected: { method: oneOf("sign_in", "api_key", "environment") },
   scenario_request: {
     request: oneOf("price_check", "generate", "cancel", "import", "upload_reference", "recommend", "list_teams",
-      "check_unknown", "model_settings"),
+      "check_unknown", "check_key", "model_settings"),
     outcome: oneOf("ok", "error"),
     error_kind: ERROR_KINDS,
     duration_ms: count(3_600_000),
@@ -262,7 +262,9 @@ function relayEvents(request: Request, body: Json, token: string, context: Reque
 async function relayFeedback(request: Request, body: Json, token: string): Promise<Response> {
   const surveyId = env("POSTHOG_FEEDBACK_SURVEY_ID");
   if (!surveyId) return reply(503, { error: "unavailable" });
-  const { submission_id: submissionId, install_id: installId, rating, message, email } = body;
+  const { submission_id: submissionId, rating, message, email } = body;
+  // An address is never tied to the install ID of the usage data.
+  const installId = typeof email === "string" && email !== "" ? undefined : body.install_id;
   const valid =
     typeof submissionId === "string" && HEX_ID.test(submissionId) &&
     (installId === undefined || (typeof installId === "string" && HEX_ID.test(installId))) &&

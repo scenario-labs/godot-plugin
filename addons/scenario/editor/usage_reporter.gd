@@ -40,6 +40,10 @@ var _rows := {}
 var _finished := {}
 var _sending := false
 var _started := false
+## A connection is recorded once a Scenario call succeeds on it, so a key
+## Scenario rejects is never counted.
+var _verified := false
+var _pending_connection := false
 
 
 func setup(p_controller: Node, p_transport: Object, state_path: String) -> void:
@@ -67,7 +71,7 @@ func set_sharing(on: bool) -> void:
 		usage.mark_asked()  # chosen in Editor Settings: no need to ask
 	usage.set_enabled(on)
 	if on and not was and _started and _connected:
-		_record_connected()  # how the account in use connected, once sharing starts
+		_connection_seen()  # how the account in use connected, once sharing starts
 	sharing_changed.emit()
 
 
@@ -76,7 +80,7 @@ func start() -> void:
 	_started = true
 	usage.record("extension_started")
 	if _connected:
-		_record_connected()  # a session or key resumed at startup
+		_connection_seen()  # a session or key resumed at startup
 
 
 ## The dock asks once, after the first successful sign-in or key connection.
@@ -121,11 +125,20 @@ func send_feedback(rating: int, message: String, email: String) -> Dictionary:
 	return {"ok": false, "message": "Could not send the feedback (%s). Your text is kept: try again." % ("HTTP %d" % status if status > 0 else "no connection")}
 
 
-func _on_called(tool: String, dry_run: bool, ok: bool, error_kind: String, duration_ms: int) -> void:
+func _on_called(tool: String, arguments: Dictionary, ok: bool, error_kind: String, duration_ms: int) -> void:
+	if ok and _connected and not _verified:
+		_verified = true
+		if _pending_connection:
+			_pending_connection = false
+			_record_connected()
 	if not REQUESTS.has(tool):
 		return
-	var properties := {"request": "price_check" if tool == "model_run" and dry_run else REQUESTS[tool],
-		"outcome": "ok" if ok else "error", "duration_ms": duration_ms}
+	var request: String = REQUESTS[tool]
+	if tool == "model_run" and bool(arguments.get("dry_run", false)):
+		request = "price_check"
+	elif tool == "jobs_list" and int(arguments.get("page_size", 0)) == 1:
+		request = "check_key"  # connect_account's free check of a new key
+	var properties := {"request": request, "outcome": "ok" if ok else "error", "duration_ms": duration_ms}
 	if not ok:
 		properties["error_kind"] = error_kind
 	usage.record("scenario_request", properties)
@@ -136,7 +149,11 @@ func _on_called(tool: String, dry_run: bool, ok: bool, error_kind: String, durat
 func _on_changed() -> void:
 	var connected: bool = controller.is_connected_account()
 	if connected and not _connected:
-		_record_connected()
+		_verified = false
+		_connection_seen()
+	elif not connected:
+		_verified = false
+		_pending_connection = false
 	_connected = connected
 	for row in controller.ledger.jobs:
 		var id: String = row["local_id"]
@@ -151,6 +168,14 @@ func _on_changed() -> void:
 			usage.record("generation_finished", properties)
 	if usage.should_flush():
 		flush()
+
+
+## Records the connection now if a call already succeeded on it, else at the first that does.
+func _connection_seen() -> void:
+	if _verified:
+		_record_connected()
+	else:
+		_pending_connection = true
 
 
 func _record_connected() -> void:
