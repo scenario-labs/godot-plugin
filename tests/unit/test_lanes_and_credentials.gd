@@ -8,7 +8,7 @@ var config_path := ""
 
 
 func before_each() -> void:
-	config_path = "user://test_credentials_%d/credentials.json" % randi()
+	config_path = "res://tests/tmp_output/credentials-%d/credentials.json" % randi()
 	OS.unset_environment("SCENARIO_API_KEY")
 	OS.unset_environment("SCENARIO_API_SECRET")
 
@@ -182,10 +182,9 @@ func test_secret_tool_never_gets_the_secret_as_an_argument() -> void:
 		"lookup", "service", "Scenario Godot Plugin", "account", "api_abc"]))
 	assert_eq(Credentials.secret_tool_arguments("clear", "api_abc")[0], "clear")
 	var bounded := Credentials._bounded("/usr/bin/secret-tool", PackedStringArray(["lookup"]), Credentials.UNLOCK_TIMEOUT_S)
-	if FileAccess.file_exists("/usr/bin/timeout"):
-		assert_eq(bounded, PackedStringArray(["/usr/bin/timeout", "120", "/usr/bin/secret-tool", "lookup"]), "time to answer the unlock prompt")
-	else:
-		assert_eq(bounded, PackedStringArray(["/usr/bin/secret-tool", "lookup"]))
+	assert_eq(bounded, PackedStringArray([Credentials._timeout_tool(), "120", "/usr/bin/secret-tool", "lookup"]), "time to answer the unlock prompt")
+	if Credentials._timeout_tool().is_empty():
+		assert_ne(Credentials.detect_store(), Credentials.SECRET_SERVICE, "never an unbounded secret-tool call")
 
 
 func test_credential_manager_script_names_the_target_and_reads_base64() -> void:
