@@ -6,6 +6,9 @@ extends RefCounted
 ##
 ## One refresh at a time: a call that needs a token while a refresh runs waits
 ## for it instead of sending a second one, which would spend the rotated token.
+## The provider rotates refresh tokens and revokes the whole session when an
+## old one comes back, so each refresh starts from the saved token: another
+## editor on this machine may have rotated it.
 
 ## The provider refused refresh_token: the person must sign in again.
 signal ended(refresh_token: String)
@@ -27,6 +30,8 @@ var project_id := ""
 var project_name := ""
 ## Called with the new refresh token after a rotation: (refresh_token: String) -> void
 var on_rotate := Callable()
+## Returns the refresh token saved now ("" if none): () -> String
+var load_saved := Callable()
 var _refreshing := false
 var _last_refresh := {}
 
@@ -57,6 +62,9 @@ func refresh() -> Dictionary:
 	if refresh_token().is_empty():
 		return Errors.fail(Errors.AUTH, "Your Scenario session ended. Sign in again.", {"session_ended": true})
 	_refreshing = true
+	var saved: String = load_saved.call() if load_saved.is_valid() else ""
+	if not saved.is_empty():
+		tokens["refresh_token"] = saved
 	var sent := refresh_token()
 	var result: Dictionary = await oauth.refresh(sent)
 	if result["ok"]:

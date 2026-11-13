@@ -155,6 +155,15 @@ func test_session_refreshes_an_expired_token_and_saves_the_rotation() -> void:
 	assert_eq((await session.authorization(300.0))["value"], "Bearer at_3")
 
 
+func test_session_refreshes_from_the_token_another_editor_saved() -> void:
+	var session := OAuthSession.new(oauth, {"access_token": "", "refresh_token": "rt_1", "expires_at": 0.0})
+	session.load_saved = func() -> String: return "rt_5"
+	fake.replies.append(_json(200, {"access_token": "at_6", "refresh_token": "rt_6", "expires_in": 3600}))
+	assert_true((await session.authorization())["ok"])
+	assert_eq(_form(0)["refresh_token"], "rt_5", "an old token would revoke the whole session")
+	assert_eq(session.refresh_token(), "rt_6")
+
+
 func test_session_ends_when_the_refresh_token_is_refused() -> void:
 	var session := OAuthSession.new(oauth, {"access_token": "", "refresh_token": "rt_1", "expires_at": 0.0})
 	watch_signals(session)

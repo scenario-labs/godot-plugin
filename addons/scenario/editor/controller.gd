@@ -382,6 +382,7 @@ func _finish_sign_in(serial: int, app: Dictionary, tokens: Dictionary) -> void:
 func _new_session(app: Dictionary, tokens: Dictionary) -> OAuthSession:
 	var session := OAuthSession.new(OAuth.new(transport, app["issuer"], app["client_id"]), tokens)
 	session.on_rotate = _save_rotated.bind(session)
+	session.load_saved = func() -> String: return credentials.load_session(app["issuer"], app["client_id"])["refresh_token"]
 	session.ended.connect(_on_session_ended.bind(session))
 	return session
 
