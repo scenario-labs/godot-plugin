@@ -8,6 +8,8 @@ extends Node
 
 ## The person answered the dock's question; the plugin saves it in Editor Settings.
 signal sharing_chosen(share: bool)
+## Sharing was turned on or off (from the dock or Editor Settings): the dock refreshes.
+signal sharing_changed
 
 const Usage := preload("res://addons/scenario/core/usage.gd")
 const Feedback := preload("res://addons/scenario/core/feedback.gd")
@@ -37,6 +39,7 @@ var _connected := false
 var _rows := {}
 var _finished := {}
 var _sending := false
+var _started := false
 
 
 func setup(p_controller: Node, p_transport: Object, state_path: String) -> void:
@@ -59,14 +62,21 @@ func setup(p_controller: Node, p_transport: Object, state_path: String) -> void:
 
 ## The editor setting changed (or the dock's answer was saved).
 func set_sharing(on: bool) -> void:
+	var was := usage.enabled
 	if on:
 		usage.mark_asked()  # chosen in Editor Settings: no need to ask
 	usage.set_enabled(on)
+	if on and not was and _started and _connected:
+		_record_connected()  # how the account in use connected, once sharing starts
+	sharing_changed.emit()
 
 
 ## Called once the plugin applied the settings at startup.
 func start() -> void:
+	_started = true
 	usage.record("extension_started")
+	if _connected:
+		_record_connected()  # a session or key resumed at startup
 
 
 ## The dock asks once, after the first successful sign-in or key connection.
@@ -126,8 +136,7 @@ func _on_called(tool: String, dry_run: bool, ok: bool, error_kind: String, durat
 func _on_changed() -> void:
 	var connected: bool = controller.is_connected_account()
 	if connected and not _connected:
-		var method := "sign_in" if controller.is_oauth() else ("environment" if controller.account.get("source") == "environment" else "api_key")
-		usage.record("signed_in", {"method": method})
+		_record_connected()
 	_connected = connected
 	for row in controller.ledger.jobs:
 		var id: String = row["local_id"]
@@ -142,3 +151,8 @@ func _on_changed() -> void:
 			usage.record("generation_finished", properties)
 	if usage.should_flush():
 		flush()
+
+
+func _record_connected() -> void:
+	var method := "sign_in" if controller.is_oauth() else ("environment" if controller.account.get("source") == "environment" else "api_key")
+	usage.record("connected", {"method": method})

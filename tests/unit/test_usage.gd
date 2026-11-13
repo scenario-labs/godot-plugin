@@ -88,6 +88,11 @@ func test_batches_carry_the_id_and_context_and_leave_the_rest_queued() -> void:
 		assert_false(text.contains(word), word)
 
 
+func test_an_unknown_send_is_not_an_end() -> void:
+	assert_false("unknown" in Usage.FINISHED, "it may still resolve to done or failed")
+	assert_true("dismissed" in Usage.FINISHED)
+
+
 func test_the_queue_is_bounded() -> void:
 	var usage := Usage.new(state_path)
 	usage.set_enabled(true)
