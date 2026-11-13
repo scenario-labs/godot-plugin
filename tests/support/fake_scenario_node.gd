@@ -37,6 +37,35 @@ const MODEL_LANE := {
 	"model_sonilo-v1-1-text-to-sound-effects": "sound",
 }
 
+## workflows_list rows per privacy, and each workflow's inputs and output lane
+## (fields as the API names them: allowedValues, costImpact...).
+const WORKFLOWS := {
+	"private": [
+		{"id": "workflow_prop3d", "name": "Prop to 3D", "status": "ready", "description": "Concept image, then a textured GLB"},
+		{"id": "workflow_wip", "name": "Work in progress", "status": "draft"},
+	],
+	"public": [
+		{"id": "workflow_pubsfx", "name": "Foley Pack", "status": "ready", "description": "Three takes of one sound"},
+		{"id": "workflow_pubbatch", "name": "Sprite Batch", "status": "ready"},
+	],
+}
+const WORKFLOW_INPUTS := {
+	"workflow_prop3d": [
+		{"name": "objectPrompt", "type": "string", "label": "Object", "required": true},
+		{"name": "style", "type": "string", "allowedValues": ["stylized", "realistic"], "default": "stylized"},
+		{"name": "referenceImage", "type": "file", "kind": "image"},
+		{"name": "detail", "type": "number", "min": 1, "max": 4, "step": 1, "default": 2, "costImpact": true},
+		{"name": "transparent", "type": "boolean", "default": true},
+		{"name": "extraSteps", "type": "inputs_array"},
+	],
+	"workflow_pubsfx": [{"name": "prompt", "type": "string", "required": true}],
+	"workflow_pubbatch": [
+		{"name": "prompt", "type": "string", "required": true},
+		{"name": "sprites", "type": "inputs_array", "required": true},
+	],
+}
+const WORKFLOW_LANE := {"workflow_prop3d": "model3d", "workflow_pubsfx": "sound", "workflow_pubbatch": "image"}
+
 ## What teams_list returns.
 var teams: Array = [
 	{"id": "team_a", "name": "Team A", "projects": [{"id": "proj_a1", "name": "Game A"}, {"id": "proj_a2", "name": "Game B"}]},
@@ -73,6 +102,11 @@ var uploads := 0
 var puts: Array = []
 var estimates := 0
 var tool_log: Array = []
+## Workflow runs paused at a person's step: job_get reports awaiting_input
+## for these job ids, as many times as the count says.
+var awaiting := {}
+## The next paid workflow run reaches Scenario but its reply is lost (a timeout).
+var drop_next_paid := false
 ## jobs_list answers per project: {project_id: [job, ...]}.
 var listed := {}
 var _jobs := {}
@@ -114,7 +148,30 @@ func post(url: String, headers: PackedStringArray, body: String, _timeout_s: flo
 			var job_id := "job_fake_%d" % paid_calls.size()
 			_jobs[job_id] = MODEL_LANE.get(str(args["model_id"]), "image")
 			return _reply(payload["id"], _tool({"model_id": args["model_id"], "job_id": job_id, "status": "queued"}))
+		"workflows_list":
+			return _reply(payload["id"], _tool({"workflows": WORKFLOWS.get(str(args.get("privacy", "private")), [])}))
+		"workflow_get":
+			var workflow_id := str(args["workflow_id"])
+			# As MCP returns it: the API's inputs renamed inputs_definition.
+			return _reply(payload["id"], _tool({"workflow": {"id": workflow_id, "name": workflow_id, "status": "ready",
+				"inputs_definition": WORKFLOW_INPUTS.get(workflow_id, [])}}))
+		"workflow_run":
+			if args.get("dry_run", false):
+				estimates += 1
+				return _reply(payload["id"], _tool({"creativeUnitsCost": price * 3, "creativeUnitsDiscount": 0}))
+			paid_calls.append(args)
+			if drop_next_paid:
+				drop_next_paid = false
+				return {"status": 0, "headers": {}, "body": "", "error": "timeout"}  # sent, reply lost
+			var run_id := "job_fake_%d" % paid_calls.size()
+			_jobs[run_id] = WORKFLOW_LANE.get(str(args["workflow_id"]), "image")
+			return _reply(payload["id"], _tool({"job": {"jobId": run_id, "status": "queued", "workflowId": args["workflow_id"]},
+				"workflow": {"id": args["workflow_id"]}}))
 		"job_get":
+			if int(awaiting.get(str(args["job_id"]), 0)) > 0:
+				awaiting[str(args["job_id"])] -= 1
+				return _reply(payload["id"], _tool({"job": {"jobId": args["job_id"], "status": "in-progress", "progress": 0.5,
+					"awaiting_input": [{"node_id": "approve_1", "type": "approval"}]}}))
 			var lane: String = _jobs.get(str(args["job_id"]), "image")
 			var ids: Array = OUTPUTS[lane].map(func(o: Dictionary) -> String: return o["id"])
 			return _reply(payload["id"], _tool({"job": {"jobId": args["job_id"], "status": "success", "progress": 1, "assetIds": ids, "cuCost": price}}))

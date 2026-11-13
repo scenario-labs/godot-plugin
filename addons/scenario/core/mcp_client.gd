@@ -18,6 +18,7 @@ extends RefCounted
 const Errors := preload("res://addons/scenario/core/errors.gd")
 const Sse := preload("res://addons/scenario/core/sse.gd")
 const OAuthSession := preload("res://addons/scenario/core/oauth_session.gd")
+const Workflows := preload("res://addons/scenario/core/workflows.gd")
 
 const DEFAULT_ENDPOINT := "https://mcp.scenario.com/mcp?toolsets=full"
 const PROTOCOL_VERSION := "2025-03-26"
@@ -32,7 +33,7 @@ const PAID_MIN_TOKEN_S := 300.0
 ## Idempotent reads: the only calls ever retried.
 const READ_TOOLS := [
 	"model_schema_get", "models_list", "job_get", "jobs_list", "asset_get", "asset_download",
-	"recommend", "search", "usage", "teams_list", "projects_list",
+	"recommend", "search", "usage", "teams_list", "projects_list", "workflows_list", "workflow_get",
 ]
 ## Calls that can spend Creative Units or create something.
 const SUBMIT_TOOLS := [
@@ -103,8 +104,10 @@ static func is_submission(tool: String, arguments: Dictionary) -> bool:
 
 
 static func is_retryable(tool: String, arguments: Dictionary) -> bool:
+	# A free model estimate is a read. A workflow estimate is not retried: a run
+	# it starts by mistake fans out into several paid jobs.
 	if tool == "model_run" and bool(arguments.get("dry_run", false)):
-		return true  # a free estimate is a read
+		return true
 	return tool in READ_TOOLS
 
 
@@ -126,9 +129,14 @@ static func created_job_id(value: Variant) -> String:
 
 # --- High-level calls ---------------------------------------------------------
 
-## Free price check. ok({"cu": float, "discount": float})
+## Free price check. ok({"cu": float, "discount": float}). A workflow id
+## (workflow_...) is priced with workflow_run's dry run.
 func estimate(model_id: String, parameters: Dictionary) -> Dictionary:
-	var result: Dictionary = await call_tool("model_run", {"model_id": model_id, "parameters": parameters, "dry_run": true})
+	var result: Dictionary
+	if Workflows.is_workflow(model_id):
+		result = await call_tool("workflow_run", {"workflow_id": model_id, "inputs": parameters, "dry_run": true})
+	else:
+		result = await call_tool("model_run", {"model_id": model_id, "parameters": parameters, "dry_run": true})
 	if not result["ok"]:
 		return result
 	var value: Dictionary = result["value"]
@@ -142,7 +150,11 @@ func estimate(model_id: String, parameters: Dictionary) -> Dictionary:
 
 ## Paid. Sent exactly once. ok({"job_id", "status"})
 func submit(model_id: String, parameters: Dictionary) -> Dictionary:
-	var result: Dictionary = await call_tool("model_run", {"model_id": model_id, "parameters": parameters, "wait": false})
+	var result: Dictionary
+	if Workflows.is_workflow(model_id):
+		result = await call_tool("workflow_run", {"workflow_id": model_id, "inputs": parameters})
+	else:
+		result = await call_tool("model_run", {"model_id": model_id, "parameters": parameters, "wait": false})
 	if not result["ok"]:
 		return result
 	var job_id := created_job_id(result["value"])
@@ -150,7 +162,9 @@ func submit(model_id: String, parameters: Dictionary) -> Dictionary:
 		return Errors.fail(Errors.PROTOCOL,
 			"Scenario accepted the request but returned no job id. Check recent jobs before generating again.",
 			{"ambiguous": true})
-	return Errors.ok({"job_id": job_id, "status": str(result["value"].get("status", "queued"))})
+	var job: Variant = result["value"].get("job")  # a workflow run: {"job": {...}, "workflow": {...}}
+	var status: Variant = result["value"].get("status", job.get("status", "queued") if job is Dictionary else "queued")
+	return Errors.ok({"job_id": job_id, "status": str(status)})
 
 
 ## scope: {"team_id", "project_id"} of the project the job ran in, when it is
@@ -234,8 +248,25 @@ func list_project_models(max_pages: int = 5) -> Dictionary:
 	return Errors.ok(models)
 
 
+## A model's schema, or a workflow's inputs in the same shape (see Workflows.schema_from).
 func get_schema(model_id: String) -> Dictionary:
-	return await call_tool("model_schema_get", {"model_id": model_id})
+	if not Workflows.is_workflow(model_id):
+		return await call_tool("model_schema_get", {"model_id": model_id})
+	var result := _unwrap(await call_tool("workflow_get", {"workflow_id": model_id}), "workflow")
+	return Errors.ok(Workflows.schema_from(result["value"])) if result["ok"] else result
+
+
+## Ready workflows as picker entries: this project's, then public ones.
+func list_workflows() -> Dictionary:
+	var entries: Array = []
+	for privacy in ["private", "public"]:
+		var result := _unwrap(await call_tool("workflows_list", {"privacy": privacy, "status": "ready", "limit": 100}), "workflows")
+		if not result["ok"]:
+			if privacy == "public" and not entries.is_empty():
+				break  # the project's own workflows are enough
+			return result
+		entries.append_array(Workflows.entries(result["value"], privacy == "public"))
+	return Errors.ok(entries)
 
 
 func recommend(capability: String, prompt: String, limit: int = 8) -> Dictionary:
@@ -286,7 +317,7 @@ func call_tool(tool: String, arguments: Dictionary = {}, timeout_s: float = DEFA
 			elif renewed["ok"]:
 				result["error"]["message"] = "Scenario refused the sign-in token, so nothing was sent. The sign-in is renewed: try again."
 		if result["ok"]:
-			if tool == "model_run" and bool(arguments.get("dry_run", false)):
+			if tool in ["model_run", "workflow_run"] and bool(arguments.get("dry_run", false)):
 				var job_id := created_job_id(result["value"])
 				if not job_id.is_empty():
 					return Errors.fail(Errors.ESTIMATE_JOB,

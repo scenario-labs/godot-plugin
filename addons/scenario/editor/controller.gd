@@ -20,6 +20,7 @@ const Loopback := preload("res://addons/scenario/core/loopback.gd")
 const Files := preload("res://addons/scenario/core/files.gd")
 const ProjectModels := preload("res://addons/scenario/core/project_models.gd")
 const Placer := preload("res://addons/scenario/editor/placer.gd")
+const Workflows := preload("res://addons/scenario/core/workflows.gd")
 
 const ESTIMATE_DEBOUNCE_S := 0.6
 const POLL_INTERVAL_S := 3.0
@@ -301,6 +302,9 @@ func choose_project(team_id: String, project_id: String) -> void:
 		_set_price(PRICE_IDLE, -1.0, "")
 		_drop_references()
 		_forget_project_models()
+		recommended.erase(Lanes.WORKFLOW)  # workflows belong to the project
+		if lane_id == Lanes.WORKFLOW:
+			model_id = ""  # _start_work lists the new project's workflows
 		notified.emit("Generations now go to %s." % client.session.workspace_label(), "info")
 	changed.emit()
 	_start_work()
@@ -389,6 +393,7 @@ func _use_session(session: OAuthSession, source: String) -> void:
 	picking = false
 	quotes.clear()
 	_forget_project_models()
+	recommended.erase(Lanes.WORKFLOW)
 	changed.emit()
 	if session.has_project():
 		_start_work()
@@ -480,7 +485,22 @@ func select_lane(id: String) -> void:
 	if Lanes.lane(id).is_empty():
 		return
 	lane_id = id
-	await select_model(Lanes.default_model(id))
+	if id != Lanes.WORKFLOW:
+		await select_model(Lanes.default_model(id))
+		return
+	if not recommended.has(id):  # the project's ready workflows, then public ones
+		var listed: Dictionary = await client.list_workflows()
+		if listed["ok"]:
+			recommended[id] = listed["value"]
+		else:
+			notified.emit(listed["error"]["message"], "error")  # the next visit lists again
+	if lane_id == id and not lane_models().is_empty():
+		await select_model(lane_models()[0]["id"])
+	elif lane_id == id:
+		model_id = ""
+		fields = []
+		_set_price(PRICE_INVALID, -1.0, "No ready workflow to run here. Make one on app.scenario.com, then press Refresh.")
+		changed.emit()
 
 
 func lane_models() -> Array:
@@ -667,11 +687,14 @@ func poll() -> void:
 	for row in ledger.active():
 		var result: Dictionary = await client.get_job(row["job_id"], _row_scope(row))
 		if result["ok"]:
+			var was_waiting: bool = row["error"] == Ledger.AWAITING
 			var updated := ledger.apply_job(result["value"], _now())
 			if updated.get("state") == Ledger.SUCCESS and auto_import and not updated["imported"]:
 				import_job(updated["local_id"])
 			elif updated.get("state") in [Ledger.FAILED, Ledger.BLOCKED]:
-				notified.emit("%s: %s" % [_model_name(updated["model_id"]), _failure_text(updated)], "error")
+				notified.emit("%s: %s" % [_model_name(updated["model_id"]), Ledger.failure_text(updated)], "error")
+			elif updated.get("error") == Ledger.AWAITING and not was_waiting:
+				notified.emit("%s: %s" % [_model_name(updated["model_id"]), Ledger.AWAITING], "warning")
 	_polling = false
 	if ledger.active().is_empty():
 		_poll.stop()
@@ -810,8 +833,10 @@ func import_job(local_id: String) -> Dictionary:
 		changed.emit()
 		return {"ok": false, "message": problem}
 	Files.write_provenance(row, assets, files[0]["path"].get_basename() + ".scenario.json", "Scenario Godot Plugin " + Client.VERSION)
-	await placer.import_files(row["lane"], files)
-	var placed := placer.place(row["lane"], files, Files.node_name(row["prompt"]))
+	# A workflow's outputs are placed by their file type.
+	var place_lane: String = Workflows.place_lane(files) if row["lane"] == Lanes.WORKFLOW else row["lane"]
+	await placer.import_files(place_lane, files)
+	var placed := placer.place(place_lane, files, Files.node_name(row["prompt"]))
 	var paths: Array = files.map(func(f: Dictionary) -> String: return f["path"])
 	for extra in placed["resource_paths"]:
 		if not extra in paths:
@@ -903,6 +928,10 @@ func clear_field(field_name: String) -> void:
 
 
 func load_recommendations() -> void:
+	if lane_id == Lanes.WORKFLOW:
+		recommended.erase(lane_id)
+		await select_lane(lane_id)  # Refresh: list the workflows again
+		return
 	var lane := Lanes.lane(lane_id)
 	if not lane.get("recommend", true):
 		return
@@ -967,10 +996,6 @@ func _set_price(state: String, cu: float, message: String) -> void:
 	price_message = message
 
 
-func _has_field(name: String) -> bool:
-	return not _field(name).is_empty()
-
-
 func _field(name: String) -> Dictionary:
 	for field in fields:
 		if field["name"] == name:
@@ -988,12 +1013,6 @@ func _model_name(id: String) -> String:
 			if model["id"] == id:
 				return model["name"]
 	return id.trim_prefix("model_")
-
-
-func _failure_text(row: Dictionary) -> String:
-	if row["state"] == Ledger.BLOCKED:
-		return Errors.message_for(Errors.MODERATED)
-	return str(row["error"]) if not str(row["error"]).is_empty() else "the job failed on Scenario."
 
 
 static func _now() -> float:
