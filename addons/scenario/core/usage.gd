@@ -23,11 +23,12 @@ const REQUESTS := ["price_check", "generate", "cancel", "import", "upload_refere
 const ERROR_KINDS := [Errors.AUTH, Errors.FORBIDDEN, Errors.QUOTA, Errors.MODERATED, Errors.RATE_LIMIT,
 	Errors.NOT_FOUND, Errors.INVALID, Errors.TRANSPORT, Errors.TIMEOUT, Errors.HTTP_5XX, Errors.PROTOCOL,
 	Errors.LOCAL, Errors.ESTIMATE_JOB, Errors.SCENARIO]
-const FINISHED := ["success", "failed", "blocked", "canceled", "rejected", "unknown"]
+## A generation's end. Unknown is not one: it may still resolve to one of these.
+const FINISHED := ["success", "failed", "blocked", "canceled", "rejected", "dismissed"]
 ## event -> {property: allowed values, or TYPE_INT / TYPE_FLOAT for a number}
 const EVENTS := {
 	"extension_started": {},
-	"signed_in": {"method": ["sign_in", "api_key", "environment"]},
+	"connected": {"method": ["sign_in", "api_key", "environment"]},
 	"scenario_request": {"request": REQUESTS, "outcome": ["ok", "error"], "error_kind": ERROR_KINDS, "duration_ms": TYPE_INT},
 	"generation_sent": {"lane": LANES, "cu": TYPE_FLOAT},
 	"generation_finished": {"lane": LANES, "state": FINISHED, "cu": TYPE_FLOAT},

@@ -8,7 +8,7 @@ Version 0.2.1. For installation see the [README](../README.md). <!-- x-release-p
 2. Press **Sign in with Scenario**. Your browser opens Scenario's sign-in; approve "Scenario for Godot", then come back to Godot. When this computer's browser cannot finish (a remote machine, a locked-down browser), press **Sign in on another device** instead: the dock shows a code to enter at the address it gives, on any device.
 3. Choose the team and project that pays for the generations, and press **Use this project**. An account with a single project skips this step. Jobs and their results stay in the project they were sent to.
 
-The footer shows the team and project. The **...** menu holds **Change team or project**, **Open Scenario**, **Check unknown jobs** and **Sign out** (forgets the sign-in on this computer and tells Scenario to end it). The sign-in lasts across editor restarts; if Scenario ends it, the dock asks you to sign in again.
+The footer shows the team and project. The **...** menu holds **Change team or project**, **Open Scenario**, **Check unknown jobs**, **Send feedback** and **Sign out** (forgets the sign-in on this computer and tells Scenario to end it). The sign-in lasts across editor restarts; if Scenario ends it, the dock asks you to sign in again.
 
 With an API key instead: press **Use an API key instead**, paste a key (`api_...`) and its secret from the Scenario web app ([app.scenario.com](https://app.scenario.com)), and press **Connect**. Generations go to the key's project, and the footer shows the key and where it came from (`keychain`, `credential-manager`, `secret-service`, `file` or `environment`).
 
@@ -108,9 +108,9 @@ Environment variables, read when Godot starts:
 While it is on, the plugin keeps a random install ID in the editor settings folder (`scenario/usage.json`), not linked to your Scenario account, and about once a minute sends:
 
 - that the plugin started;
-- that you signed in, and how (Sign in with Scenario, a saved key or environment variables);
+- that the dock is connected, and how (Sign in with Scenario, a saved key or environment variables), at startup, on each sign-in and when sharing starts;
 - which Scenario requests the dock makes (price check, generate, cancel, import, reference upload, recommendations, team list, unknown-job check, model settings), whether each worked, the error type and how long it took;
-- each generation's lane, its quoted CU when sent, and its end state and charged CU.
+- each generation's lane, its quoted CU when sent, and its end state (done, failed, blocked, canceled, rejected or dismissed) and charged CU.
 
 Each batch adds the plugin and Godot versions, the operating system and the processor type. It never sends prompts, file paths, scene or node names, model, asset, job, team or project IDs, or your key. Events go to `https://godot.scenario.com/telemetry/v1/events`, which adds the country Vercel derives from your address, drops any other event or field, and forwards the rest to Scenario's PostHog project without your address. Turning the setting off discards unsent events and deletes the ID. A headless editor (scripts, CI) never sends them.
 

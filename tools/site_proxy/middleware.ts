@@ -138,7 +138,7 @@ const ERROR_KINDS = oneOf("auth", "forbidden", "quota", "moderated", "rate_limit
 // Each event the plugin may send, with the only properties kept and their checks.
 export const EVENTS: Record<string, Record<string, Check>> = {
   extension_started: {},
-  signed_in: { method: oneOf("sign_in", "api_key", "environment") },
+  connected: { method: oneOf("sign_in", "api_key", "environment") },
   scenario_request: {
     request: oneOf("price_check", "generate", "cancel", "import", "upload_reference", "recommend", "list_teams",
       "check_unknown", "model_settings"),
@@ -147,7 +147,7 @@ export const EVENTS: Record<string, Record<string, Check>> = {
     duration_ms: count(3_600_000),
   },
   generation_sent: { lane: LANES, cu: amount },
-  generation_finished: { lane: LANES, state: oneOf("success", "failed", "blocked", "canceled", "rejected", "unknown"), cu: amount },
+  generation_finished: { lane: LANES, state: oneOf("success", "failed", "blocked", "canceled", "rejected", "dismissed"), cu: amount },
 };
 // Sent with every batch and feedback: where the plugin runs, never who uses it.
 const CONTEXT: Record<string, Check> = {

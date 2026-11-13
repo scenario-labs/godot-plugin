@@ -66,11 +66,18 @@ func run() -> Dictionary:
 	controller.changed.emit()
 	await wait_frames(1)
 	check("asked after the first connection", reporter.should_ask() and ui._consent_box.visible)
+	# Turned on in Editor Settings while the card shows: the card goes, the connection is recorded.
+	reporter.set_sharing(true)
+	await wait_frames(1)
+	check("on from Editor Settings: the card goes", not ui._consent_box.visible and not reporter.should_ask())
+	check("sharing on while connected: the connection is recorded", reporter.usage.queue.any(func(e: Dictionary) -> bool:
+		return e["event"] == "connected" and e["properties"] == {"method": "api_key"}))
+	reporter.set_sharing(false)
 	var answers: Array = []
 	reporter.sharing_chosen.connect(func(share: bool) -> void: answers.append(share))
 	ui._choose_sharing(false)
 	check("No thanks: not asked again, nothing on", not reporter.should_ask() and not ui._consent_box.visible
-		and not reporter.usage.enabled and answers == [false])
+		and not reporter.usage.enabled and answers == [false] and reporter.usage.queue.is_empty())
 	await _generate(controller, "a wooden chest, game prop")
 	reporter.flush()
 	check("No thanks: nothing queued or sent", reporter.usage.queue.is_empty() and relay.posts.is_empty())

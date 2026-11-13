@@ -93,6 +93,8 @@ func bind(p_controller: Controller) -> void:
 	_library_ui.bind(library)
 	controller.changed.connect(_refresh)
 	controller.notified.connect(_on_notified)
+	if reporter != null:
+		reporter.sharing_changed.connect(_refresh)
 	_refresh()
 
 
