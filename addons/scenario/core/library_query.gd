@@ -107,6 +107,16 @@ static func thumbnail_url(item: Dictionary, kind: String) -> String:
 	return url
 
 
+## An output's kind from its MIME type, else its metadata: Scenario can list a
+## GLB as application/octet-stream with a 3D type (as Workflows.download_format reads it).
+static func output_kind(asset: Dictionary) -> String:
+	var kind := kind_for_mime(text(asset.get("mimeType")))
+	var metadata: Variant = asset.get("metadata")
+	if kind.is_empty() and metadata is Dictionary and text(metadata.get("type")).contains("3d"):
+		return "3d"
+	return kind
+
+
 static func kind_for_mime(mime: String) -> String:
 	if mime in ["image/x-exr", "image/vnd.radiance"]:
 		return "image-hdr"
@@ -135,12 +145,12 @@ static func lane_for(model_id: String, kind: String, mime: String = "") -> Strin
 	return "skybox" if by_kind == "image" and model_lane(model_id) == "skybox" else by_kind
 
 
-## The lane that places a whole job: its model's, else from all its outputs
-## (a 3D job lists a preview image before the model).
-static func lane_for_job(model_id: String, mimes: Array) -> String:
+## The lane that places a whole job: its model's, else from all its outputs,
+## the asset_get replies (a 3D job lists a preview image before the model).
+static func lane_for_job(model_id: String, outputs: Array) -> String:
 	if not model_lane(model_id).is_empty():
 		return model_lane(model_id)
-	var lanes: Array = mimes.map(func(mime: String) -> String: return lane_for("", "", mime))
+	var lanes: Array = outputs.map(func(asset: Dictionary) -> String: return lane_for("", output_kind(asset)))
 	for preferred in ["model3d", "sound", "skybox", "image"]:
 		if preferred in lanes:
 			return preferred

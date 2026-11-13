@@ -72,10 +72,13 @@ func test_lane_for_one_asset() -> void:
 
 func test_lane_for_a_whole_job() -> void:
 	assert_eq(Query.lane_for_job("model_patina-material", []), "material", "a listed model's lane")
-	assert_eq(Query.lane_for_job("model_team-3d", ["image/png", "model/gltf-binary"]), "model3d", "a preview listed before the GLB")
-	assert_eq(Query.lane_for_job("model_team-sfx", ["audio/mpeg"]), "sound")
-	assert_eq(Query.lane_for_job("model_team-style", ["image/png", "image/png"]), "image")
-	assert_eq(Query.lane_for_job("model_team-video", ["video/mp4"]), "")
+	var png := {"mimeType": "image/png"}
+	assert_eq(Query.lane_for_job("model_team-3d", [png, {"mimeType": "model/gltf-binary"}]), "model3d", "a preview listed before the GLB")
+	assert_eq(Query.lane_for_job("model_team-3d", [png, {"mimeType": "application/octet-stream", "metadata": {"type": "inference-txt23d"}}]),
+		"model3d", "a GLB listed as octet-stream, known by its 3D type")
+	assert_eq(Query.lane_for_job("model_team-sfx", [{"mimeType": "audio/mpeg"}]), "sound")
+	assert_eq(Query.lane_for_job("model_team-style", [png, png]), "image")
+	assert_eq(Query.lane_for_job("model_team-video", [{"mimeType": "video/mp4"}]), "")
 
 
 func test_history_rows() -> void:
