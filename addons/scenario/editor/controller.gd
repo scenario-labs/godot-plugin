@@ -863,26 +863,9 @@ func attach_file(field_name: String, path: String) -> void:
 	uploads[field_name] = "uploading"
 	schedule_estimate()
 	var serial := _reference_serial
-	var start: Dictionary = await client.upload_start(path.get_file(), type["mime"], type["kind"], bytes.size())
-	var asset_id := ""
-	var problem := ""
-	if not start["ok"]:
-		problem = start["error"]["message"]
-	else:
-		var part_size := int(start["value"].get("part_size", bytes.size()))
-		for part in start["value"].get("parts", []):
-			var index := int(part.get("part_number", 1)) - 1
-			var chunk := bytes.slice(index * part_size, mini((index + 1) * part_size, bytes.size()))
-			var put: Dictionary = await transport.put_bytes(str(part.get("upload_url", "")), chunk)
-			if not put["ok"]:
-				problem = put["error"]
-				break
-		if problem.is_empty():
-			var done: Dictionary = await client.upload_complete({"upload_id": start["value"].get("upload_id", "")})
-			if done["ok"] and str(done["value"].get("asset_id", "")).begins_with("asset_"):
-				asset_id = done["value"]["asset_id"]
-			else:
-				problem = done["error"]["message"] if not done["ok"] else "Scenario did not finish the upload."
+	var sent: Dictionary = await Downloads.upload(client, transport, path.get_file(), type, bytes)
+	var asset_id: String = sent["asset_id"]
+	var problem: String = sent["problem"]
 	uploads.erase(field_name)
 	if serial != _reference_serial:
 		pass  # the project changed during the upload: the asset is in the earlier one
