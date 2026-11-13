@@ -105,7 +105,7 @@ func run() -> Dictionary:
 	for child in scene.get_children():
 		if child.scene_file_path.ends_with(".glb"):
 			model = child
-	check("GLB output instanced in the scene", placed.get("ok", false) and model != null and model.owner == scene)
+	check("GLB output instanced in the scene: " + str(placed.get("message", "")), placed.get("ok", false) and model != null and model.owner == scene)
 	check("image next to the GLB kept as a file, not placed", row.get("files", []).any(func(f: String) -> bool: return f.ends_with(".png"))
 		and _first_of(scene, "Sprite3D") == null)
 	check("files under the workflow folder", row.get("files", []).all(func(f: String) -> bool: return f.contains("/scenario/workflow/")))
@@ -116,8 +116,8 @@ func run() -> Dictionary:
 	await controller.estimate_now()
 	var sound: Dictionary = await controller.generate()
 	await controller.poll()
-	await controller.import_job(sound.get("local_id", ""))
-	check("sound output placed as a player", _first_of(scene, "AudioStreamPlayer3D") != null or _first_of(scene, "AudioStreamPlayer") != null)
+	var sound_placed: Dictionary = await controller.import_job(sound.get("local_id", ""))
+	check("sound output placed as a player: " + str(sound_placed.get("message", "")), _first_of(scene, "AudioStreamPlayer3D") != null or _first_of(scene, "AudioStreamPlayer") != null)
 
 	# Image, model and sound from one run: each placed by its lane, the model asked for as GLB.
 	var players_before := scene.find_children("*", "AudioStreamPlayer3D", true, false).size()
@@ -129,7 +129,7 @@ func run() -> Dictionary:
 	await controller.poll()
 	EditorInterface.get_selection().clear()
 	var kit_placed: Dictionary = await controller.import_job(kit.get("local_id", ""))
-	check("mixed run: model and sound both placed", kit_placed.get("ok", false) and _models(scene) == models_before + 1
+	check("mixed run: model and sound both placed: " + str(kit_placed.get("message", "")), kit_placed.get("ok", false) and _models(scene) == models_before + 1
 		and scene.find_children("*", "AudioStreamPlayer3D", true, false).size() == players_before + 1)
 	var glb_download := fake.calls.filter(func(c: Dictionary) -> bool: return c["tool"] == "asset_download" and c["arguments"]["asset_id"] == "asset_mixglb")
 	check("mixed run: the model downloaded as GLB, the rest as is", glb_download.size() == 1 and glb_download[0]["arguments"].get("format") == "glb"
