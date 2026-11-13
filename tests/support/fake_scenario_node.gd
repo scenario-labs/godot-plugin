@@ -236,10 +236,12 @@ func post(url: String, headers: PackedStringArray, body: String, _timeout_s: flo
 	return _reply(payload["id"], {"content": [{"type": "text", "text": "unknown tool " + tool}], "isError": true})
 
 
-func download(url: String, dest_path: String, _timeout_s: float = 600.0) -> Dictionary:
+func download(url: String, dest_path: String, _timeout_s: float = 600.0, max_bytes: int = 0) -> Dictionary:
 	var asset_id := url.get_file().get_slice("?", 0)
 	var output := _output(asset_id)
 	var bytes := FileAccess.get_file_as_bytes(ASSETS + output["file"])
+	if max_bytes > 0 and bytes.size() > max_bytes:
+		return {"ok": false, "path": "", "error": "Download failed (HTTP 200)."}
 	var absolute := ProjectSettings.globalize_path(dest_path)
 	DirAccess.make_dir_recursive_absolute(absolute.get_base_dir())
 	var file := FileAccess.open(absolute, FileAccess.WRITE)

@@ -21,6 +21,10 @@ const MAX_LIST_PAGES := 5
 const HISTORY_PAGE_SIZE := 30
 ## Thumbnail width asked of Scenario's image transform.
 const THUMBNAIL_WIDTH := 192
+## A thumbnail larger than this, in bytes or decoded pixels, is not shown: a
+## collaborator's upload could otherwise be a tiny file that decodes to gigabytes.
+const MAX_THUMBNAIL_BYTES := 4 * 1024 * 1024
+const MAX_THUMBNAIL_PIXELS := 4096 * 4096
 const KINDS := ["all", "image", "3d", "audio"]
 const SOURCES := ["all", "generated", "uploaded"]
 ## The kinds the dock can place.
@@ -91,7 +95,8 @@ static func matches(row: Dictionary, kind: String, source: String, query: String
 
 
 ## A small picture of an image: Scenario's transform URL with a width (the
-## signed policy covers any parameter after p=100), else the file itself.
+## signed policy covers any parameter after p=100), else the file itself,
+## which the Library reads only within MAX_THUMBNAIL_BYTES and MAX_THUMBNAIL_PIXELS.
 ## 3D and audio have none.
 static func thumbnail_url(item: Dictionary, kind: String) -> String:
 	var url := text(item.get("url"))
@@ -186,3 +191,40 @@ static func model_name(model_id: String) -> String:
 ## "2026-11-13 14:05" from an ISO date (UTC, as Scenario stores it).
 static func date_text(iso: String) -> String:
 	return iso.substr(0, 16).replace("T", " ") if iso.length() >= 16 else iso
+
+
+## Width and height read from a PNG, JPEG or WebP header, without decoding;
+## Vector2i.ZERO when the header is not understood.
+static func image_size(bytes: PackedByteArray) -> Vector2i:
+	if bytes.size() >= 24 and bytes[0] == 0x89 and bytes[1] == 0x50 and bytes[12] == 0x49:  # PNG, IHDR first
+		return Vector2i(_be32(bytes, 16), _be32(bytes, 20))
+	if bytes.size() >= 30 and bytes.slice(0, 4).get_string_from_ascii() == "RIFF" and bytes.slice(8, 12).get_string_from_ascii() == "WEBP":
+		match bytes.slice(12, 16).get_string_from_ascii():
+			"VP8 ":
+				return Vector2i((bytes[26] | bytes[27] << 8) & 0x3FFF, (bytes[28] | bytes[29] << 8) & 0x3FFF)
+			"VP8L":
+				var bits := bytes[21] | bytes[22] << 8 | bytes[23] << 16 | bytes[24] << 24
+				return Vector2i((bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1)
+			"VP8X":
+				return Vector2i((bytes[24] | bytes[25] << 8 | bytes[26] << 16) + 1, (bytes[27] | bytes[28] << 8 | bytes[29] << 16) + 1)
+		return Vector2i.ZERO
+	if bytes.size() >= 4 and bytes[0] == 0xFF and bytes[1] == 0xD8:  # JPEG: the first start-of-frame
+		var i := 2
+		while i + 9 < bytes.size():
+			if bytes[i] != 0xFF:
+				return Vector2i.ZERO
+			var marker := bytes[i + 1]
+			if marker == 0xFF:
+				i += 1  # fill byte
+				continue
+			if marker >= 0xD0 and marker <= 0xD9 or marker == 0x01:
+				i += 2  # no length
+				continue
+			if marker >= 0xC0 and marker <= 0xCF and not marker in [0xC4, 0xC8, 0xCC]:
+				return Vector2i(bytes[i + 7] << 8 | bytes[i + 8], bytes[i + 5] << 8 | bytes[i + 6])
+			i += 2 + (bytes[i + 2] << 8 | bytes[i + 3])
+	return Vector2i.ZERO
+
+
+static func _be32(bytes: PackedByteArray, at: int) -> int:
+	return bytes[at] << 24 | bytes[at + 1] << 16 | bytes[at + 2] << 8 | bytes[at + 3]
