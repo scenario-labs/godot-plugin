@@ -143,3 +143,28 @@ func test_feedback_keeps_its_submission_id_until_sent() -> void:
 	assert_false(off.has("install_id"), "no install ID while usage data is off")
 	feedback.sent()
 	assert_ne(feedback.payload(5, "", "")["submission_id"], off["submission_id"])
+
+
+func test_an_opt_out_in_another_editor_holds_in_this_one() -> void:
+	var here := Usage.new(state_path)
+	here.mark_asked()
+	here.set_enabled(true)
+	assert_true(here.record("extension_started"))
+	var other := Usage.new(state_path)  # a second editor process, same config folder
+	other.set_enabled(true)
+	other.set_enabled(false)
+	assert_eq(here.take_batch(), {}, "nothing sent once the install ID is gone")
+	assert_false(here.enabled)
+	assert_true(here.queue.is_empty())
+	# At the next start, this editor's saved setting still says on: it no longer counts.
+	var next := Usage.new(state_path)
+	assert_false(next.still_shared(true))
+	assert_false(next.still_shared(false))
+
+
+func test_a_setting_turned_on_before_any_choice_still_holds() -> void:
+	var fresh := Usage.new(state_path)
+	assert_true(fresh.still_shared(true), "not asked yet: the setting is the person's choice")
+	fresh.mark_asked()
+	fresh.set_enabled(true)
+	assert_true(Usage.new(state_path).still_shared(true), "the install ID is there")

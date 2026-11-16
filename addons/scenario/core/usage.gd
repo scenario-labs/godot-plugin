@@ -70,6 +70,12 @@ func set_enabled(on: bool) -> void:
 			_write(state)
 
 
+## Whether a sharing setting found on at startup still holds: another editor
+## that opted out deleted the install ID after this one last saved its settings.
+func still_shared(setting_on: bool) -> bool:
+	return setting_on and not (asked() and not _is_id(str(_read().get("install_id", ""))))
+
+
 ## "" while sharing is off.
 func install_id() -> String:
 	return str(_read().get("install_id", "")) if enabled else ""
@@ -98,6 +104,8 @@ func should_flush() -> bool:
 ## A batch that fails to send is not retried.
 func take_batch() -> Dictionary:
 	var id := install_id()
+	if enabled and id.is_empty():
+		set_enabled(false)  # another editor opted out: this one stops and drops its queue too
 	if id.is_empty() or queue.is_empty():
 		return {}
 	var events := queue.slice(0, MAX_BATCH)

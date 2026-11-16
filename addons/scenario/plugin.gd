@@ -35,9 +35,12 @@ func _enter_tree() -> void:
 	reporter.setup(controller, controller.transport, config_dir.path_join("scenario/usage.json"))
 	reporter.sharing_chosen.connect(func(share: bool) -> void:
 		EditorInterface.get_editor_settings().set_setting(SETTING_SHARE_USAGE, share))
+	var settings := EditorInterface.get_editor_settings()
+	if not reporter.usage.still_shared(bool(settings.get_setting(SETTING_SHARE_USAGE))):
+		settings.set_setting(SETTING_SHARE_USAGE, false)  # opted out in another editor since
 	_apply_settings()
 	reporter.start()
-	EditorInterface.get_editor_settings().settings_changed.connect(_apply_settings)
+	settings.settings_changed.connect(_apply_settings)
 
 	ui = DockUI.new()
 	ui.reporter = reporter
@@ -52,7 +55,6 @@ func _enter_tree() -> void:
 	add_dock(dock)
 	# First enable in a project: bring the dock to the front even when a saved
 	# layout put it in a tab group.
-	var settings := EditorInterface.get_editor_settings()
 	if not settings.get_project_metadata("scenario", "dock_shown", false):
 		dock.make_visible.call_deferred()
 		settings.set_project_metadata("scenario", "dock_shown", true)
