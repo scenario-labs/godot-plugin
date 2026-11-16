@@ -107,6 +107,29 @@ func test_image_size_is_read_from_the_header_without_decoding() -> void:
 	assert_eq(Query.image_size(PackedByteArray([1, 2, 3])), Vector2i.ZERO, "not an image")
 
 
+func test_a_jpeg_header_the_decoder_would_read_differently_has_no_size() -> void:
+	# FF 00 (a stuffed byte), then a fake small SOF: the decoder would not see it as a marker.
+	var stuffed := PackedByteArray([0xFF, 0xD8, 0xFF, 0x00, 0x00, 0x10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0xFF, 0xC0, 0x00, 0x11, 0x08, 0x00, 0x01, 0x00, 0x01, 0x03, 0, 0, 0, 0, 0, 0])
+	assert_eq(Query.image_size(stuffed), Vector2i.ZERO)
+	var restart := stuffed.duplicate()
+	restart[3] = 0xD0
+	assert_eq(Query.image_size(restart), Vector2i.ZERO, "a restart marker before the frame header")
+	var second_soi := stuffed.duplicate()
+	second_soi[3] = 0xD8
+	assert_eq(Query.image_size(second_soi), Vector2i.ZERO)
+
+
+func test_history_keeps_workflow_runs_and_places_them_by_their_lane() -> void:
+	var page := Query.parse_history({"jobs": [
+		{"jobId": "job_w", "workflowId": "wflow_UcxXVCuMwjMak8NobqXQSCqv", "status": "success", "createdAt": "2026-11-13T10:00:00Z"},
+		{"jobId": "job_u", "status": "success", "createdAt": "2026-11-13T10:01:00Z"}]})
+	assert_eq(page["jobs"].size(), 1, "an upload names neither a model nor a workflow")
+	assert_eq(page["jobs"][0]["model_id"], "wflow_UcxXVCuMwjMak8NobqXQSCqv")
+	assert_eq(Query.lane_for_job("wflow_UcxXVCuMwjMak8NobqXQSCqv", []), "workflow")
+	assert_eq(Query.model_name("wflow_UcxXVCuMwjMak8NobqXQSCqv"), "Workflow")
+
+
 func test_an_oversized_header_is_over_the_thumbnail_budget() -> void:
 	# A PNG header claiming 100000 x 100000 pixels: what a decompression bomb looks like.
 	var png := PackedByteArray([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52,

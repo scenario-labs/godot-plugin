@@ -262,6 +262,22 @@ func active() -> Array:
 		return not str(row["job_id"]).is_empty() and (row["state"] in ACTIVE_STATES or row.get("unread", false)))
 
 
+## The rows the Jobs list draws, newest first, at most limit: every row that
+## still needs an action (Cancel, Check Scenario, Dismiss) is among them, however
+## many imported rows came after it.
+func shown(limit: int = 12) -> Array:
+	var needs_action := func(row: Dictionary) -> bool: return row["state"] in ACTIVE_STATES or row["state"] in UNRESOLVED_STATES
+	var waiting: int = jobs.filter(needs_action).size()
+	var out: Array = []
+	for row in jobs:
+		if needs_action.call(row):
+			out.append(row)
+			waiting -= 1
+		elif row["state"] != DISMISSED and out.size() + waiting < limit:
+			out.append(row)
+	return out
+
+
 func unresolved() -> Array:
 	return jobs.filter(func(row: Dictionary) -> bool: return row["state"] in UNRESOLVED_STATES)
 

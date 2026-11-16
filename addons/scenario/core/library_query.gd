@@ -12,6 +12,7 @@ extends RefCounted
 ## the Photoshop plugin does. History lists jobs with jobs_list. Free reads.
 
 const Lanes := preload("res://addons/scenario/core/lanes.gd")
+const Workflows := preload("res://addons/scenario/core/workflows.gd")
 
 ## Placeable rows to show before Show more.
 const PAGE_SIZE := 24
@@ -148,6 +149,8 @@ static func lane_for(model_id: String, kind: String, mime: String = "") -> Strin
 ## The lane that places a whole job: its model's, else from all its outputs,
 ## the asset_get replies (a 3D job lists a preview image before the model).
 static func lane_for_job(model_id: String, outputs: Array) -> String:
+	if Workflows.is_workflow(model_id):
+		return Lanes.WORKFLOW  # its outputs are placed each by its own lane
 	if not model_lane(model_id).is_empty():
 		return model_lane(model_id)
 	var lanes: Array = outputs.map(func(asset: Dictionary) -> String: return lane_for("", output_kind(asset)))
@@ -176,12 +179,15 @@ static func parse_history(value: Variant) -> Dictionary:
 		return page
 	var jobs: Variant = value.get("jobs", [])
 	for job in jobs if jobs is Array else []:
-		if not job is Dictionary or text(job.get("jobId")).is_empty() or text(job.get("modelId")).is_empty():
+		# A workflow run names its workflow instead of a model; uploads name neither.
+		var model_id := text(job.get("modelId")) if job is Dictionary and not text(job.get("modelId")).is_empty() \
+			else (text(job.get("workflowId")) if job is Dictionary else "")
+		if not job is Dictionary or text(job.get("jobId")).is_empty() or model_id.is_empty():
 			continue
 		var status := text(job.get("status"))
 		var prompt := text(job.get("prompt"))
 		page["jobs"].append({
-			"job_id": text(job["jobId"]), "model_id": text(job["modelId"]), "prompt": "" if prompt.begins_with("asset_") else prompt,
+			"job_id": text(job["jobId"]), "model_id": model_id, "prompt": "" if prompt.begins_with("asset_") else prompt,
 			"status": status, "created_at": text(job.get("createdAt")),
 			"finished": status.to_lower() in ["success", "succeeded", "completed"],
 		})
@@ -191,6 +197,8 @@ static func parse_history(value: Variant) -> Dictionary:
 
 ## The lane list's name for a model, else its id without the "model_" prefix.
 static func model_name(model_id: String) -> String:
+	if Workflows.is_workflow(model_id):
+		return "Workflow"
 	for lane in Lanes.LANES:
 		for model in lane["models"]:
 			if model["id"] == model_id:
@@ -227,9 +235,11 @@ static func image_size(bytes: PackedByteArray) -> Vector2i:
 			if marker == 0xFF:
 				i += 1  # fill byte
 				continue
-			if marker >= 0xD0 and marker <= 0xD9 or marker == 0x01:
-				i += 2  # no length
-				continue
+			# A stuffed 0x00, a restart, SOI, EOI or TEM has no length: before the
+			# frame header the decoder would scan on from there, so the size cannot
+			# be read from the header and the file is not decoded.
+			if marker == 0x00 or marker >= 0xD0 and marker <= 0xD9 or marker == 0x01:
+				return Vector2i.ZERO
 			if marker >= 0xC0 and marker <= 0xCF and not marker in [0xC4, 0xC8, 0xCC]:
 				return Vector2i(bytes[i + 7] << 8 | bytes[i + 8], bytes[i + 5] << 8 | bytes[i + 6])
 			i += 2 + (bytes[i + 2] << 8 | bytes[i + 3])

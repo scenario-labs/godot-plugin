@@ -226,3 +226,20 @@ func test_a_job_an_unknown_row_may_stand_for() -> void:
 	assert_false(ledger.could_be_unresolved({"jobId": "job_3", "modelId": "model_a", "createdAt": "2026-10-05T09:00:00.000Z"}, "proj_a1"), "outside the window")
 	ledger.dismiss(local_id, T0)
 	assert_false(ledger.could_be_unresolved(job, "proj_a1"), "a dismissed row stands for nothing")
+
+
+func test_rows_that_need_an_action_stay_in_the_jobs_list() -> void:
+	var ledger := _ledger()
+	var lost := ledger.add_intent("image", "model_a", {}, "fp_lost", 2.0, T0)
+	ledger.mark_unknown(lost, "timeout", T0)
+	var running := ledger.add_intent("image", "model_a", {}, "fp_run", 2.0, T0 + 1)
+	ledger.mark_submitted(running, "job_run", "queued", T0 + 1)
+	for i in 20:
+		ledger.adopt("image", "", "import %d" % i, "job_imp_%d" % i, ["asset_%d" % i], T0 + 2 + i, {}, "library")
+	var shown := ledger.shown(12)
+	assert_eq(shown.size(), 12)
+	assert_true(shown.any(func(r: Dictionary) -> bool: return r["local_id"] == lost), "Dismiss stays reachable")
+	assert_true(shown.any(func(r: Dictionary) -> bool: return r["local_id"] == running), "Cancel stays reachable")
+	assert_eq(shown[0]["state"], Ledger.SUCCESS, "newest first")
+	ledger.dismiss(lost, T0 + 30)
+	assert_false(ledger.shown(12).any(func(r: Dictionary) -> bool: return r["local_id"] == lost))

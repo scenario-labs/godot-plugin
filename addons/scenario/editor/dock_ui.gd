@@ -458,15 +458,10 @@ func _refresh_price() -> void:
 func _refresh_jobs() -> void:
 	for child in _jobs_box.get_children():
 		child.queue_free()
-	var shown := 0
-	for row in controller.ledger.jobs:
-		if row["state"] == Ledger.DISMISSED:
-			continue
+	var rows: Array = controller.ledger.shown()
+	for row in rows:
 		_jobs_box.add_child(_job_row(row))
-		shown += 1
-		if shown >= 12:
-			break
-	if shown == 0:
+	if rows.is_empty():
 		_jobs_box.add_child(_dim_label("Nothing generated yet."))
 
 
