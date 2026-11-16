@@ -436,6 +436,7 @@ func _forget_workflows(keep_choice: bool = false) -> void:
 	recommended.erase(Lanes.WORKFLOW)
 	for id in schemas.keys().filter(func(key: String) -> bool: return Workflows.is_workflow(key)):
 		schemas.erase(id)  # their inputs may have changed on Scenario
+	quotes.clear()  # so did their prices: an edited workflow keeps its id, so its fingerprint
 	if lane_id == Lanes.WORKFLOW and not keep_choice:
 		model_id = ""
 		fields = []

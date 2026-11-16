@@ -150,10 +150,18 @@ func run() -> Dictionary:
 	check("re-run keeps the workflow, even with a modelId input", controller.model_id == "wflow_kit")
 
 	# Refresh lists again and reads the chosen workflow's inputs again, keeping it chosen.
+	controller.set_value("prompt", "camp kit")
+	await controller.estimate_now()
 	var gets_before := fake.calls.filter(func(c: Dictionary) -> bool: return c["tool"] == "workflow_get").size()
 	await controller.load_recommendations()
 	check("Refresh re-reads the inputs and keeps the workflow", controller.model_id == "wflow_kit"
 		and fake.calls.filter(func(c: Dictionary) -> bool: return c["tool"] == "workflow_get").size() == gets_before + 1)
+	# The workflow may have been edited on Scenario under the same id: no cached price survives.
+	controller.set_value("prompt", "camp kit")
+	check("Refresh drops the workflow's quote", controller.quotes.usable(controller.fingerprint(), Time.get_unix_time_from_system()).is_empty())
+	var refreshed_before := fake.estimates
+	await controller.estimate_now()
+	check("Refresh prices the workflow again", fake.estimates == refreshed_before + 1 and controller.price_state == Controller.PRICE_READY)
 
 	# Another account: its own workflows are listed, the old choice is dropped.
 	var lists_before := fake.calls.filter(func(c: Dictionary) -> bool: return c["tool"] == "workflows_list").size()
