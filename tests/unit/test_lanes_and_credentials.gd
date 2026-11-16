@@ -198,6 +198,15 @@ func test_system_store_per_platform() -> void:
 		assert_true(Credentials.detect_store() in [Credentials.SECRET_SERVICE, ""])
 
 
+func test_secret_tool_never_gets_an_unsafe_account() -> void:
+	var store := _store()
+	store.use_keychain = true
+	store.store = Credentials.SECRET_SERVICE
+	var key := 'api_"$(touch x)`\\'
+	assert_false(store._store_write(key, "sec_123"), "an unsafe key stays in the file")
+	assert_eq(store._store_read(Credentials.SECRET_SERVICE, key), "")
+
+
 func test_secret_tool_never_gets_the_secret_as_an_argument() -> void:
 	assert_eq(Credentials.secret_tool_arguments("store", "oauth:client_godot"), PackedStringArray([
 		"store", "--label=Scenario Godot Plugin", "service", "Scenario Godot Plugin", "account", "oauth:client_godot"]))

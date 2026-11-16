@@ -293,6 +293,8 @@ func _delete_accounts(accounts: PackedStringArray, keep: String = "") -> void:
 			CREDENTIAL_MANAGER:
 				OS.execute(_powershell(), windows_arguments(_WINDOWS_DELETE, account), [], true)
 			SECRET_SERVICE:
+				if not _safe(account):
+					continue  # never written there: see _store_write
 				var command := _bounded(_secret_tool(), secret_tool_arguments("clear", account), STORE_TIMEOUT_S)
 				OS.execute(command[0], command.slice(1), [], true)
 
@@ -339,6 +341,8 @@ func _store_read(kept: String, account: String) -> String:
 				return ""
 			return windows_secret(str(output[0]))
 		SECRET_SERVICE:
+			if not _safe(account):
+				return ""
 			var command := _bounded(_secret_tool(), secret_tool_arguments("lookup", account), UNLOCK_TIMEOUT_S)
 			if OS.execute(command[0], command.slice(1), output) != 0 or output.is_empty():
 				return ""
@@ -369,6 +373,10 @@ func _store_write(account: String, secret: String) -> bool:
 			arguments = windows_arguments(_WINDOWS_WRITE, account)
 			input = secret
 		SECRET_SERVICE:
+			# The account (an API key) becomes a secret-tool argument, which some
+			# Godot builds pass through a shell: a key outside _SAFE stays in the file.
+			if not _safe(account):
+				return false
 			path = _secret_tool()
 			arguments = secret_tool_arguments("store", account)
 			input = secret
