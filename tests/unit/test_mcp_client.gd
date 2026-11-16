@@ -180,6 +180,20 @@ func test_moderation_error_is_blocked_kind() -> void:
 	assert_false(result["error"]["ambiguous"])
 
 
+func test_tool_error_shows_the_reason_after_the_banner() -> void:
+	fake.replies.append({"result": {"isError": true, "content": [
+		{"type": "text", "text": "⚠ Scenario error (trace_id: mcpt_Abc123). For a diagnostic report, run diagnostics_run."},
+		{"type": "text", "text": "Error: 400 {\"reason\":\"Input image2 is required\"}"}]}})
+	var result: Dictionary = await client.call_tool("workflow_run", {"workflow_id": "wflow_x", "inputs": {}, "dry_run": true})
+	assert_eq(result["error"]["kind"], Errors.INVALID)
+	assert_string_contains(result["error"]["message"], "Input image2 is required")
+	assert_string_contains(result["error"]["message"], "mcpt_Abc123")
+	assert_false(result["error"]["message"].contains("diagnostics_run"))
+	var one_text := Errors.tool_error("⚠ Scenario error (trace_id: mcpt_Z9).\nError: 404 {\"message\":\"Model not found\"}")
+	assert_eq([one_text["status"], one_text["detail"], one_text["trace_id"]], [404, "Model not found", "mcpt_Z9"])
+	assert_eq(Errors.tool_error("Error: The prompt was flagged.")["detail"], "The prompt was flagged.")
+
+
 func test_auth_errors() -> void:
 	fake.replies.append({"http": 401, "body": "Unauthorized"})
 	var result: Dictionary = await client.get_job("a")

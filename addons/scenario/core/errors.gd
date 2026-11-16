@@ -100,6 +100,26 @@ static func classify(detail: String, status: int = 0) -> String:
 	return SCENARIO
 
 
+## A tool error's text as the hosted MCP writes it: a banner with the trace id,
+## then "Error: <status> <body>", the body often {"reason": ...}.
+## {"detail": the reason, "status": HTTP status or 0, "trace_id": "mcpt_..." or ""}
+static func tool_error(text: String) -> Dictionary:
+	var trace := RegEx.create_from_string("trace_id: (mcpt_[A-Za-z0-9]+)").search(text)
+	var out := {"detail": text.strip_edges(), "status": 0, "trace_id": trace.get_string(1) if trace != null else ""}
+	var line := RegEx.create_from_string("(?m)^Error: (?:(\\d{3}) )?(.*)$").search(text)
+	if line == null:
+		return out
+	out["status"] = int(line.get_string(1)) if not line.get_string(1).is_empty() else 0
+	out["detail"] = line.get_string(2).strip_edges()
+	var json := JSON.new()
+	if json.parse(out["detail"]) == OK and json.data is Dictionary:
+		for key in ["reason", "message", "error"]:
+			if json.data.get(key) is String and not str(json.data[key]).is_empty():
+				out["detail"] = json.data[key]
+				break
+	return out
+
+
 ## User-facing message: the plain explanation, plus the server's detail when it adds something.
 ## signed_in: the person signed in with their account rather than an API key.
 static func message_for(kind: String, detail: String = "", signed_in: bool = false) -> String:

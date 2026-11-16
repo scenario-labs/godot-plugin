@@ -296,11 +296,15 @@ func _call_once(tool: String, arguments: Dictionary, timeout_s: float, submit_ca
 	var structured: Variant = result.get("structuredContent")
 	var content: Variant = result.get("content", [])
 	if result.get("isError") == true:
-		var detail := _first_text(content)
+		var parsed := Errors.tool_error(_all_text(content))
+		var detail: String = parsed["detail"]
 		if structured is Dictionary and not structured.is_empty():
 			detail = JSON.stringify(structured)
-		var kind := Errors.classify(detail)
-		return Errors.fail(kind, Errors.message_for(kind, detail, signed_in()), {"detail": detail})
+		var kind := Errors.classify(detail, parsed["status"])
+		var message := Errors.message_for(kind, detail, signed_in())
+		if not parsed["trace_id"].is_empty():
+			message += " Trace id: %s." % parsed["trace_id"]
+		return Errors.fail(kind, message, {"detail": detail, "trace_id": parsed["trace_id"]})
 	if structured is Dictionary:
 		if submit_call and structured.is_empty():
 			return Errors.fail(Errors.PROTOCOL, "Scenario returned an empty reply.", {"ambiguous": true})
@@ -435,12 +439,14 @@ static func _retry_after(headers: Dictionary) -> float:
 	return -1.0
 
 
-static func _first_text(content: Variant) -> String:
+## Every text part of a tool reply, one per line: an error puts its reason after the banner.
+static func _all_text(content: Variant) -> String:
+	var parts: Array = []
 	if content is Array:
 		for item in content:
 			if item is Dictionary and item.get("type") == "text":
-				return str(item.get("text", ""))
-	return ""
+				parts.append(str(item.get("text", "")))
+	return "\n".join(parts)
 
 
 ## arguments plus the scope's ids, without replacing ids already there.
