@@ -97,6 +97,9 @@ func run() -> Dictionary:
 	var preview := Fake.library_asset("asset_glbprv", "image", "image/png", "2026-10-02T09:00:00.000Z", "", "model_rodin-hyper3d-v2-5-text-to-3d", "a crate")
 	var preview_import: Dictionary = await library.import_asset(Query.asset_row(preview))
 	check("a 3D model's preview alone imports as an image", preview_import.get("ok", false) and _row_with(controller, "asset_glbprv").get("lane") == "image")
+	var normal := Fake.library_asset("asset_pat002", "image", "image/png", "2026-10-02T08:00:00.000Z", "", "", "stone normal map")
+	var normal_import: Dictionary = await library.import_asset(Query.asset_row(normal))
+	check("a lone normal map imports and is placed as an image", normal_import.get("ok", false) and _row_with(controller, "asset_pat002").get("imported") == true)
 
 	# An image of the project as a reference: no upload.
 	var fields: Array = library.reference_fields()
