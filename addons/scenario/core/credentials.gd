@@ -76,7 +76,14 @@ func load_session(issuer: String, client_id: String) -> Dictionary:
 	if token.is_empty():
 		return empty
 	var workspace: Variant = _read_config().get("workspace")
-	return {"refresh_token": token, "source": str(oauth.get("secret_store", "file")), "workspace": workspace if workspace is Dictionary else {}}
+	return {"refresh_token": token, "source": str(oauth.get("secret_store", "file")), "workspace": workspace if workspace is Dictionary else {},
+		"sign_in": str(oauth.get("sign_in", ""))}
+
+
+## The saved refresh token if it still belongs to that sign-in, else "".
+func session_token(issuer: String, client_id: String, sign_in: String) -> String:
+	var saved := load_session(issuer, client_id)
+	return saved["refresh_token"] if saved["sign_in"] == sign_in else ""
 
 
 ## Saves a new session in place of any key or earlier session. The chosen team
@@ -92,7 +99,9 @@ func save_session(issuer: String, client_id: String, refresh_token: String) -> D
 		workspace = {}
 	var replaced := _saved_accounts()
 	var account := _session_account(client_id)
-	var oauth := {"issuer": issuer, "client_id": client_id, "secret_store": "file"}
+	# sign_in tells this sign-in from a later one (another account, maybe) that
+	# another editor saved over it: each session refreshes only from its own.
+	var oauth := {"issuer": issuer, "client_id": client_id, "secret_store": "file", "sign_in": Crypto.new().generate_random_bytes(8).hex_encode()}
 	if use_keychain and _safe(refresh_token) and _keychain_write(account, refresh_token):
 		oauth["secret_store"] = "keychain"
 	else:

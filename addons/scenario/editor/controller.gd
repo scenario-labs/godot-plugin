@@ -1,8 +1,7 @@
 @tool
 extends Node
-## The plugin's brain: sign-in, team and project, lane and model, form
-## values, price checks, generation, job polling and import. The dock only displays this state and
-## forwards clicks, so this node is testable headless with a fake transport.
+## The plugin's brain: sign-in, team and project, lane and model, form values, price checks,
+## generation, job polling and import. The dock only displays it, so it is testable headless.
 
 signal changed
 signal notified(text: String, level: String)
@@ -382,13 +381,13 @@ func _finish_sign_in(serial: int, app: Dictionary, tokens: Dictionary) -> void:
 func _new_session(app: Dictionary, tokens: Dictionary) -> OAuthSession:
 	var session := OAuthSession.new(OAuth.new(transport, app["issuer"], app["client_id"]), tokens)
 	session.on_rotate = _save_rotated.bind(session)
-	session.load_saved = func() -> String: return credentials.load_session(app["issuer"], app["client_id"])["refresh_token"]
+	var sign_in_id: String = credentials.load_session(app["issuer"], app["client_id"])["sign_in"]
+	session.load_saved = func() -> String: return credentials.session_token(app["issuer"], app["client_id"], sign_in_id)
 	session.ended.connect(_on_session_ended.bind(session))
 	return session
 
 
-## Saves a rotated refresh token only for the session in use: a refresh that
-## finishes after a sign-out or another sign-in must not replace the saved one.
+## Saves a rotated token only for the session in use, not after a sign-out or another sign-in.
 func _save_rotated(previous: String, refresh_token: String, session: OAuthSession) -> void:
 	if client.session == session:
 		credentials.save_refresh_token(session.oauth.issuer, session.oauth.client_id, previous, refresh_token)
@@ -859,10 +858,10 @@ func attach_file(field_name: String, path: String) -> void:
 				asset_id = done["value"]["asset_id"]
 			else:
 				problem = done["error"]["message"] if not done["ok"] else "Scenario did not finish the upload."
-	uploads.erase(field_name)
 	if serial != _reference_serial:
-		pass  # the project changed during the upload: the asset is in the earlier one
-	elif not problem.is_empty():
+		return  # the project changed during the upload: the asset is in the earlier one
+	uploads.erase(field_name)
+	if not problem.is_empty():
 		notified.emit(problem, "error")
 	elif field["type"] == "files":
 		var current: Array = values.get(field_name, []).duplicate()
@@ -928,6 +927,7 @@ func _drop_references() -> void:
 	for field in fields:
 		if field["type"] in ["file", "files"]:
 			values.erase(field["name"])
+	uploads.clear()
 	_reference_serial += 1  # an upload still running finishes into the old project: dropped
 
 

@@ -8,7 +8,8 @@ extends RefCounted
 ## for it instead of sending a second one, which would spend the rotated token.
 ## The provider rotates refresh tokens and revokes the whole session when an
 ## old one comes back, so each refresh starts from the saved token: another
-## editor on this machine may have rotated it.
+## editor on this machine may have rotated it. A token another sign-in saved
+## (load_saved returns "" then) is never adopted: this session keeps its own.
 
 ## The provider refused refresh_token: the person must sign in again.
 signal ended(refresh_token: String)

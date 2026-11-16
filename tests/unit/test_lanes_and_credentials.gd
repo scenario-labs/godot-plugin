@@ -142,6 +142,18 @@ func test_workspace_stays_with_the_same_application_only() -> void:
 	assert_eq(store.load_session(ISSUER, "client_dev")["workspace"], {}, "another application's ids mean nothing here")
 
 
+func test_a_session_reads_only_its_own_sign_in() -> void:
+	var store := _store()
+	store.save_session(ISSUER, "client_godot", "rt_a")
+	var first: String = store.load_session(ISSUER, "client_godot")["sign_in"]
+	assert_eq(store.session_token(ISSUER, "client_godot", first), "rt_a")
+	assert_true(store.save_refresh_token(ISSUER, "client_godot", "rt_a", "rt_a2"))
+	assert_eq(store.session_token(ISSUER, "client_godot", first), "rt_a2", "a rotation keeps the sign-in")
+	store.save_session(ISSUER, "client_godot", "rt_b")  # another editor signs in, maybe as another account
+	assert_eq(store.session_token(ISSUER, "client_godot", first), "", "the first session never adopts it")
+	assert_ne(store.load_session(ISSUER, "client_godot")["sign_in"], first)
+
+
 func test_a_refused_token_is_forgotten_but_not_a_newer_one() -> void:
 	var store := _store()
 	store.save_session(ISSUER, "client_godot", "rt_1")
