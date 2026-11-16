@@ -64,7 +64,7 @@ func save_credentials(key: String, secret: String) -> Dictionary:
 ## A session saved for another issuer or client id (a development instance)
 ## is not resumed: its tokens mean nothing to this one.
 func load_session(issuer: String, client_id: String) -> Dictionary:
-	var empty := {"refresh_token": "", "source": "", "workspace": {}}
+	var empty := {"refresh_token": "", "source": "", "workspace": {}, "sign_in": ""}
 	var oauth: Variant = _read_config().get("oauth")
 	if not oauth is Dictionary or oauth.get("issuer") != issuer or oauth.get("client_id") != client_id:
 		return empty

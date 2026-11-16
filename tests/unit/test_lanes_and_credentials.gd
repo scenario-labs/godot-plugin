@@ -152,6 +152,8 @@ func test_a_session_reads_only_its_own_sign_in() -> void:
 	store.save_session(ISSUER, "client_godot", "rt_b")  # another editor signs in, maybe as another account
 	assert_eq(store.session_token(ISSUER, "client_godot", first), "", "the first session never adopts it")
 	assert_ne(store.load_session(ISSUER, "client_godot")["sign_in"], first)
+	store.clear()
+	assert_eq(store.session_token(ISSUER, "client_godot", first), "", "nothing saved: no token, no error")
 
 
 func test_a_refused_token_is_forgotten_but_not_a_newer_one() -> void:
