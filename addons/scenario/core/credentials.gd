@@ -53,6 +53,8 @@ public static extern void CredFree(IntPtr credential);
 $target = {target}
 $account = {account}
 """
+# Persist 3 (CRED_PERSIST_ENTERPRISE): the secret roams with the profile, like
+# the settings file that points to it in %APPDATA%; it stays local otherwise.
 const _WINDOWS_WRITE := """$stdin = [Console]::OpenStandardInput()
 $buffer = New-Object IO.MemoryStream
 $stdin.CopyTo($buffer)
@@ -61,7 +63,7 @@ $credential = New-Object ScenarioGodot.Cred+CREDENTIAL
 $credential.Type = 1
 $credential.TargetName = $target
 $credential.UserName = $account
-$credential.Persist = 2
+$credential.Persist = 3
 $credential.CredentialBlobSize = $bytes.Length
 $credential.CredentialBlob = [Runtime.InteropServices.Marshal]::AllocHGlobal($bytes.Length)
 [Runtime.InteropServices.Marshal]::Copy($bytes, 0, $credential.CredentialBlob, $bytes.Length)

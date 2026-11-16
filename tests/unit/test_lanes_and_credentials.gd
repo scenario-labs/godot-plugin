@@ -218,6 +218,7 @@ func test_credential_manager_script_names_the_target_and_reads_base64() -> void:
 	assert_false(script.contains("Remove-Item"), "the key reaches the script only as base64")
 	assert_string_contains(script, "FromBase64String('%s')" % Marshalls.raw_to_base64(("Scenario Godot Plugin/" + key).to_utf8_buffer()))
 	assert_string_contains(script, "CredWriteW")
+	assert_string_contains(script, "$credential.Persist = 3", "roams with the profile, like the settings file")
 	assert_string_contains(script, "OpenStandardInput", "the secret comes on stdin")
 	assert_eq(Credentials.windows_secret(Marshalls.raw_to_base64("sec_é1".to_utf8_buffer()) + "\r\n"), "sec_é1")
 	assert_eq(Credentials.windows_secret(""), "")
