@@ -50,6 +50,17 @@ func test_entries_keep_ready_workflows_only() -> void:
 	assert_eq(Workflows.entries([{"id": "model_x"}, "junk"]), [])
 
 
+func test_required_as_production_writes_it() -> void:
+	var schema := Workflows.schema_from({"id": "wflow_x", "inputs": [
+		{"name": "image2", "type": "file", "kind": "image", "required": {"always": true}},
+		{"name": "image1", "type": "file", "kind": "image", "required": {"always": false}},
+		{"name": "text16", "type": "string", "prompt": true, "required": {"always": true}}]})
+	var required := {}
+	for p in schema["parameters"]:
+		required[p["name"]] = p["required"]
+	assert_eq(required, {"image2": true, "image1": false, "text16": true})
+
+
 func test_inputs_become_form_fields() -> void:
 	var schema := Workflows.schema_from({"id": "wflow_prop3d", "inputs_definition": FakeNode.WORKFLOW_INPUTS["wflow_prop3d"]})
 	assert_eq(schema["unsupported"], PackedStringArray(), "an optional list input is left to the workflow's default")

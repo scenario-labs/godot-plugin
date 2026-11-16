@@ -66,6 +66,9 @@ static func schema_from(record: Dictionary) -> Dictionary:
 		for key in input:
 			parameter[_KEYS.get(key, key)] = input[key]
 		var type := str(parameter.get("type", "string"))
+		# Workflows write it as {"always": bool}; a plain flag is taken as is.
+		if parameter.get("required") is Dictionary:
+			parameter["required"] = Form.truthy(parameter["required"].get("always"))
 		# truthy(): the API may send these flags as null or as strings.
 		if type == "file" and Form.truthy(parameter.get("array")):
 			parameter["type"] = "file_array"
