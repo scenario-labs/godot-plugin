@@ -8,6 +8,7 @@ extends "res://addons/agentkit/agent_job.gd"
 const Controller := preload("res://addons/scenario/editor/controller.gd")
 const DockUI := preload("res://addons/scenario/editor/dock_ui.gd")
 const UsageReporter := preload("res://addons/scenario/editor/usage_reporter.gd")
+const Usage := preload("res://addons/scenario/core/usage.gd")
 const Ledger := preload("res://addons/scenario/core/job_ledger.gd")
 const Fake := preload("res://tests/support/fake_scenario_node.gd")
 
@@ -131,6 +132,15 @@ func run() -> Dictionary:
 	check("sharing off: queue dropped, ID deleted, nothing sent", reporter.usage.queue.is_empty()
 		and reporter.usage.install_id() == "" and relay.posts.size() == 1
 		and not FileAccess.get_file_as_string(run_dir + "/usage.json").contains(install_id))
+
+	# Another editor opts out: this one stops, and its setting is written off too.
+	reporter.set_sharing(true)
+	reporter.usage.record("extension_started")
+	answers.clear()
+	Usage.new(run_dir + "/usage.json").set_enabled(false)  # the other editor process
+	await reporter.flush()
+	check("an opt-out elsewhere: nothing sent, the setting written off", relay.posts.size() == 1
+		and not reporter.usage.enabled and answers == [false])
 
 	# Feedback: from the footer menu, works with sharing off, keeps the text on failure.
 	ui._on_menu(DockUI.MENU_FEEDBACK)

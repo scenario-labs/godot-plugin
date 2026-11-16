@@ -99,7 +99,14 @@ func choose(share: bool) -> void:
 func flush() -> void:
 	if offline or _sending:
 		return
+	var was := usage.enabled
 	var batch := usage.take_batch()
+	if was and not usage.enabled:
+		# Another editor opted out: write this editor's setting off too, so a
+		# later settings change here does not turn sharing back on.
+		sharing_changed.emit()
+		sharing_chosen.emit(false)
+		return
 	if batch.is_empty():
 		return
 	_sending = true
