@@ -24,16 +24,20 @@
 
 Generate images, 3D models, PBR materials, skyboxes and sound effects with [Scenario](https://scenario.com) from a dock inside the Godot editor. You see the exact price in Creative Units (CU) before you spend, and the result lands in the open scene as a native Godot asset.
 
-<p align="center">
-  <img src="docs/images/dock-0.1.0.png" alt="The Scenario dock: sign in, the image lane after a finished job, the material lane with its settings open">
-</p>
+![The Scenario dock in three states: Sign in with Scenario, the Image lane after a finished job, the Material lane with its settings open](docs/images/hero.png)
 
-> **Version 0.2.1.** <!-- x-release-please-version -->
 > Tested on Godot 4.7.2 (standard build, macOS). GDScript only, so it also loads in the .NET build. MIT license.
+
+## What it does
+
+- **Five lanes, one dock.** Images, 3D models, tileable PBR materials, 360 skies and sound effects, each placed where it belongs: on the selected node, under it, or as a new node that matches the scene.
+- **Your project's own work.** Its trained models (LoRAs and compositions) and its Scenario workflows run from the dock; Library and History import its assets and earlier jobs.
+- **The price before you pay.** The Generate button shows the exact cost in CU for the form as it is now, and one click sends one request.
+- **Native assets you can trace.** Results are imported as Godot resources under `res://scenario/`, each with a `.scenario.json` naming its job, model, prompt and cost; every placement is one undo step.
 
 ## Install
 
-1. Download `scenario-godot-plugin-0.2.1.zip` from [godot.scenario.com](https://godot.scenario.com/), or copy `addons/scenario/` from this repository. <!-- x-release-please-version -->
+1. Download the latest `scenario-godot-plugin-<version>.zip` from [godot.scenario.com/download/latest](https://godot.scenario.com/download/latest), or copy `addons/scenario/` from this repository.
 2. Unzip it at the root of your Godot project, so you get `res://addons/scenario/plugin.cfg`.
 3. In Godot, open **Project > Project Settings > Plugins** and enable **Scenario**. The Scenario dock opens in its own column, right of the Inspector.
 
@@ -83,7 +87,7 @@ Every placement is one undo step (Ctrl+Z, Cmd+Z on macOS).
 
 ## Documentation
 
-- [User guide](docs/USER_GUIDE.md): each lane step by step, references, job states, troubleshooting, and what the opt-in usage data and feedback send. Also published as a [website](https://godot.scenario.com/).
+- [User guide](docs/USER_GUIDE.md): each lane step by step, references, job states, troubleshooting, and what the opt-in usage data and feedback send. With the README and the changelog, it makes the handbook at [godot.scenario.com](https://godot.scenario.com/).
 - [Changelog](CHANGELOG.md), [known issues](https://github.com/scenario-labs/godot-plugin/issues?q=is%3Aissue%20is%3Aopen%20type%3ABug), [roadmap](https://github.com/scenario-labs/godot-plugin/milestones) and [issues](https://github.com/scenario-labs/godot-plugin/issues).
 - [Design notes](docs/design-notes/README.md): proposals and open questions for 0.2 and later.
 - [AGENTS.md](AGENTS.md): the code map and the rules, for contributors and coding agents.
@@ -96,7 +100,8 @@ The repository root is a small Godot demo project that hosts the addon and its t
 make toolkit  # the pinned toolkit into .toolkit/ (git), checked against addons/agentkit
 make test     # unit tests (GUT, 85) and the headless editor test (69 checks, fake backend, 0 CU)
 make zip      # dist/scenario-godot-plugin-<version>.zip, then a clean install into a blank project
-make dock     # re-render docs/images/dock-<version>.png (fake backend, opens a small window)
+make dock     # re-render docs/images/hero.png (fake backend, opens a small window)
+make site     # the handbook into dist/site, as godot.scenario.com builds it (Node 24)
 make lint     # gdlint and ruff (uv), the same as CI
 ```
 

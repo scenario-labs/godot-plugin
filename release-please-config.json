@@ -29,7 +29,6 @@
       "extra-files": [
         { "type": "generic", "path": "addons/scenario/plugin.cfg" },
         { "type": "generic", "path": "addons/scenario/core/mcp_client.gd" },
-        { "type": "generic", "path": "README.md" },
         { "type": "generic", "path": "docs/USER_GUIDE.md" }
       ]
     }

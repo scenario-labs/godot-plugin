@@ -189,7 +189,7 @@ blank project, attaches the zip, `SHA256SUMS` and a provenance bundle, publishes
 the draft, and `publish-changelog.yml` posts the notes to scenario.com.
 
 - Never edit versions or `CHANGELOG.md` by hand: release-please bumps
-  `plugin.cfg`, `mcp_client.gd`, `README.md` and `docs/USER_GUIDE.md` (the
+  `plugin.cfg`, `mcp_client.gd` and `docs/USER_GUIDE.md` (the
   `x-release-please` markers) and writes the changelog from the squashed PR
   titles.
 - The source archive (GitHub downloads, the Godot Asset Library) holds
@@ -198,19 +198,22 @@ the draft, and `publish-changelog.yml` posts the notes to scenario.com.
 
 ## Website and download counts
 
-`pages.yml` publishes `docs/USER_GUIDE.md` as one page (`tools/build_site.py`,
-`docs/site/template.html`; `make site` builds it into `dist/site`) to GitHub
-Pages, with the latest release zip once its checksum and build provenance
-verify. The page has the look of the Blender plugin's site: `docs/site/site.css`
-and the guide search `docs/site/handbook-search.js` come from there, so restyle
-both sites together. `tools/site_proxy/` is a Vercel project in front of Pages
-that counts zip downloads in PostHog (anonymous; `plugin: "godot"`, the Godot
-version and OS from the editor's User-Agent) and relays the plugin's opt-in
-usage events and feedback (`/telemetry/v1/`, allowlisted to the same events as
-`core/usage.gd`; env `POSTHOG_PROJECT_TOKEN`, `POSTHOG_HOST`,
-`POSTHOG_FEEDBACK_SURVEY_ID`); its Vercel Web Analytics counts
-page visits and Download clicks, without cookies, from the script in
-`docs/site/template.html`, served at a path of ours (`vercel.json`) because
-blocker lists block Vercel's own. `make site-test` type-checks and
-tests the proxy and the search. The page content comes from the guide: change
-the guide, not the site.
+`pages.yml` publishes godot.scenario.com to GitHub Pages with
+[scenario-labs/components](https://github.com/scenario-labs/components), the
+site tooling the Scenario plug-ins share, pinned by commit (there and as
+`COMPONENTS` in the Makefile: bump both): the handbook built
+from the newest release's README, user guide and changelog (chapters, hero,
+link-preview card `docs/images/og-keyvisual.jpg` in `handbook.config.json`),
+and that release's zip under `/download/` once its checksum and build
+provenance verify. `make site` builds the handbook from the checkout into
+`dist/site`. `tools/site_proxy/` is a Vercel project in front of Pages that
+answers `/download/latest` with the latest zip, counts zip downloads in PostHog
+(anonymous; `plugin: "godot"`, the Godot version and OS from the editor's
+User-Agent) and relays the plugin's opt-in usage events and feedback
+(`/telemetry/v1/`, allowlisted to the same events as `core/usage.gd`; env
+`POSTHOG_PROJECT_TOKEN`, `POSTHOG_HOST`, `POSTHOG_FEEDBACK_SURVEY_ID`); its
+Vercel Web Analytics counts page visits without cookies, from the script the
+handbook loads at `/page.js` (`analytics`), served there by `vercel.json`
+because blocker lists block Vercel's own path. `make site-test` type-checks and
+tests the proxy. The page content comes from the docs: change the docs, not the
+site.

@@ -25,22 +25,23 @@ archive:
 		echo "source archive: the $$(wc -l < "$$t/got" | tr -d ' ') files of addons/scenario"; rm -rf "$$t"; \
 	else echo "The source archive must hold exactly the committed files of addons/scenario (- missing, + extra)."; rm -rf "$$t"; exit 1; fi
 
-# Dock screenshot for the docs (fake backend, 0 CU; opens a small window).
+# The dock picture of the README and the handbook, docs/images/hero.png (fake backend, 0 CU; opens a small window).
 dock:
 	python3 tools/capture_dock.py
 
-# The website (docs/USER_GUIDE.md as one page) into dist/site; requires uv. CI publishes it with the release zip.
+# The handbook (handbook.config.json) into dist/site with scenario-labs/components, at the commit pages.yml pins;
+# requires Node 24. Built from this checkout's docs, without the release zip.
+COMPONENTS := dc4d1c4246a992432bd64af4f093e2558a6ca9b1
 site:
 	rm -rf dist/site
-	uv run --no-project --with markdown==3.10.3 python tools/build_site.py --output dist/site
+	npx --yes github:scenario-labs/components\#$(COMPONENTS) handbook --no-pdf --quiet --out dist/site
 
-# The download-counting and telemetry proxy (tools/site_proxy), type-checked as Vercel builds it, and the guide search
-# (docs/site/handbook-search.js), type-checked; then both tested. Requires pnpm install.
+# The download-counting and telemetry proxy (tools/site_proxy), type-checked as Vercel builds it, then tested.
+# Requires pnpm install.
 site-test:
 	mkdir -p .no-types
 	node_modules/.bin/tsc --noEmit --strict --target es2022 --lib es2022,dom --module nodenext --moduleResolution nodenext --typeRoots .no-types tools/site_proxy/middleware.ts
-	node_modules/.bin/tsc --noEmit --strict --target es2022 --lib es2022,dom,dom.iterable --module nodenext --moduleResolution nodenext --allowJs --checkJs --typeRoots .no-types docs/site/handbook-search.js
-	node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/site/middleware.test.ts tests/site/telemetry.test.ts tests/site/handbook-search.test.ts
+	node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/site/middleware.test.ts tests/site/telemetry.test.ts
 
 # Paid: spends Creative Units on the test key's project. Opt-in only.
 smoke:

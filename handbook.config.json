@@ -1,0 +1,330 @@
+{
+  "product": "Scenario for Godot",
+  "brand": "for Godot",
+  "repository": "scenario-labs/godot-plugin",
+  "files": "scenario-godot",
+  "site": "https://godot.scenario.com",
+  "description": "User handbook for Scenario for Godot {version}: install, sign in, the six lanes with their models and workflows, prices and spending rules, jobs, files, settings, what leaves your machine and troubleshooting.",
+  "version": {
+    "file": "addons/scenario/plugin.cfg",
+    "pattern": "version=\"([^\"]+)\""
+  },
+  "media": "docs/images",
+  "analytics": "/page.js",
+  "cta": [
+    [
+      "Download for Godot 4.7",
+      "/download/latest"
+    ],
+    [
+      "Sign in",
+      "#sign-in"
+    ]
+  ],
+  "nav": [
+    [
+      "Install",
+      "#install"
+    ],
+    [
+      "Sign in",
+      "#sign-in"
+    ],
+    [
+      "Downloads",
+      "#downloads"
+    ],
+    [
+      "Changelog",
+      "#changelog"
+    ]
+  ],
+  "cover": [
+    [
+      "Godot",
+      "4.7, tested on 4.7.2 on macOS"
+    ]
+  ],
+  "downloads": [
+    "The plug-in: `scenario-godot-plugin-{version}.zip` from [godot.scenario.com/download/latest](https://godot.scenario.com/download/latest), installed as described in [Install](#install). Each release lists its SHA-256 in `SHA256SUMS`."
+  ],
+  "trademarks": "Godot is a trademark of the Godot Foundation. This project is not affiliated with or endorsed by it.",
+  "checks": {
+    "prefixed": [
+      [
+        "MCP",
+        "Scenario"
+      ]
+    ]
+  },
+  "fileNames": {
+    "docs/USER_GUIDE.md": "User guide",
+    "AGENTS.md": "contributor guide",
+    "SUPPORT.md": "Support",
+    "SECURITY.md": "Security",
+    "CONTRIBUTING.md": "Contributing"
+  },
+  "chapters": [
+    {
+      "id": "what-it-does",
+      "title": "What it does",
+      "parts": [
+        {
+          "file": "README.md",
+          "section": "What it does"
+        }
+      ]
+    },
+    {
+      "id": "install",
+      "title": "Install",
+      "parts": [
+        {
+          "file": "README.md",
+          "section": "Install"
+        }
+      ]
+    },
+    {
+      "id": "downloads",
+      "title": "Downloads",
+      "generated": "downloads"
+    },
+    {
+      "id": "sign-in",
+      "title": "Sign in",
+      "parts": [
+        {
+          "file": "docs/USER_GUIDE.md",
+          "section": "1. Sign in"
+        }
+      ],
+      "alias": [
+        [
+          "docs/USER_GUIDE.md",
+          "1-sign-in"
+        ]
+      ]
+    },
+    {
+      "id": "generate",
+      "title": "Generate",
+      "parts": [
+        {
+          "file": "docs/USER_GUIDE.md",
+          "section": "2. Generate"
+        }
+      ],
+      "alias": [
+        [
+          "docs/USER_GUIDE.md",
+          "2-generate"
+        ]
+      ]
+    },
+    {
+      "id": "lanes",
+      "title": "Lanes",
+      "newPage": true,
+      "parts": [
+        {
+          "file": "README.md",
+          "section": "Lanes"
+        },
+        {
+          "file": "docs/USER_GUIDE.md",
+          "section": "3. Lanes"
+        }
+      ],
+      "alias": [
+        [
+          "docs/USER_GUIDE.md",
+          "3-lanes"
+        ]
+      ]
+    },
+    {
+      "id": "prices-and-spending",
+      "title": "Prices and spending",
+      "newPage": true,
+      "parts": [
+        {
+          "file": "README.md",
+          "section": "Spending rules"
+        }
+      ]
+    },
+    {
+      "id": "jobs",
+      "title": "Jobs, Library and History",
+      "parts": [
+        {
+          "file": "docs/USER_GUIDE.md",
+          "section": "4. Jobs"
+        }
+      ],
+      "alias": [
+        [
+          "docs/USER_GUIDE.md",
+          "4-jobs"
+        ]
+      ]
+    },
+    {
+      "id": "files-and-folders",
+      "title": "Files and folders",
+      "parts": [
+        {
+          "file": "docs/USER_GUIDE.md",
+          "section": "5. Files"
+        }
+      ],
+      "alias": [
+        [
+          "docs/USER_GUIDE.md",
+          "5-files"
+        ]
+      ]
+    },
+    {
+      "id": "settings",
+      "title": "Settings",
+      "parts": [
+        {
+          "file": "docs/USER_GUIDE.md",
+          "section": "6. Settings"
+        }
+      ],
+      "alias": [
+        [
+          "docs/USER_GUIDE.md",
+          "6-settings"
+        ]
+      ]
+    },
+    {
+      "id": "what-leaves-your-machine",
+      "title": "What leaves your machine",
+      "newPage": true,
+      "parts": [
+        {
+          "file": "docs/USER_GUIDE.md",
+          "section": "8. Usage data and feedback"
+        }
+      ],
+      "alias": [
+        [
+          "docs/USER_GUIDE.md",
+          "8-usage-data-and-feedback"
+        ]
+      ]
+    },
+    {
+      "id": "troubleshooting",
+      "title": "Troubleshooting",
+      "newPage": true,
+      "parts": [
+        {
+          "file": "docs/USER_GUIDE.md",
+          "section": "7. Troubleshooting"
+        }
+      ],
+      "alias": [
+        [
+          "docs/USER_GUIDE.md",
+          "7-troubleshooting"
+        ]
+      ]
+    },
+    {
+      "id": "changelog",
+      "title": "Changelog",
+      "newPage": true,
+      "parts": [
+        {
+          "file": "CHANGELOG.md"
+        }
+      ]
+    },
+    {
+      "id": "licence",
+      "title": "Licence",
+      "generated": "licence",
+      "parts": [
+        {
+          "file": "README.md",
+          "section": "License"
+        }
+      ]
+    }
+  ],
+  "flow": {
+    "from": {
+      "label": "From your scene",
+      "items": [
+        [
+          "A prompt",
+          "#generate"
+        ],
+        [
+          "An image, or the viewport",
+          "#generate"
+        ],
+        [
+          "The selected node or meshes",
+          "#lanes"
+        ]
+      ]
+    },
+    "models": {
+      "label": "Scenario models",
+      "items": [
+        [
+          "Image, 3D, material, skybox, sound",
+          "#lanes"
+        ],
+        [
+          "Your project's trained models",
+          "#generate"
+        ],
+        [
+          "Your project's workflows",
+          "#lanes"
+        ]
+      ],
+      "note": "Priced on the button before you click."
+    },
+    "to": {
+      "label": "Back in Godot",
+      "items": [
+        [
+          "A texture on a sprite, or a new one"
+        ],
+        [
+          "A GLB instanced in the scene"
+        ],
+        [
+          "A StandardMaterial3D on your meshes"
+        ],
+        [
+          "A sky on the WorldEnvironment"
+        ],
+        [
+          "An audio player"
+        ]
+      ]
+    },
+    "note": "Each placement is one undo step."
+  },
+  "og": {
+    "picture": "docs/images/og-keyvisual.jpg",
+    "subtitle": "Images, 3D, materials, skies and sounds.",
+    "textColor": "#2a211b"
+  },
+  "theme": {
+    "chip": "#478cbf",
+    "chipInk": "#28577c",
+    "chipSoft": "#e9f2f9",
+    "chipLine": "#c5dcee"
+  }
+}

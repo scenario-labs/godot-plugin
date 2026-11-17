@@ -138,12 +138,12 @@ test("forwards to the same GitHub Pages address as vercel.json", () => {
 test("serves the analytics script at the page's own path", () => {
   // Blocker lists (EasyPrivacy) block /_vercel/insights/script.js, not the endpoints it reports to;
   // vercel.json reaches /_vercel/ paths only through a full URL: a bare path falls through to Pages.
+  // The handbook (scenario-labs/components) loads the script named by "analytics" in handbook.config.json.
   const settings = JSON.parse(readFileSync("tools/site_proxy/vercel.json", "utf8"));
-  const page = readFileSync("docs/site/template.html", "utf8");
-  const src = /<script defer src="([^"]+)"><\/script>/.exec(page)?.[1];
+  const handbook = JSON.parse(readFileSync("handbook.config.json", "utf8"));
 
   assert.deepEqual(settings.rewrites[0], {
-    source: src,
+    source: handbook.analytics,
     destination: "https://godot.scenario.com/_vercel/insights/script.js",
   });
 });
@@ -230,6 +230,32 @@ test("ignores other download files, HEAD requests and resumed downloads", async 
   await visit("/download/scenario-godot-plugin-0.2.0.zip", { "user-agent": BROWSER, range: "bytes=1048576-" });
 
   assert.deepEqual(received, []);
+});
+
+test("redirects /download/latest to the zip latest.json names, read afresh, without counting it", async () => {
+  const prefix = publish("0.3.0");
+  const first = (await visit("/download/latest", { "user-agent": BROWSER })) as Response;
+  latest.set(prefix, { status: 200, version: "0.3.1" });
+  const second = (await visit("/download/latest", {}, "HEAD")) as Response;
+
+  assert.equal(first.status, 302);
+  assert.equal(first.headers.get("location"), "/download/scenario-godot-plugin-0.3.0.zip");
+  assert.equal(first.headers.get("cache-control"), "no-store");
+  assert.equal(second.headers.get("location"), "/download/scenario-godot-plugin-0.3.1.zip");
+  assert.equal(latestReads.get(prefix), 2);
+  assert.deepEqual(received, []);
+});
+
+test("redirects /download/latest to the releases page before the first release or when latest.json cannot be read", async () => {
+  publish("");
+  const empty = (await visit("/download/latest")) as Response;
+  publish("0.3.0", 503);
+  const unreadable = (await visit("/download/latest")) as Response;
+
+  for (const result of [empty, unreadable]) {
+    assert.equal(result.status, 302);
+    assert.equal(result.headers.get("location"), "https://github.com/scenario-labs/godot-plugin/releases");
+  }
 });
 
 test("counts a download that requests its range from the first byte", async () => {

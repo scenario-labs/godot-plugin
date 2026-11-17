@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render the dock in three states (fake backend, 0 CU) to docs/images/.
+"""Render the dock in three states (fake backend, 0 CU) as docs/images/hero.png, the README's and the handbook's picture.
 
 Usage: python3 tools/capture_dock.py
 Opens a small editor window for a few seconds (headless draws nothing).
@@ -13,9 +13,7 @@ import gd_run, gd_review  # noqa: E402
 
 
 def main() -> int:
-    sys.path.insert(0, str(ROOT / "tools"))
-    from build_zip import version
-    out = ROOT / f"docs/images/dock-{version()}.png"
+    out = ROOT / "docs/images/hero.png"
     r = gd_run.run_script(str(ROOT), "res://tests/editor/dock_capture_job.gd", {"out": str(out)},
                           editor=True, headless=False, timeout=180)
     res = r.get("result") or {}
