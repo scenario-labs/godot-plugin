@@ -4,3 +4,5 @@
 ^https://mcp\.scenario\.com/
 # These repository pages redirect to GitHub login when unauthenticated.
 ^https://github\.com/scenario-labs/godot-plugin/(issues/new|security/advisories/new)
+# tools/site_proxy answers it with a redirect once its change is deployed from main.
+^https://godot\.scenario\.com/download/latest$
