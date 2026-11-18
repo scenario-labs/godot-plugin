@@ -24,7 +24,7 @@
 
 Generate images, 3D models, PBR materials, skyboxes and sound effects with [Scenario](https://scenario.com) from a dock inside the Godot editor. You see the exact price in Creative Units (CU) before you spend, and the result lands in the open scene as a native Godot asset.
 
-![The Scenario dock in three states: Sign in with Scenario, the Image lane after a finished job, the Material lane with its settings open](docs/images/hero.png)
+![A Godot scene made with the plugin: its sky, cobblestone floor, barrel, lantern and treasure chest were all generated from the Scenario dock](docs/images/hero.jpg)
 
 > For Godot 4.7, the standard and the .NET builds. Free and open source under the MIT license.
 
@@ -34,6 +34,8 @@ Generate images, 3D models, PBR materials, skyboxes and sound effects with [Scen
 - **Your project's own work.** Its trained models (LoRAs and compositions) and its Scenario workflows run from the dock; Library and History import its assets and earlier jobs.
 - **The price before you pay.** The Generate button shows the exact cost in CU for the form as it is now, and one click sends one request.
 - **Native assets you can trace.** Results are imported as Godot resources under `res://scenario/`, each with a `.scenario.json` naming its job, model, prompt and cost; every placement is one undo step.
+
+![The Scenario dock in three states: Sign in with Scenario, the Image lane after a finished job, the Material lane with its settings open](docs/images/dock.png)
 
 ## Install
 
@@ -104,7 +106,7 @@ The repository root is a small Godot demo project that hosts the addon and its t
 make toolkit  # the pinned toolkit into .toolkit/ (git), checked against addons/agentkit
 make test     # unit tests (GUT, 85) and the headless editor test (69 checks, fake backend, 0 CU)
 make zip      # dist/scenario-godot-plugin-<version>.zip, then a clean install into a blank project
-make dock     # re-render docs/images/hero.png (fake backend, opens a small window)
+make dock     # re-render docs/images/dock.png (fake backend, opens a small window)
 make site     # the handbook into dist/site, as godot.scenario.com builds it (Node 24)
 make lint     # gdlint and ruff (uv), the same as CI
 ```

@@ -317,9 +317,8 @@
     "note": "Each placement is one undo step."
   },
   "og": {
-    "picture": "docs/images/og-keyvisual.jpg",
-    "subtitle": "Images, 3D, materials, skies and sounds.",
-    "textColor": "#2a211b"
+    "picture": "docs/images/og.jpg",
+    "subtitle": "Images, 3D, materials, skies and sounds."
   },
   "theme": {
     "chip": "#478cbf",

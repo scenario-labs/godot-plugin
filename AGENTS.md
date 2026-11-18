@@ -207,8 +207,10 @@ the draft, and `publish-changelog.yml` posts the notes to scenario.com.
 [scenario-labs/components](https://github.com/scenario-labs/components), the
 site tooling the Scenario plug-ins share, pinned by commit (there and as
 `COMPONENTS` in the Makefile: bump both): the handbook built
-from the newest release's README, user guide and changelog (chapters, hero,
-link-preview card `docs/images/og-keyvisual.jpg` in `handbook.config.json`),
+from the newest release's README, user guide and changelog (chapters in
+`handbook.config.json`; the hero `docs/images/hero.jpg`, a scene made from
+plugin results, with a shaded copy for the link-preview card,
+`docs/images/og.jpg`; the dock picture `docs/images/dock.png`),
 and that release's zip under `/download/` once its checksum and build
 provenance verify. `make site` builds the handbook from the checkout into
 `dist/site`. `tools/site_proxy/` is a Vercel project in front of Pages that

@@ -25,7 +25,7 @@ archive:
 		echo "source archive: the $$(wc -l < "$$t/got" | tr -d ' ') files of addons/scenario"; rm -rf "$$t"; \
 	else echo "The source archive must hold exactly the committed files of addons/scenario (- missing, + extra)."; rm -rf "$$t"; exit 1; fi
 
-# The dock picture of the README and the handbook, docs/images/hero.png (fake backend, 0 CU; opens a small window).
+# The dock picture of the README and the handbook, docs/images/dock.png (fake backend, 0 CU; opens a small window).
 dock:
 	python3 tools/capture_dock.py
 
