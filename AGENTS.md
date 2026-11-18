@@ -112,6 +112,11 @@ CI (`.github/workflows/ci.yml`) runs them on Linux, with `make tools-test`;
 (`tools/smoke.py`) spends Creative Units: never run it without
 explicit authorization for the project and budget.
 
+For Scenario developers, read when Godot starts: `SCENARIO_OAUTH_ISSUER` and
+`SCENARIO_OAUTH_CLIENT_ID` (together) and `SCENARIO_MCP_URL` sign in to a
+development instance; `SCENARIO_TELEMETRY_URL` sends usage data and feedback to
+another relay. The user guide leaves them out.
+
 ## Scheduled and manual checks
 
 Informational, never required, and none spends unless noted. A failed

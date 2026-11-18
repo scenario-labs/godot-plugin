@@ -83,9 +83,7 @@ Editor Settings > Scenario:
 Environment variables, read when Godot starts:
 
 - `SCENARIO_API_KEY`, `SCENARIO_API_SECRET`: use this key instead of the saved sign-in or key. A headless editor (CI, scripts) never resumes the saved sign-in, so it needs these.
-- `SCENARIO_OAUTH_ISSUER`, `SCENARIO_OAUTH_CLIENT_ID`, `SCENARIO_MCP_URL`: sign in to a development instance of Scenario (for Scenario developers; set the first two together).
 - `SCENARIO_NO_SPEND=1`: refuse every paid request and upload inside the editor. Price checks, cancels and imports still work.
-- `SCENARIO_TELEMETRY_URL`: send usage data and feedback to another relay (for Scenario developers).
 
 ## 7. Troubleshooting
 
@@ -94,7 +92,7 @@ Environment variables, read when Godot starts:
 | "Wait for the price check to finish." | The form changed after the last price; wait a moment. |
 | A price check error | Read the message under the form, then press **Check price**. |
 | "Automatic price checks are off for this session." | Scenario answered a price check with a job, which should not happen. Check that job on Scenario (its id is in the message), then press **Check price** to turn checks back on. |
-| Not sent: not enough Creative Units | Top up the Scenario project of the key, or pick cheaper settings. |
+| Not sent: not enough Creative Units | Add Creative Units to the team that pays for this project, or pick cheaper settings. |
 | "This exact request may already be running." | An Unknown job has the same settings: press Check Scenario first. |
 | Material saved but not applied | No mesh was selected: drag the `.tres` onto a mesh. |
 | "Open a scene to place it." | The result was imported but not placed: open a scene, press **Show** on the job and drag the file in. |
