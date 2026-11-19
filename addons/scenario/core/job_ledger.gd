@@ -283,13 +283,15 @@ static func needs_scenario(row: Dictionary) -> bool:
 		and (row["state"] in ACTIVE_STATES or row.get("unread", false) or (row["state"] == SUCCESS and not row["imported"]))
 
 
-## Records the project a row's job was found in.
+## Records the project a row sent with an API key was found in; the row stays
+## marked as the key's, which still follows it.
 func set_scope(local_id: String, team_id: String, project_id: String, now: float) -> void:
 	var row := find(local_id)
 	if row.is_empty():
 		return
 	row["team_id"] = team_id
 	row["project_id"] = project_id
+	row["sent_with_key"] = true
 	row["error"] = ""
 	row["updated_at"] = now
 	save()

@@ -289,5 +289,7 @@ func test_rows_of_the_other_connection_method_are_set_aside() -> void:
 	assert_false(JobScopes.is_set_aside(ledger.find(signed_in), true))
 	assert_true(JobScopes.is_set_aside(ledger.find(signed_in), false), "a signed-in row under a key")
 	assert_false(JobScopes.is_set_aside(ledger.find(with_key), false))
+	ledger.set_scope(with_key, "t", "proj", T0)  # found by a sign-in
+	assert_false(JobScopes.is_set_aside(ledger.find(with_key), false), "a key's row found by a sign-in: the key still follows it")
 	ledger.dismiss(signed_in, T0)
 	assert_false(JobScopes.is_set_aside(ledger.find(signed_in), false), "dismissed: nothing left to follow")

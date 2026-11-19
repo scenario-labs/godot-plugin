@@ -19,7 +19,7 @@ const SIGNED_IN_NOTE := "Sent while signed in with Scenario, to a project an API
 static func is_set_aside(row: Dictionary, oauth: bool) -> bool:
 	if oauth:
 		return Ledger.needs_project(row)
-	return not str(row.get("project_id", "")).is_empty() and Ledger.needs_scenario(row)
+	return not str(row.get("project_id", "")).is_empty() and not row.get("sent_with_key", false) and Ledger.needs_scenario(row)
 
 
 ## What the dock shows on a set-aside row: [label, note].
