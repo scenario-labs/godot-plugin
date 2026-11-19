@@ -157,7 +157,7 @@ func run() -> Dictionary:
 	var here := solo.ledger.find(key_rows["job_key_here"])
 	var away := solo.ledger.find(key_rows["job_key_away"])
 	check("a key job found in the account's projects is followed there", here["project_id"] == "proj_solo" and here["team_id"] == "team_solo" and not solo.is_set_aside(here))
-	check("a key job out of reach is set aside with a note", away["project_id"] == "" and solo.is_set_aside(away) and away["error"] == Controller.JobScopes.NOTE)
+	check("a key job out of reach is set aside, its note not saved", away["project_id"] == "" and solo.is_set_aside(away) and str(away["error"]).is_empty())
 	var asked := fake.calls.size()
 	await solo.poll()
 	var polled: Dictionary = {}  # job_id -> project_id of each job_get the poll sent
@@ -169,19 +169,28 @@ func run() -> Dictionary:
 	aside_ui.bind(solo)
 	var aside_row: Control = aside_ui._job_row(away)
 	check("the dock offers Dismiss on a set-aside row", aside_row.find_children("*", "Button", true, false).map(func(b: Button) -> String: return b.text) == ["Dismiss"])
+	check("the dock shows the note on a set-aside row", aside_row.tooltip_text == Controller.JobScopes.NOTE)
 	aside_row.free()
 	aside_ui.queue_free()
 	solo.dismiss(key_rows["job_key_away"])
 	check("dismissed: no longer set aside", not solo.is_set_aside(solo.ledger.find(key_rows["job_key_away"])))
 
 	# Sign out forgets everything locally and revokes the refresh token.
+	await _until(func() -> bool: return not solo.fields.is_empty())
+	var solo_reference := ""
+	for field in solo.fields:
+		if field["type"] in ["file", "files"]:
+			solo_reference = field["name"]
+	solo.values[solo_reference] = ["asset_in_solo"]
 	var token := solo.client.session.refresh_token()
 	await solo.sign_out()
 	check("sign out: revoked", token in fake.revoked)
+	check("sign out: references of the account are dropped", not solo_reference.is_empty() and not solo.values.has(solo_reference))
 	check("sign out: nothing saved", solo.credentials.load_session(OAuth.PRODUCTION_ISSUER, OAuth.PRODUCTION_CLIENT_ID)["refresh_token"] == "" and not solo.is_signed_in())
 
 	# Device grant: a code to enter elsewhere, then the same picker path.
 	fake.device_pending = 1
+	solo.teams_loading = true  # a teams load of the earlier sign-in, still under way
 	solo.sign_in_device()
 	await _until(func() -> bool: return not str(solo.sign_in.get("user_code", "")).is_empty())
 	var device_ui := DockUI.new()
@@ -192,7 +201,7 @@ func run() -> Dictionary:
 	solo.open_device_page()
 	check("device: page opens with the code", opened == ["https://accounts.example.test/device?user_code=WDJB-MJHT"])
 	await _until(func() -> bool: return solo.is_connected_account(), 10.0)
-	check("device: signed in after one pending poll", solo.is_connected_account() and fake.device_pending == 0)
+	check("device: signed in after one pending poll, its own teams loaded", solo.is_connected_account() and fake.device_pending == 0)
 
 	# The provider ends the session: back to sign-in, with a notice.
 	var notices: Array = []
@@ -208,6 +217,10 @@ func run() -> Dictionary:
 		and kept.get("workspace", {}).get("project_id") == "proj_solo")
 	ended_session.on_rotate.call("", "rt_late")
 	check("a replaced session's late rotation is not saved", solo.credentials.load_session(OAuth.PRODUCTION_ISSUER, OAuth.PRODUCTION_CLIENT_ID)["refresh_token"] == "")
+	var ended_ref: WeakRef = weakref(ended_session)
+	ended_session = null
+	await wait_frames(1)
+	check("an ended session is freed, its tokens with it", ended_ref.get_ref() == null)
 	check("ended session: the dock shows sign-in", device_ui._connect_box.visible)
 
 	# A cancelled browser sign-in closes its listener.

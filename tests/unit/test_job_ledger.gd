@@ -243,3 +243,35 @@ func test_rows_that_need_an_action_stay_in_the_jobs_list() -> void:
 	assert_eq(shown[0]["state"], Ledger.SUCCESS, "newest first")
 	ledger.dismiss(lost, T0 + 30)
 	assert_false(ledger.shown(12).any(func(r: Dictionary) -> bool: return r["local_id"] == lost))
+
+
+func test_an_intent_that_cannot_be_saved_is_not_kept() -> void:
+	DirAccess.make_dir_recursive_absolute(path + ".tmp")  # a folder where the file goes
+	var ledger := _ledger()
+	assert_eq(ledger.add_intent("image", "m", {"prompt": "chest"}, "fp", 2.0, T0), "", "the caller sends nothing")
+	assert_true(ledger.jobs.is_empty())
+	DirAccess.remove_absolute(path + ".tmp")
+
+
+func test_reconcile_links_a_job_only_one_unknown_row_could_stand_for() -> void:
+	var ledger := _ledger()
+	var older := ledger.add_intent("workflow", "wflow_a", {"prompt": "a chest"}, "fp_1", 2.0, T0)
+	ledger.mark_unknown(older, "timeout", T0)
+	var newer := ledger.add_intent("workflow", "wflow_a", {"prompt": "a lamp"}, "fp_2", 2.0, T0 + 2)
+	ledger.mark_unknown(newer, "timeout", T0 + 2)
+	var server := [{"jobId": "job_1", "workflowId": "wflow_a", "status": "success", "createdAt": "2026-10-04T09:10:56.000Z"}]
+	assert_eq(ledger.reconcile(server, T0 + 10), 0, "either row could be the job's")
+	assert_eq([ledger.find(older)["state"], ledger.find(newer)["state"]], [Ledger.UNKNOWN, Ledger.UNKNOWN])
+	ledger.dismiss(newer, T0 + 20)
+	assert_eq(ledger.reconcile(server, T0 + 30), 1)
+	assert_eq(ledger.find(older)["job_id"], "job_1")
+
+
+func test_a_dismissed_row_is_not_read_again() -> void:
+	var ledger := _ledger()
+	var local_id := ledger.add_intent("image", "model_a", {}, "fp", 2.0, T0)
+	ledger.mark_unknown(local_id, "timeout", T0)
+	ledger.reconcile([{"jobId": "job_1", "modelId": "model_a", "status": "success", "createdAt": "2026-10-04T09:10:53.000Z"}], T0 + 10)
+	ledger.dismiss(local_id, T0 + 20)
+	assert_true(ledger.active().is_empty(), "its outputs are not read, nor imported")
+	assert_false(Ledger.needs_project(ledger.find(local_id)))

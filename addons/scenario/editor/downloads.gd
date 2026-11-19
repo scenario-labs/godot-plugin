@@ -1,8 +1,9 @@
 @tool
 extends RefCounted
 ## Transfers for the controller: a finished job's outputs downloaded into the
-## project, named and typed (a failure keeps nothing: neither the files already
-## moved nor the pending download), and a reference file uploaded to Scenario.
+## project, named and typed (a failure keeps nothing it added: neither the files
+## it moved in nor the pending download; a file it replaced, the same asset
+## from an earlier import, stays), and a reference file uploaded to Scenario.
 
 const Files := preload("res://addons/scenario/core/files.gd")
 const Lanes := preload("res://addons/scenario/core/lanes.gd")
@@ -18,6 +19,7 @@ static func fetch(client: Object, transport: Object, row: Dictionary, scope: Dic
 	var assets: Array = []
 	var problem := ""
 	var pending := ""  # a download not yet moved into the project
+	var added: Array = []  # files this import created, removed if it fails
 	var skipped: Array = []  # a workflow's outputs Godot cannot import (their MIME types)
 	var date := Files.today()
 	for asset_id in row["asset_ids"]:
@@ -33,7 +35,8 @@ static func fetch(client: Object, transport: Object, row: Dictionary, scope: Dic
 		if not url_result["ok"]:
 			problem = url_result["error"]["message"]
 			break
-		var temp := "%s/%s.download" % [Files.DOWNLOADS, asset_id]
+		# Per row: another row importing the same asset at once has its own staging file.
+		var temp := "%s/%s-%s.download" % [Files.DOWNLOADS, row["local_id"], asset_id]
 		var downloaded: Dictionary = await transport.download(url_result["value"], temp)
 		if not downloaded["ok"]:
 			problem = downloaded["error"]
@@ -58,6 +61,8 @@ static func fetch(client: Object, transport: Object, row: Dictionary, scope: Dic
 			role = "preview"  # 3D models come with a thumbnail next to the GLB
 		var final_path := Files.base_path(row["lane"], row["prompt"], asset_id, role, date, output_root) + "." + ext
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(final_path.get_base_dir()))
+		if not FileAccess.file_exists(final_path):
+			added.append(final_path)
 		if DirAccess.rename_absolute(ProjectSettings.globalize_path(temp), ProjectSettings.globalize_path(final_path)) != OK:
 			problem = "Could not move the download into " + final_path
 			break
@@ -70,8 +75,8 @@ static func fetch(client: Object, transport: Object, row: Dictionary, scope: Dic
 	if problem.is_empty() and lane["importer"] == "model3d" and files.all(func(f: Dictionary) -> bool: return f["role"] == "preview"):
 		problem = "%s returned no GLB or glTF model, which the 3D lane needs. Pick one of the lane's own models." % model_name
 	if not problem.is_empty():
-		for item in files:
-			DirAccess.remove_absolute(ProjectSettings.globalize_path(item["path"]))
+		for added_path in added:
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(added_path))
 		if not pending.is_empty():
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(pending))
 		files = []

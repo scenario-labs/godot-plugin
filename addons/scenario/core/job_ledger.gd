@@ -77,21 +77,17 @@ func save() -> bool:
 
 ## prompt: the text that names the files and the node; defaults to parameters.prompt.
 ## scope: {"team_id", "project_id"} the request goes to ({} with an API key).
+## Returns "" when the row could not be saved: the paid request must not go out.
 func add_intent(lane: String, model_id: String, parameters: Dictionary, fingerprint: String,
 		quoted_cu: float, now: float, prompt: String = "", scope: Dictionary = {}) -> String:
-	_counter += 1
-	var local_id := "local_%d_%d" % [int(now * 1000.0), _counter]
-	var row := {
-		"local_id": local_id, "job_id": "", "state": SUBMITTING, "lane": lane, "model_id": model_id,
-		"prompt": prompt if not prompt.is_empty() else str(parameters.get("prompt", "")), "parameters": parameters, "fingerprint": fingerprint,
-		"quoted_cu": quoted_cu, "charged_cu": null, "asset_ids": [], "files": [], "imported": false,
-		"error": "", "created_at": now, "updated_at": now,
-		"team_id": str(scope.get("team_id", "")), "project_id": str(scope.get("project_id", "")),
-	}
+	var row := _new_row(lane, model_id, prompt if not prompt.is_empty() else str(parameters.get("prompt", "")), now, scope)
+	row.merge({"parameters": parameters, "fingerprint": fingerprint, "quoted_cu": quoted_cu}, true)
 	jobs.push_front(row)
 	_trim()
-	save()
-	return local_id
+	if not save():
+		jobs.erase(row)
+		return ""
+	return row["local_id"]
 
 
 ## A finished result brought in from the Library or History, not sent from
@@ -106,14 +102,12 @@ func adopt(lane: String, model_id: String, prompt: String, job_id: String, asset
 				existing = row
 	if not existing.is_empty():
 		return existing["local_id"]
-	var local_id := add_intent(lane, model_id, {}, "", 0.0, now, prompt, scope)
-	var row := find(local_id)
-	row["job_id"] = job_id
-	row["state"] = SUCCESS
-	row["asset_ids"] = asset_ids.duplicate()
-	row["source"] = source
+	var row := _new_row(lane, model_id, prompt, now, scope)
+	row.merge({"job_id": job_id, "state": SUCCESS, "asset_ids": asset_ids.duplicate(), "source": source}, true)
+	jobs.push_front(row)
+	_trim()
 	save()
-	return local_id
+	return row["local_id"]
 
 
 func mark_submitted(local_id: String, job_id: String, server_status: String, now: float) -> void:
@@ -141,7 +135,9 @@ func mark_cancel_requested(local_id: String, now: float) -> void:
 		_set_state(local_id, CANCEL_REQUESTED, "", now)
 
 
+## Ends the row: it is not read on Scenario again, even if a read was due.
 func dismiss(local_id: String, now: float) -> void:
+	find(local_id).erase("unread")
 	_set_state(local_id, DISMISSED, "", now)
 
 
@@ -194,26 +190,34 @@ func apply_job(job: Dictionary, now: float) -> Dictionary:
 
 
 ## Links unresolved rows to jobs found on Scenario. Returns how many were linked.
-## Only an unambiguous match (exactly one untracked job of the same model in the
-## window after the intent) is linked; anything else stays for the user.
+## Only an unambiguous match is linked: the row's only candidate (an untracked
+## job of the same model in the window after the intent), which is no other
+## unresolved row's candidate. Anything else stays for the user.
 ## project_id: the project server_jobs were listed in; rows sent to another
 ## project are left alone ("" with an API key, whose rows carry none).
 func reconcile(server_jobs: Array, now: float, project_id: String = "") -> int:
-	var linked := 0
+	var candidates := {}  # local_id: [job]
+	var claims := {}  # jobId: how many rows it could stand for
 	for row in jobs:
 		if not row["state"] in UNRESOLVED_STATES or str(row.get("project_id", "")) != project_id:
 			continue
-		var candidates: Array = []
+		candidates[row["local_id"]] = []
 		for job in server_jobs:
 			if job is Dictionary and find_by_job(str(job.get("jobId", ""))).is_empty() and _could_be(row, job):
-				candidates.append(job)
-		if candidates.size() == 1:
-			row["job_id"] = str(candidates[0]["jobId"])
-			row["error"] = ""
-			row["state"] = state_for_status(str(candidates[0].get("status", "")), str(candidates[0].get("error", "")))
-			row["unread"] = true  # a listing has no outputs: the poll reads the job once
-			row["updated_at"] = now
-			linked += 1
+				candidates[row["local_id"]].append(job)
+				claims[str(job["jobId"])] = claims.get(str(job["jobId"]), 0) + 1
+	var linked := 0
+	for local_id in candidates:
+		var found: Array = candidates[local_id]
+		if found.size() != 1 or claims[str(found[0]["jobId"])] != 1:
+			continue
+		var row := find(local_id)
+		row["job_id"] = str(found[0]["jobId"])
+		row["error"] = ""
+		row["state"] = state_for_status(str(found[0].get("status", "")), str(found[0].get("error", "")))
+		row["unread"] = true  # a listing has no outputs: the poll reads the job once
+		row["updated_at"] = now
+		linked += 1
 	if linked > 0:
 		save()
 	return linked
@@ -374,6 +378,16 @@ func _set_state(local_id: String, state: String, message: String, now: float) ->
 	row["error"] = message
 	row["updated_at"] = now
 	save()
+
+
+func _new_row(lane: String, model_id: String, prompt: String, now: float, scope: Dictionary) -> Dictionary:
+	_counter += 1
+	return {
+		"local_id": "local_%d_%d" % [int(now * 1000.0), _counter], "job_id": "", "state": SUBMITTING, "lane": lane,
+		"model_id": model_id, "prompt": prompt, "parameters": {}, "fingerprint": "", "quoted_cu": 0.0, "charged_cu": null,
+		"asset_ids": [], "files": [], "imported": false, "error": "", "created_at": now, "updated_at": now,
+		"team_id": str(scope.get("team_id", "")), "project_id": str(scope.get("project_id", "")),
+	}
 
 
 func _trim() -> void:
