@@ -111,6 +111,7 @@ func setup(p_transport: Node, ledger_path: String, credentials_path: String, res
 	if transport.get_parent() == null:
 		add_child(transport)
 	credentials = Credentials.new(credentials_path)
+	credentials.rotation_lost.connect(func(message: String) -> void: notified.emit(message, "warning"))
 	ledger = Ledger.new(ledger_path)
 	ledger.load_from_disk()
 	client = Client.new(transport)
