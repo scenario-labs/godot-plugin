@@ -18,9 +18,12 @@ class Relay:
 	extends RefCounted
 	var posts: Array = []
 	var statuses: Array = []
+	var during := Callable()  # called while a post is in flight
 
 	func post(url: String, _headers: PackedStringArray, body: String, _timeout_s: float) -> Dictionary:
 		posts.append({"url": url, "body": JSON.parse_string(body), "text": body})
+		if during.is_valid():
+			during.call()
 		var status: int = statuses.pop_front() if not statuses.is_empty() else 202
 		return {"status": status, "headers": {}, "body": "{}", "error": ""}
 
@@ -155,9 +158,15 @@ func run() -> Dictionary:
 	check("a bad address is refused before sending", ui._feedback.status_text().contains("email") and relay.posts.size() == 1)
 	ui._feedback.fill(4, "The dock is handy", "me@example.com")
 	relay.statuses = [500]
+	var locked := []
+	relay.during = func() -> void: locked.append(not ui._feedback._message.editable and not ui._feedback._email.editable
+		and ui._feedback._rating_buttons.all(func(b: Button) -> bool: return b.disabled))
 	await ui._feedback._on_send()
+	relay.during = Callable()
 	check("a failed send keeps the text", ui._feedback.visible and ui._feedback.message_text() == "The dock is handy"
 		and ui._feedback.status_text().contains("kept") and relay.posts.size() == 2)
+	check("the form is locked while it is sent, then editable again", locked == [true] and ui._feedback._message.editable
+		and ui._feedback._email.editable and not ui._feedback._rating_buttons[0].disabled)
 	relay.statuses = [200]
 	await ui._feedback._on_send()
 	var sent: Dictionary = relay.posts[2]["body"]

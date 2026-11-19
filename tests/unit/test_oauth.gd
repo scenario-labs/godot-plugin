@@ -6,20 +6,29 @@ const Loopback := preload("res://addons/scenario/core/loopback.gd")
 const Errors := preload("res://addons/scenario/core/errors.gd")
 const Fake := preload("res://tests/support/fake_transport.gd")
 
+const ENV := ["SCENARIO_OAUTH_ISSUER", "SCENARIO_OAUTH_CLIENT_ID"]
+
 var fake: Fake
 var oauth: OAuth
+var _saved_env := {}  # the runner's values, put back after each test
 
 
 func before_each() -> void:
 	fake = Fake.new()
 	oauth = OAuth.new(fake, "https://idp.example.test/", "client_godot")
-	OS.unset_environment("SCENARIO_OAUTH_ISSUER")
-	OS.unset_environment("SCENARIO_OAUTH_CLIENT_ID")
+	_saved_env = {}
+	for name in ENV:
+		if OS.has_environment(name):
+			_saved_env[name] = OS.get_environment(name)
+		OS.unset_environment(name)
 
 
 func after_each() -> void:
-	OS.unset_environment("SCENARIO_OAUTH_ISSUER")
-	OS.unset_environment("SCENARIO_OAUTH_CLIENT_ID")
+	for name in ENV:
+		if _saved_env.has(name):
+			OS.set_environment(name, _saved_env[name])
+		else:
+			OS.unset_environment(name)
 
 
 func _json(status: int, data: Dictionary) -> Dictionary:

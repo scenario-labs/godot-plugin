@@ -19,13 +19,7 @@ func before_each() -> void:
 	fake = FakeTransport.new()
 	client = Client.new(fake, "api_key_1", "secret_1")
 	client.spending_disabled = false
-	ledger_path = "user://test_workflow_jobs_%d.json" % randi()
-
-
-func after_each() -> void:
-	for suffix in ["", ".tmp"]:
-		if FileAccess.file_exists(ledger_path + suffix):
-			DirAccess.remove_absolute(ledger_path + suffix)
+	ledger_path = "res://tests/tmp_output/workflows-%d/jobs.json" % randi()
 
 
 func _arguments(index: int = 0) -> Dictionary:
@@ -127,6 +121,10 @@ func test_panoramas_maps_and_unlabelled_images_reach_a_lane_that_places_them() -
 	var odd := {"path": "res://a/x.png", "role": "preview"}
 	assert_eq(Workflows.groups([odd]), {"image": [odd]})
 	assert_eq(odd["role"], "main", "the Image lane places a main image")
+	var glb := {"path": "res://a/y.glb", "role": "main"}
+	var preview := {"path": "res://a/p.png", "role": "main"}
+	assert_eq(Workflows.groups([glb, sky, preview]), {"skybox": [sky], "model3d": [glb, preview]}, "a panorama next to a GLB is a sky")
+	assert_eq(sky["role"], "panorama")
 
 
 func test_3d_outputs_are_downloaded_as_glb() -> void:

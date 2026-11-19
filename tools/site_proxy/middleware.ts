@@ -253,6 +253,18 @@ function common(request: Request, context: unknown): Json {
   return properties;
 }
 
+/** The limited resource that drops these events ("events" or "survey_responses"), or "" when none does. */
+async function quotaLimited(response: Response): Promise<string> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await response.text());
+  } catch {
+    return "";
+  }
+  const limited = isObject(parsed) && Array.isArray(parsed.quota_limited) ? parsed.quota_limited : [];
+  return limited.find((resource) => resource === "events" || resource === "survey_responses") ?? "";
+}
+
 async function forward(path: string, body: Json): Promise<boolean> {
   const host = env("POSTHOG_HOST") || "https://us.i.posthog.com";
   try {
@@ -262,8 +274,14 @@ async function forward(path: string, body: Json): Promise<boolean> {
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-    if (!response.ok) console.warn(`Telemetry not recorded: HTTP ${response.status}`);
-    return response.ok;
+    if (!response.ok) {
+      console.warn(`Telemetry not recorded: HTTP ${response.status}`);
+      return false;
+    }
+    // Over a billing quota, capture still answers 200 and names the limited resources.
+    const limited = await quotaLimited(response);
+    if (limited) console.warn(`Telemetry not recorded: quota limited (${limited})`);
+    return !limited;
   } catch (error) {
     console.warn(`Telemetry not recorded: ${(error as Error).name}`);
     return false;

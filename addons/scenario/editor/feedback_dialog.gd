@@ -85,12 +85,11 @@ func status_text() -> String:
 func _on_send() -> void:
 	if _sending or reporter == null:
 		return
-	_sending = true
-	get_ok_button().disabled = true
+	# The form is locked while it is sent: an edit made now would be cleared unsent.
+	_set_sending(true)
 	_set_status("Sending...")
 	var result: Dictionary = await reporter.send_feedback(rating, _message.text, _email.text)
-	_sending = false
-	get_ok_button().disabled = false
+	_set_sending(false)
 	if not result["ok"]:
 		_set_status(result["message"])
 		return
@@ -98,6 +97,15 @@ func _on_send() -> void:
 	_set_status("")
 	hide()
 	sent.emit()
+
+
+func _set_sending(sending: bool) -> void:
+	_sending = sending
+	get_ok_button().disabled = sending
+	_message.editable = not sending
+	_email.editable = not sending
+	for button in _rating_buttons:
+		button.disabled = sending
 
 
 func _set_status(text: String) -> void:

@@ -87,10 +87,10 @@ static func schema_from(record: Dictionary) -> Dictionary:
 	return {"model_id": str(record.get("id", "")), "parameters": parameters, "unsupported": unsupported}
 
 
-## A workflow's files by the lane that places them: a GLB or glTF on the 3D
-## lane with the images as its previews; else a 360 panorama on the Skybox
-## lane, PBR maps on the Material lane and other images on the Image lane;
-## sounds on the Sound lane. Roles come from Files.role_for. {lane_id: [file, ...]}
+## A workflow's files by the lane that places them: a 360 panorama on the
+## Skybox lane; a GLB or glTF on the 3D lane with the other images as its
+## previews; else PBR maps on the Material lane and other images on the Image
+## lane; sounds on the Sound lane. Roles come from Files.role_for. {lane_id: [file, ...]}
 static func groups(files: Array) -> Dictionary:
 	var models: Array = []
 	var sounds: Array = []
@@ -104,15 +104,15 @@ static func groups(files: Array) -> Dictionary:
 			_:
 				images.append(file)
 	var out := {}
+	var panoramas := images.filter(func(f: Dictionary) -> bool: return f["role"] == "panorama")
+	var rest := images.filter(func(f: Dictionary) -> bool: return f["role"] != "panorama")
+	if not panoramas.is_empty():
+		out["skybox"] = panoramas
 	if not models.is_empty():
-		for image in images:
+		for image in rest:
 			image["role"] = "preview"
-		out["model3d"] = models + images
+		out["model3d"] = models + rest
 	else:
-		var panoramas := images.filter(func(f: Dictionary) -> bool: return f["role"] == "panorama")
-		var rest := images.filter(func(f: Dictionary) -> bool: return f["role"] != "panorama")
-		if not panoramas.is_empty():
-			out["skybox"] = panoramas
 		var has_color := rest.any(func(f: Dictionary) -> bool: return f["role"] in ["main", "base", "albedo"])
 		var has_maps := rest.any(func(f: Dictionary) -> bool: return f["role"] in MAP_ROLES)
 		if has_maps and has_color:

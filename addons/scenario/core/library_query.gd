@@ -59,7 +59,7 @@ static func parse_assets(value: Variant) -> Dictionary:
 
 
 ## One asset as the dock shows it, or {} without an id:
-## {"id", "kind", "name", "prompt", "model_id", "mime", "created_at", "thumbnail", "generated", "uploaded"}
+## {"id", "kind", "name", "caption", "prompt", "model_id", "mime", "created_at", "thumbnail", "generated", "uploaded"}
 static func asset_row(item: Variant) -> Dictionary:
 	if not item is Dictionary or text(item.get("id")).is_empty():
 		return {}
@@ -71,12 +71,13 @@ static func asset_row(item: Variant) -> Dictionary:
 	var prompt := text(item.get("prompt"))
 	if prompt.begins_with("asset_"):
 		prompt = ""  # the prompt was kept as a text asset: its id says nothing
+	var caption := text(item.get("description"))
 	var name := text(item.get("name"))
-	for fallback in [text(item.get("description")), prompt, text(item["id"])]:
+	for fallback in [caption, prompt, text(item["id"])]:
 		if name.is_empty():
 			name = fallback
 	return {
-		"id": text(item["id"]), "kind": kind, "name": name, "prompt": prompt, "model_id": model_id, "mime": mime,
+		"id": text(item["id"]), "kind": kind, "name": name, "caption": caption, "prompt": prompt, "model_id": model_id, "mime": mime,
 		"created_at": text(item.get("createdAt")), "thumbnail": thumbnail_url(item, kind),
 		"generated": not model_id.is_empty(), "uploaded": text(item.get("source")).begins_with("uploaded"),
 	}
@@ -92,7 +93,7 @@ static func matches(row: Dictionary, kind: String, source: String, query: String
 	if (source == "generated" and not row["generated"]) or (source == "uploaded" and not row["uploaded"]):
 		return false
 	query = query.strip_edges().to_lower()
-	return query.is_empty() or (str(row["name"]) + " " + str(row["prompt"])).to_lower().contains(query)
+	return query.is_empty() or ("%s %s %s" % [row["name"], row.get("caption", ""), row["prompt"]]).to_lower().contains(query)
 
 
 ## A small picture of an image: Scenario's transform URL with a width (the

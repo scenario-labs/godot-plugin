@@ -57,6 +57,8 @@ func test_filters() -> void:
 	assert_true(Query.matches(image, "all", "all", "  RED "), "prompt words, any case")
 	assert_true(Query.matches(image, "all", "all", "gem"), "caption words")
 	assert_false(Query.matches(image, "all", "all", "blue"))
+	var named := Query.asset_row({"id": "a4", "kind": "image", "name": "scene.png", "description": "blue castle"})
+	assert_true(Query.matches(named, "all", "all", "castle"), "the caption of a named asset")
 
 
 func test_lane_for_one_asset() -> void:

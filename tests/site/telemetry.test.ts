@@ -12,6 +12,7 @@ type Captured = { path: string; body: Record<string, unknown> };
 let server: Server;
 let received: Captured[] = [];
 let status = 200;
+let answer = "{}";
 
 const INSTALL = "0123456789abcdef0123456789abcdef";
 const SUBMISSION = "fedcba9876543210fedcba9876543210";
@@ -28,7 +29,7 @@ function read(request: IncomingMessage): Promise<string> {
 before(async () => {
   server = createServer(async (request, response) => {
     received.push({ path: request.url ?? "", body: JSON.parse(await read(request)) });
-    response.writeHead(status).end("{}");
+    response.writeHead(status).end(answer);
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   process.env.POSTHOG_HOST = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -42,6 +43,7 @@ after(() => {
 beforeEach(() => {
   received = [];
   status = 200;
+  answer = "{}";
   resetRateLimits();
   process.env.POSTHOG_PROJECT_TOKEN = "phc_test";
   process.env.POSTHOG_FEEDBACK_SURVEY_ID = "survey_test";
@@ -147,6 +149,16 @@ test("records feedback as a survey response and says whether PostHog took it", a
   status = 500;
   assert.equal((await send("/telemetry/v1/feedback", { submission_id: SUBMISSION, rating: 2, message: "" })).status, 502);
   assert.equal(received[2].body.distinct_id, SUBMISSION, "without usage data, the submission id stands in");
+});
+
+test("reports feedback as not recorded when PostHog drops it over a quota", async () => {
+  const feedback = { submission_id: SUBMISSION, rating: 3, message: "" };
+  answer = JSON.stringify({ status: "Ok", quota_limited: ["survey_responses"] });
+  assert.equal((await send("/telemetry/v1/feedback", feedback)).status, 502, "a 200 that names the quota");
+  answer = JSON.stringify({ status: "Ok", quota_limited: ["recordings"] });
+  assert.equal((await send("/telemetry/v1/feedback", feedback)).status, 200, "another resource's quota");
+  answer = "";
+  assert.equal((await send("/telemetry/v1/feedback", feedback)).status, 200, "an empty body");
 });
 
 test("refuses feedback with a bad rating, address or id", async () => {
