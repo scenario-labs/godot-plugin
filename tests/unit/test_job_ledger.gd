@@ -297,3 +297,7 @@ func test_rows_of_the_other_connection_method_are_set_aside() -> void:
 	assert_false(JobScopes.can_import(ledger.find(library), false), "a signed-in Library row is not read in a key's project")
 	assert_true(JobScopes.can_import(ledger.find(library), true))
 	assert_true(JobScopes.can_import(ledger.find(with_key), false), "a key's row found by a sign-in")
+	assert_eq(ledger.adopt("image", "", "a library image", "", ["asset_1"], T0, {"team_id": "t", "project_id": "proj"}, "library"), library, "the same asset again: the same row")
+	var under_key := ledger.adopt("image", "", "a library image", "", ["asset_1"], T0, {}, "library")
+	assert_ne(under_key, library, "the same asset under a key: a row of the key's project")
+	assert_true(JobScopes.can_import(ledger.find(under_key), false))

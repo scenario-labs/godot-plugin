@@ -98,7 +98,9 @@ func adopt(lane: String, model_id: String, prompt: String, job_id: String, asset
 	var existing := find_by_job(job_id)
 	if job_id.is_empty():
 		for row in jobs:
-			if row.get("source") == source and row["asset_ids"] == asset_ids and row["state"] == SUCCESS:
+			# The same asset under another connection is another row: its project tells where to read it.
+			if row.get("source") == source and row["asset_ids"] == asset_ids and row["state"] == SUCCESS \
+					and str(row.get("project_id", "")) == str(scope.get("project_id", "")):
 				existing = row
 	if not existing.is_empty():
 		return existing["local_id"]
