@@ -107,6 +107,8 @@ static func _write_texture_sidecar(path: String, params: Dictionary) -> void:
 
 func _place_image(files: Array, label: String) -> Dictionary:
 	var path := _first(files, ["main", "base", "albedo"])
+	if path.is_empty() and not files.is_empty():
+		path = files[0]["path"]  # a single map or panorama from the Library or History: placed as it is
 	var texture := load(path) as Texture2D
 	if texture == null:
 		return _fail("The image could not be imported: " + path)

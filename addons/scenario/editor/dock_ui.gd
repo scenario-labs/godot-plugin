@@ -7,17 +7,56 @@ const Controller := preload("res://addons/scenario/editor/controller.gd")
 const Lanes := preload("res://addons/scenario/core/lanes.gd")
 const Ledger := preload("res://addons/scenario/core/job_ledger.gd")
 const Form := preload("res://addons/scenario/core/schema_form.gd")
+const Workflows := preload("res://addons/scenario/core/workflows.gd")
+const Library := preload("res://addons/scenario/editor/library.gd")
+const LibraryUI := preload("res://addons/scenario/editor/library_ui.gd")
+const FeedbackDialog := preload("res://addons/scenario/editor/feedback_dialog.gd")
 
+## The dock's views: generate in a lane, or browse the project's assets or jobs.
+const VIEWS := [["generate", "Generate"], ["library", "Library"], ["history", "History"]]
 const KEYS_URL := "https://app.scenario.com"
 const DOCS_URL := "https://docs.scenario.com"
 
+# Footer menu items.
+const MENU_SIGN_OUT := 0
+const MENU_OPEN := 1
+const MENU_CHECK := 2
+const MENU_PROJECT := 3
+const MENU_FEEDBACK := 4
+
 var controller: Controller
+## The Library and History state, created with the dock.
+var library: Library
+## "generate", "library" or "history"
+var view := "generate"
+## editor/usage_reporter.gd (opt-in usage data and feedback); set before bind.
+var reporter: Node
 
 var _connect_box: VBoxContainer
+var _sign_in_box: VBoxContainer
+var _sign_in_button: Button
+var _waiting_box: VBoxContainer
+var _waiting_label: Label
+var _code_edit: LineEdit
+var _device_buttons: HBoxContainer
+var _key_box: VBoxContainer
 var _key_edit: LineEdit
 var _secret_edit: LineEdit
 var _connect_button: Button
+var _picker_box: VBoxContainer
+var _picker_label: Label
+var _team_option: OptionButton
+var _project_option: OptionButton
+var _use_project_button: Button
+var _retry_teams_button: Button
+var _picker_cancel_button: Button
+var _picker_team := ""
+var _picker_project := ""
+var _menu: MenuButton
 var _main_box: VBoxContainer
+var _view_buttons := {}
+var _generate_box: VBoxContainer
+var _library_ui: LibraryUI
 var _lane_buttons := {}
 var _lane_hint: Label
 var _model_option: OptionButton
@@ -30,6 +69,8 @@ var _problem_label: Label
 var _generate_button: Button
 var _jobs_box: VBoxContainer
 var _account_label: Label
+var _consent_box: VBoxContainer
+var _feedback: FeedbackDialog
 var _confirm: ConfirmationDialog
 var _file_dialog: EditorFileDialog
 var _file_field := ""
@@ -44,10 +85,27 @@ func _init() -> void:
 
 func bind(p_controller: Controller) -> void:
 	controller = p_controller
+	library = Library.new()
+	library.name = "ScenarioLibrary"
+	add_child(library)
+	library.bind(controller)
 	_build()
+	_library_ui.bind(library)
 	controller.changed.connect(_refresh)
 	controller.notified.connect(_on_notified)
+	if reporter != null:
+		reporter.sharing_changed.connect(_refresh)
 	_refresh()
+
+
+func _show_view(p_view: String) -> void:
+	view = p_view
+	for id in _view_buttons:
+		_view_buttons[id].set_pressed_no_signal(id == view)
+	_generate_box.visible = view == "generate"
+	_library_ui.visible = view != "generate"
+	if view != "generate":
+		_library_ui.show_view(view)
 
 
 # --- Build --------------------------------------------------------------------
@@ -62,29 +120,32 @@ func _build() -> void:
 	content.add_theme_constant_override("separation", 8)
 	scroll.add_child(content)
 
-	_connect_box = VBoxContainer.new()
-	content.add_child(_connect_box)
-	_connect_box.add_child(_wrap_label("Connect your Scenario API key to generate images, 3D models, materials, skyboxes and sounds into this project."))
-	_key_edit = LineEdit.new()
-	_key_edit.placeholder_text = "API key (api_...)"
-	_connect_box.add_child(_key_edit)
-	_secret_edit = LineEdit.new()
-	_secret_edit.placeholder_text = "API secret"
-	_secret_edit.secret = true
-	_connect_box.add_child(_secret_edit)
-	_connect_button = Button.new()
-	_connect_button.text = "Connect"
-	_connect_button.pressed.connect(_on_connect)
-	_connect_box.add_child(_connect_button)
-	var keys_link := LinkButton.new()
-	keys_link.text = "Create an API key in Scenario"
-	keys_link.uri = KEYS_URL
-	_connect_box.add_child(keys_link)
-	_connect_box.add_child(_dim_label("The secret is stored in your system keychain (or your editor settings folder), never in the project."))
+	_build_connect(content)
+	_build_picker(content)
 
 	_main_box = VBoxContainer.new()
 	_main_box.add_theme_constant_override("separation", 6)
 	content.add_child(_main_box)
+	_build_consent()
+	var views := HBoxContainer.new()
+	var view_group := ButtonGroup.new()
+	for view in VIEWS:
+		var button := Button.new()
+		button.text = view[1]
+		button.toggle_mode = true
+		button.button_group = view_group
+		button.size_flags_horizontal = SIZE_EXPAND_FILL
+		button.button_pressed = view[0] == "generate"
+		button.pressed.connect(_show_view.bind(view[0]))
+		views.add_child(button)
+		_view_buttons[view[0]] = button
+	_main_box.add_child(views)
+	_generate_box = VBoxContainer.new()
+	_generate_box.add_theme_constant_override("separation", 6)
+	_main_box.add_child(_generate_box)
+	_library_ui = LibraryUI.new()
+	_library_ui.visible = false
+	_main_box.add_child(_library_ui)
 	var lanes_row := HFlowContainer.new()
 	var group := ButtonGroup.new()
 	for lane in Lanes.LANES:
@@ -95,9 +156,9 @@ func _build() -> void:
 		button.pressed.connect(controller.select_lane.bind(lane["id"]))
 		lanes_row.add_child(button)
 		_lane_buttons[lane["id"]] = button
-	_main_box.add_child(lanes_row)
+	_generate_box.add_child(lanes_row)
 	_lane_hint = _dim_label("")
-	_main_box.add_child(_lane_hint)
+	_generate_box.add_child(_lane_hint)
 
 	var model_row := HBoxContainer.new()
 	_model_option = OptionButton.new()
@@ -111,26 +172,26 @@ func _build() -> void:
 	more.pressed.connect(controller.load_recommendations)
 	model_row.add_child(more)
 	_more_button = more
-	_main_box.add_child(model_row)
+	_generate_box.add_child(model_row)
 	_model_note = _dim_label("")
-	_main_box.add_child(_model_note)
+	_generate_box.add_child(_model_note)
 
 	_fields_box = VBoxContainer.new()
-	_main_box.add_child(_fields_box)
+	_generate_box.add_child(_fields_box)
 	_settings = FoldableContainer.new()
 	_settings.title = "Settings"
 	_settings.folded = true
 	_settings_box = VBoxContainer.new()
 	_settings.add_child(_settings_box)
-	_main_box.add_child(_settings)
+	_generate_box.add_child(_settings)
 
 	_problem_label = _wrap_label("")
 	_problem_label.add_theme_color_override("font_color", Color(1.0, 0.55, 0.45))
-	_main_box.add_child(_problem_label)
+	_generate_box.add_child(_problem_label)
 	_generate_button = Button.new()
 	_generate_button.custom_minimum_size.y = _px(34)
 	_generate_button.pressed.connect(_on_generate)
-	_main_box.add_child(_generate_button)
+	_generate_box.add_child(_generate_button)
 
 	_main_box.add_child(HSeparator.new())
 	var jobs_title := Label.new()
@@ -144,16 +205,22 @@ func _build() -> void:
 	_account_label = _dim_label("")
 	_account_label.size_flags_horizontal = SIZE_EXPAND_FILL
 	footer.add_child(_account_label)
-	var menu := MenuButton.new()
-	menu.text = "..."
-	menu.flat = false
-	menu.get_popup().add_item("Disconnect", 0)
-	menu.get_popup().add_item("Open Scenario", 1)
-	menu.get_popup().add_item("Check unknown jobs", 2)
-	menu.get_popup().id_pressed.connect(_on_menu)
-	footer.add_child(menu)
+	_menu = MenuButton.new()
+	_menu.text = "..."
+	_menu.flat = false
+	_menu.get_popup().add_item("Change team or project", MENU_PROJECT)
+	_menu.get_popup().add_item("Open Scenario", MENU_OPEN)
+	_menu.get_popup().add_item("Check unknown jobs", MENU_CHECK)
+	_menu.get_popup().add_item("Send feedback", MENU_FEEDBACK)
+	_menu.get_popup().add_item("Sign out", MENU_SIGN_OUT)
+	_menu.get_popup().id_pressed.connect(_on_menu)
+	footer.add_child(_menu)
 	_main_box.add_child(footer)
 
+	_feedback = FeedbackDialog.new()
+	_feedback.reporter = reporter
+	_feedback.sent.connect(_on_notified.bind("Thanks: your feedback reached Scenario.", "info"))
+	add_child(_feedback)
 	_confirm = ConfirmationDialog.new()
 	_confirm.title = "Confirm spend"
 	_confirm.confirmed.connect(func() -> void: controller.generate(true))
@@ -165,20 +232,150 @@ func _build() -> void:
 	add_child(_file_dialog)
 
 
+## Signed out: Sign in with Scenario, on another device, or an API key.
+func _build_connect(content: VBoxContainer) -> void:
+	_connect_box = VBoxContainer.new()
+	_connect_box.add_theme_constant_override("separation", 6)
+	content.add_child(_connect_box)
+	_connect_box.add_child(_wrap_label("Sign in with your Scenario account to generate images, 3D models, materials, skyboxes and sounds into this project."))
+
+	_sign_in_box = VBoxContainer.new()
+	_connect_box.add_child(_sign_in_box)
+	_sign_in_button = Button.new()
+	_sign_in_button.text = "Sign in with Scenario"
+	_sign_in_button.custom_minimum_size.y = _px(34)
+	_sign_in_button.pressed.connect(controller.sign_in_browser)
+	_sign_in_box.add_child(_sign_in_button)
+	var device_link := LinkButton.new()
+	device_link.text = "Sign in on another device"
+	device_link.tooltip_text = "Shows a code to enter in the browser of any device, for when this computer's browser cannot finish the sign-in."
+	device_link.pressed.connect(controller.sign_in_device)
+	_sign_in_box.add_child(device_link)
+	var key_link := LinkButton.new()
+	key_link.text = "Use an API key instead"
+	key_link.pressed.connect(func() -> void: _key_box.visible = not _key_box.visible)
+	_sign_in_box.add_child(key_link)
+
+	_waiting_box = VBoxContainer.new()
+	_connect_box.add_child(_waiting_box)
+	_waiting_label = _wrap_label("")
+	_waiting_box.add_child(_waiting_label)
+	_code_edit = LineEdit.new()
+	_code_edit.editable = false
+	_code_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_code_edit.add_theme_font_size_override("font_size", int(_px(22)))
+	_waiting_box.add_child(_code_edit)
+	_device_buttons = HBoxContainer.new()
+	_device_buttons.add_child(_action("Open the page here", controller.open_device_page))
+	_device_buttons.add_child(_action("Copy code", func() -> void: DisplayServer.clipboard_set(_code_edit.text)))
+	_waiting_box.add_child(_device_buttons)
+	_waiting_box.add_child(_action("Cancel", controller.cancel_sign_in))
+
+	_key_box = VBoxContainer.new()
+	_key_box.visible = false
+	_connect_box.add_child(_key_box)
+	_key_edit = LineEdit.new()
+	_key_edit.placeholder_text = "API key (api_...)"
+	_key_box.add_child(_key_edit)
+	_secret_edit = LineEdit.new()
+	_secret_edit.placeholder_text = "API secret"
+	_secret_edit.secret = true
+	_key_box.add_child(_secret_edit)
+	_connect_button = Button.new()
+	_connect_button.text = "Connect"
+	_connect_button.pressed.connect(_on_connect)
+	_key_box.add_child(_connect_button)
+	var keys_link := LinkButton.new()
+	keys_link.text = "Create an API key in Scenario"
+	keys_link.uri = KEYS_URL
+	_key_box.add_child(keys_link)
+	_connect_box.add_child(_dim_label("Your sign-in is stored in your system keychain (or your editor settings folder), never in the project."))
+
+
+## Signed in: the team and project that pays for the generations.
+func _build_picker(content: VBoxContainer) -> void:
+	_picker_box = VBoxContainer.new()
+	_picker_box.add_theme_constant_override("separation", 6)
+	content.add_child(_picker_box)
+	_picker_label = _wrap_label("")
+	_picker_box.add_child(_picker_label)
+	_team_option = OptionButton.new()
+	_team_option.fit_to_longest_item = false
+	_team_option.item_selected.connect(func(i: int) -> void:
+		_picker_team = str(_team_option.get_item_metadata(i))
+		_picker_project = ""
+		_refresh_picker())
+	_picker_box.add_child(_team_option)
+	_project_option = OptionButton.new()
+	_project_option.fit_to_longest_item = false
+	_project_option.item_selected.connect(func(i: int) -> void:
+		_picker_project = str(_project_option.get_item_metadata(i)))
+	_picker_box.add_child(_project_option)
+	_use_project_button = Button.new()
+	_use_project_button.text = "Use this project"
+	_use_project_button.pressed.connect(func() -> void:
+		if _project_option.selected >= 0:
+			controller.choose_project(_picker_team, str(_project_option.get_item_metadata(_project_option.selected))))
+	_picker_box.add_child(_use_project_button)
+	_retry_teams_button = _action("Try again", controller.load_teams)
+	_picker_box.add_child(_retry_teams_button)
+	_picker_cancel_button = _action("Cancel", controller.close_picker)
+	_picker_box.add_child(_picker_cancel_button)
+	var sign_out := LinkButton.new()
+	sign_out.text = "Sign out"
+	sign_out.pressed.connect(controller.sign_out)
+	_picker_box.add_child(sign_out)
+
+
+## Asked once, after the first successful connection: opt-in usage data.
+func _build_consent() -> void:
+	_consent_box = VBoxContainer.new()
+	_main_box.add_child(_consent_box)
+	_consent_box.add_child(_wrap_label("Help improve Scenario for Godot? Share anonymous usage data: which Scenario requests "
+		+ "the dock makes and whether they work, and generations per lane with their CU. Never prompts, files, or account, "
+		+ "team or project details. Change it any time in Editor Settings > Scenario."))
+	var row := HFlowContainer.new()
+	row.add_child(_action("Share", _choose_sharing.bind(true)))
+	row.add_child(_action("No thanks", _choose_sharing.bind(false)))
+	var more := LinkButton.new()
+	more.text = "What is sent"
+	more.pressed.connect(OS.shell_open.bind(FeedbackDialog.PRIVACY_URL))
+	row.add_child(more)
+	_consent_box.add_child(row)
+	_consent_box.add_child(HSeparator.new())
+
+
+func _choose_sharing(share: bool) -> void:
+	reporter.choose(share)
+	_refresh()
+
+
 # --- Refresh ------------------------------------------------------------------
 
 func _refresh() -> void:
 	if controller == null:
 		return
-	var connected := controller.is_connected_account()
-	_connect_box.visible = not connected
+	var signed_in := controller.is_signed_in()
+	var connected := controller.is_connected_account() and not controller.picking
+	_connect_box.visible = not signed_in
+	_picker_box.visible = signed_in and not connected
 	_main_box.visible = connected
+	if not _picker_box.visible:
+		_picker_team = ""  # the next opening starts from the session's project
+		_picker_project = ""
+	if not signed_in:
+		_refresh_sign_in()
+		return
 	if not connected:
+		_refresh_picker()
 		return
 	for id in _lane_buttons:
 		_lane_buttons[id].set_pressed_no_signal(id == controller.lane_id)
 	_lane_hint.text = Lanes.lane(controller.lane_id)["hint"]
-	_more_button.visible = Lanes.lane(controller.lane_id).get("recommend", true)
+	var workflow_lane := controller.lane_id == Lanes.WORKFLOW
+	_more_button.visible = Lanes.lane(controller.lane_id).get("recommend", true) or workflow_lane
+	_more_button.text = "Refresh" if workflow_lane else "More"
+	_more_button.tooltip_text = "List this project's workflows again." if workflow_lane else "Ask Scenario which models fit this prompt best."
 	_refresh_models()
 	var form_key := "%s|%d" % [controller.model_id, controller.fields.size()]
 	if form_key != _built_for:
@@ -187,20 +384,94 @@ func _refresh() -> void:
 	_sync_field_values()
 	_refresh_price()
 	_refresh_jobs()
-	var key: String = controller.account["api_key"]
-	_account_label.text = "Key %s...%s (%s)" % [key.substr(0, 8), key.right(4), controller.account["source"]] if key.length() > 12 else "Connected"
+	_consent_box.visible = reporter != null and reporter.should_ask()
+	var popup := _menu.get_popup()
+	popup.set_item_disabled(popup.get_item_index(MENU_PROJECT), not controller.is_oauth())
+	popup.set_item_disabled(popup.get_item_index(MENU_FEEDBACK), reporter == null)
+	if controller.is_oauth():
+		_account_label.text = controller.client.session.workspace_label()
+		_account_label.tooltip_text = "Signed in with Scenario. Generations go to this team and project."
+	else:
+		var key: String = controller.account["api_key"]
+		_account_label.text = "Key %s...%s (%s)" % [key.substr(0, 8), key.right(4), controller.account["source"]] if key.length() > 12 else "Connected"
+		_account_label.tooltip_text = ""
+
+
+func _refresh_sign_in() -> void:
+	var state: String = controller.sign_in["state"]
+	_sign_in_box.visible = state == Controller.SIGN_IN_IDLE
+	_waiting_box.visible = not _sign_in_box.visible
+	var code := str(controller.sign_in.get("user_code", ""))
+	_code_edit.text = code
+	_code_edit.visible = not code.is_empty()
+	_device_buttons.visible = not code.is_empty()
+	match state:
+		Controller.SIGN_IN_BROWSER:
+			_waiting_label.text = "Finish signing in in your browser, then come back here."
+		Controller.SIGN_IN_DEVICE:
+			_waiting_label.text = "Starting..." if code.is_empty() else "On any device, open %s and enter this code:" % controller.sign_in.get("verification_uri", "")
+		Controller.SIGN_IN_FINISHING:
+			_waiting_label.text = "Signing in..."
+
+
+func _refresh_picker() -> void:
+	var teams := controller.teams
+	if controller.teams_loading:
+		_picker_label.text = "Reading your Scenario teams..."
+	elif not controller.teams_error.is_empty():
+		_picker_label.text = controller.teams_error
+	elif teams.is_empty():
+		_picker_label.text = "This Scenario account has no team yet. Create one at app.scenario.com, then try again."
+	else:
+		_picker_label.text = "Choose the team and project that pays for the generations. Jobs and results stay in that project."
+	# The team shown: the one picked here, else the session's, else the first.
+	var team_ids: Array = teams.map(func(t: Dictionary) -> String: return str(t["id"]))
+	if not _picker_team in team_ids:
+		var current := controller.client.session.team_id if controller.is_oauth() else ""
+		_picker_team = current if current in team_ids else (team_ids[0] if not team_ids.is_empty() else "")
+	# The project shown: the one picked here (a refresh while the picker is open
+	# must not undo it), else the session's.
+	var project_id := _picker_project
+	if project_id.is_empty() and controller.is_oauth():
+		project_id = controller.client.session.project_id
+	_team_option.clear()
+	_project_option.clear()
+	for team in teams:
+		_team_option.add_item(str(team.get("name", team["id"])))
+		_team_option.set_item_metadata(_team_option.item_count - 1, str(team["id"]))
+		if str(team["id"]) == _picker_team:
+			_team_option.select(_team_option.item_count - 1)
+			for project in team.get("projects", []):
+				_project_option.add_item(str(project.get("name", project["id"])))
+				_project_option.set_item_metadata(_project_option.item_count - 1, str(project["id"]))
+				if str(project["id"]) == project_id:
+					_project_option.select(_project_option.item_count - 1)
+	var ready := not controller.teams_loading and not teams.is_empty()
+	_team_option.visible = ready
+	_project_option.visible = ready
+	_use_project_button.visible = ready
+	_use_project_button.disabled = _project_option.item_count == 0
+	_retry_teams_button.visible = not controller.teams_loading and (teams.is_empty() or not controller.teams_error.is_empty())
+	_picker_cancel_button.visible = controller.is_oauth() and controller.client.session.has_project()
 
 
 func _refresh_models() -> void:
 	var models := controller.lane_models()
 	_model_option.clear()
 	var note := ""
-	for i in models.size():
-		_model_option.add_item(models[i]["name"], i)
-		_model_option.set_item_metadata(i, models[i]["id"])
-		if models[i]["id"] == controller.model_id:
-			_model_option.select(i)
-			note = models[i].get("note", "")
+	var picked := controller.picked_model()
+	var grouped := false
+	for model in models:
+		if model.has("lanes") and not grouped:  # the project's own models follow
+			_model_option.add_separator("Project models")
+			grouped = true
+		_model_option.add_item(model["name"])
+		_model_option.set_item_metadata(_model_option.item_count - 1, model["id"])
+		if model["id"] == picked:
+			_model_option.select(_model_option.item_count - 1)
+			note = model.get("note", "")
+	if controller.project_models.loading:
+		note += ("\n" if not note.is_empty() else "") + "Reading this project's models..."
 	_model_note.text = "Loading the model's settings..." if controller.model_loading else note
 
 
@@ -226,15 +497,10 @@ func _refresh_price() -> void:
 func _refresh_jobs() -> void:
 	for child in _jobs_box.get_children():
 		child.queue_free()
-	var shown := 0
-	for row in controller.ledger.jobs:
-		if row["state"] == Ledger.DISMISSED:
-			continue
+	var rows: Array = controller.ledger.shown()
+	for row in rows:
 		_jobs_box.add_child(_job_row(row))
-		shown += 1
-		if shown >= 12:
-			break
-	if shown == 0:
+	if rows.is_empty():
 		_jobs_box.add_child(_dim_label("Nothing generated yet."))
 
 
@@ -246,7 +512,10 @@ func _job_row(row: Dictionary) -> Control:
 	status.add_theme_color_override("font_color", _state_color(row["state"]))
 	top.add_child(status)
 	var title := Label.new()
-	title.text = "%s  %s" % [_short_model(row["model_id"]), str(row["prompt"]).left(48)]
+	var origin := _short_model(row["model_id"]) if not str(row["model_id"]).is_empty() else "Library"
+	if Workflows.is_workflow(row["model_id"]):
+		origin = controller._model_name(row["model_id"])
+	title.text = "%s  %s" % [origin, str(row["prompt"]).left(48)]
 	title.clip_text = true
 	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	title.size_flags_horizontal = SIZE_EXPAND_FILL
@@ -263,7 +532,8 @@ func _job_row(row: Dictionary) -> Control:
 				actions.add_child(_action("Import", controller.import_job.bind(local_id)))
 			else:
 				actions.add_child(_action("Show", _show_files.bind(row["files"])))
-			actions.add_child(_action("Re-run", controller.rerun.bind(local_id)))
+			if not row.has("source"):  # brought in from the Library or History: its request is not kept here
+				actions.add_child(_action("Re-run", controller.rerun.bind(local_id)))
 		Ledger.QUEUED, Ledger.RUNNING:
 			actions.add_child(_action("Cancel", controller.cancel.bind(local_id)))
 		Ledger.UNKNOWN, Ledger.SUBMITTING:
@@ -358,6 +628,8 @@ func _widget_for(field: Dictionary) -> Control:
 				row.add_child(_action("Viewport", controller.attach_viewport.bind(name)))
 			row.add_child(_action("Clear", controller.clear_field.bind(name)))
 			return row
+		"unsupported":
+			return _dim_label("Set on Scenario only (a list of values or of models).")
 		_:
 			var line_edit := LineEdit.new()
 			line_edit.text_changed.connect(func(t: String) -> void: controller.set_value(name, t))
@@ -439,12 +711,16 @@ func _on_generate() -> void:
 
 func _on_menu(id: int) -> void:
 	match id:
-		0:
-			controller.disconnect_account()
-		1:
+		MENU_SIGN_OUT:
+			controller.sign_out()
+		MENU_OPEN:
 			OS.shell_open(KEYS_URL)
-		2:
+		MENU_CHECK:
 			controller.check_unresolved()
+		MENU_PROJECT:
+			controller.open_picker()
+		MENU_FEEDBACK:
+			_feedback.open()
 
 
 func _on_notified(text: String, level: String) -> void:

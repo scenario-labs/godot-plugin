@@ -24,30 +24,38 @@
 
 Generate images, 3D models, PBR materials, skyboxes and sound effects with [Scenario](https://scenario.com) from a dock inside the Godot editor. You see the exact price in Creative Units (CU) before you spend, and the result lands in the open scene as a native Godot asset.
 
-<p align="center">
-  <img src="docs/images/dock-0.1.0.png" alt="The Scenario dock: sign in, the image lane after a finished job, the material lane with its settings open">
-</p>
+![A Godot scene made with the plugin: its sky, cobblestone floor, barrel, lantern and treasure chest were all generated from the Scenario dock](docs/images/hero.jpg)
 
-> **Version 0.2.1.** <!-- x-release-please-version -->
-> Tested on Godot 4.7.2 (standard build, macOS). GDScript only, so it also loads in the .NET build. MIT license.
+> For Godot 4.7, the standard and the .NET builds. Free and open source under the MIT license.
+
+## What it does
+
+- **Five lanes, one dock.** Images, 3D models, tileable PBR materials, 360 skies and sound effects, each placed where it belongs: on the selected node, under it, or as a new node that matches the scene.
+- **Your project's own work.** Its trained models (LoRAs and compositions) and its Scenario workflows run from the dock; Library and History import its assets and earlier jobs.
+- **The price before you pay.** The Generate button shows the exact cost in CU for the form as it is now, and one click sends one request.
+- **Native assets you can trace.** Results are imported as Godot resources under `res://scenario/`, each with a `.scenario.json` naming its job, model, prompt and cost; every placement is one undo step.
+
+![The Scenario dock in three states: Sign in with Scenario, the Image lane after a finished job, the Material lane with its settings open](docs/images/dock.png)
 
 ## Install
 
-1. Download `scenario-godot-plugin-0.2.1.zip` from [godot.scenario.com](https://godot.scenario.com/), or copy `addons/scenario/` from this repository. <!-- x-release-please-version -->
-2. Unzip it at the root of your Godot project, so you get `res://addons/scenario/plugin.cfg`.
+You need Godot 4.7 and a Scenario account on a plan with API access (Starter or above).
+
+1. Download `scenario-godot-plugin-<version>.zip` from [godot.scenario.com/download/latest](https://godot.scenario.com/download/latest).
+2. Unzip it into your Godot project's folder, so that `addons/scenario/` sits next to `project.godot`.
 3. In Godot, open **Project > Project Settings > Plugins** and enable **Scenario**. The Scenario dock opens in its own column, right of the Inspector.
+
+The plugin belongs to the project: repeat these steps in each project that uses it. To remove it, press **Sign out** in the dock's **...** menu, turn **Scenario** off in the same list and delete `addons/scenario/`. Your results under `res://scenario/` stay.
 
 ## Sign in
 
-Create an API key and secret in the Scenario web app ([app.scenario.com](https://app.scenario.com)), then paste both into the dock and press **Connect**.
+Press **Sign in with Scenario** in the dock, approve "Scenario for Godot" in your browser, then choose the team and project that pays for the generations. **Sign in on another device** shows a code to enter in any browser instead. **Use an API key instead** takes a key and secret from the Scenario web app ([app.scenario.com](https://app.scenario.com)); generations then go to the key's project.
 
-The secret never goes into your project folder, so it cannot end up in git:
+Secrets (the sign-in's refresh token, or the API secret) never go into your project folder, so they cannot end up in git:
 
-- macOS: the secret is stored in your login Keychain (service "Scenario Godot Plugin"). Only the key id is written to the editor settings folder.
-- Other systems: key and secret are written to `scenario/credentials.json` in the Godot editor settings folder, readable by your user only.
+- Stored in the system credential store under "Scenario Godot Plugin": the login Keychain on macOS, Credential Manager on Windows, the Secret Service on Linux (`secret-tool`, for example GNOME Keyring or KWallet). The rest is written to `scenario/credentials.json` in the Godot editor settings folder.
+- Where no store accepts them, written to that file instead, readable by your user only.
 - `SCENARIO_API_KEY` and `SCENARIO_API_SECRET` environment variables take precedence over both, which suits CI and shared machines.
-
-Generations are billed to the Scenario project that owns the key.
 
 ## Lanes
 
@@ -58,8 +66,11 @@ Generations are billed to the Scenario project that owns the key.
 | Material | PATINA Material | Scenario Texture | a `StandardMaterial3D` (albedo, normal, roughness, metallic, height) saved as `.tres` and set as `material_override` on the selected meshes; with no mesh selected, just saved |
 | Skybox | Scenario Skybox GPT | Scenario Skybox Flux | a `PanoramaSkyMaterial` sky on the scene's WorldEnvironment (created if missing) |
 | Sound | Sonilo V1.1 SFX | ElevenLabs Sound Effects 2, MM Audio 2 | a new AudioStreamPlayer3D, AudioStreamPlayer2D or AudioStreamPlayer to match the scene |
+| Workflow | your project's first ready workflow | its other ready workflows, then public ones | by type, as the lane for it would: a GLB as on 3D, a panorama as on Skybox, PBR maps as on Material, other images as on Image, a sound as on Sound |
 
-**More** (Image, 3D and Sound lanes) adds Scenario's recommendations for your prompt to the picker. The form is built from each model's live schema; settings that change the price are marked "affects price".
+**More** (Image, 3D and Sound lanes) adds Scenario's recommendations for your prompt to the picker. Your project's own trained models follow under **Project models**; a LoRA or a composition runs on its base model, a LoRA with a **LoRA weight**. The form is built from each model's live schema; settings that change the price are marked "affects price".
+
+**Library** and **History** browse the project's assets (with thumbnails and filters) and its earlier jobs on Scenario, and import any of them into the scene the same way. Browsing is free.
 
 Prices measured on 2026-10-04, as examples: Flare at low quality 1024x1024, 2 CU; Rodin Extreme-Low PBR, 80 CU; PATINA 512x512, 6 CU; Skybox GPT at low quality, 2 CU; Sonilo 2 s, 1 CU. Scenario sets the prices; the dock always shows the current one.
 
@@ -82,7 +93,7 @@ Every placement is one undo step (Ctrl+Z, Cmd+Z on macOS).
 
 ## Documentation
 
-- [User guide](docs/USER_GUIDE.md): each lane step by step, references, job states, troubleshooting. Also published as a [website](https://godot.scenario.com/).
+- [User guide](docs/USER_GUIDE.md): each lane step by step, references, job states, troubleshooting, and what the opt-in usage data and feedback send. With the README and the changelog, it makes the handbook at [godot.scenario.com](https://godot.scenario.com/).
 - [Changelog](CHANGELOG.md), [known issues](https://github.com/scenario-labs/godot-plugin/issues?q=is%3Aissue%20is%3Aopen%20type%3ABug), [roadmap](https://github.com/scenario-labs/godot-plugin/milestones) and [issues](https://github.com/scenario-labs/godot-plugin/issues).
 - [Design notes](docs/design-notes/README.md): proposals and open questions for 0.2 and later.
 - [AGENTS.md](AGENTS.md): the code map and the rules, for contributors and coding agents.
@@ -95,7 +106,8 @@ The repository root is a small Godot demo project that hosts the addon and its t
 make toolkit  # the pinned toolkit into .toolkit/ (git), checked against addons/agentkit
 make test     # unit tests (GUT, 85) and the headless editor test (69 checks, fake backend, 0 CU)
 make zip      # dist/scenario-godot-plugin-<version>.zip, then a clean install into a blank project
-make dock     # re-render docs/images/dock-<version>.png (fake backend, opens a small window)
+make dock     # re-render docs/images/dock.png (fake backend, opens a small window)
+make site     # the handbook into dist/site, as godot.scenario.com builds it (Node 24)
 make lint     # gdlint and ruff (uv), the same as CI
 ```
 

@@ -1,6 +1,7 @@
 @tool
 extends RefCounted
-## Durable job ledger: survives editor restarts.
+## Durable job ledger: survives editor restarts. Each row keeps the team and
+## project its request went to, so its job is read back there.
 ##
 ## The intent is written with state "submitting" BEFORE the paid request is
 ## sent. A row still "submitting" when the ledger loads means the editor
@@ -8,6 +9,7 @@ extends RefCounted
 ## it is matched to a Scenario job or dismissed by the user.
 
 const Errors := preload("res://addons/scenario/core/errors.gd")
+const Quote := preload("res://addons/scenario/core/quote.gd")
 
 const SUBMITTING := "submitting"
 const QUEUED := "queued"
@@ -24,6 +26,8 @@ const DISMISSED := "dismissed"
 const ACTIVE_STATES := [QUEUED, RUNNING, CANCEL_REQUESTED]
 const UNRESOLVED_STATES := [SUBMITTING, UNKNOWN]
 const FINAL_STATES := [SUCCESS, FAILED, BLOCKED, CANCELED, REJECTED, DISMISSED]
+## The note on a workflow run paused at an approval or a selection step.
+const AWAITING := "Waiting for an approval or a selection on Scenario: answer it at app.scenario.com."
 const MAX_ROWS := 200
 ## A server job counts as the match of an unknown row if created this close after the intent.
 const RECONCILE_WINDOW_S := 180.0
@@ -72,8 +76,9 @@ func save() -> bool:
 
 
 ## prompt: the text that names the files and the node; defaults to parameters.prompt.
+## scope: {"team_id", "project_id"} the request goes to ({} with an API key).
 func add_intent(lane: String, model_id: String, parameters: Dictionary, fingerprint: String,
-		quoted_cu: float, now: float, prompt: String = "") -> String:
+		quoted_cu: float, now: float, prompt: String = "", scope: Dictionary = {}) -> String:
 	_counter += 1
 	var local_id := "local_%d_%d" % [int(now * 1000.0), _counter]
 	var row := {
@@ -81,9 +86,32 @@ func add_intent(lane: String, model_id: String, parameters: Dictionary, fingerpr
 		"prompt": prompt if not prompt.is_empty() else str(parameters.get("prompt", "")), "parameters": parameters, "fingerprint": fingerprint,
 		"quoted_cu": quoted_cu, "charged_cu": null, "asset_ids": [], "files": [], "imported": false,
 		"error": "", "created_at": now, "updated_at": now,
+		"team_id": str(scope.get("team_id", "")), "project_id": str(scope.get("project_id", "")),
 	}
 	jobs.push_front(row)
 	_trim()
+	save()
+	return local_id
+
+
+## A finished result brought in from the Library or History, not sent from
+## here: no quote, nothing to reconcile. Rows of the same job are reused, so
+## importing it twice adds no second row. source: "library" | "history".
+func adopt(lane: String, model_id: String, prompt: String, job_id: String, asset_ids: Array,
+		now: float, scope: Dictionary = {}, source: String = "history") -> String:
+	var existing := find_by_job(job_id)
+	if job_id.is_empty():
+		for row in jobs:
+			if row.get("source") == source and row["asset_ids"] == asset_ids and row["state"] == SUCCESS:
+				existing = row
+	if not existing.is_empty():
+		return existing["local_id"]
+	var local_id := add_intent(lane, model_id, {}, "", 0.0, now, prompt, scope)
+	var row := find(local_id)
+	row["job_id"] = job_id
+	row["state"] = SUCCESS
+	row["asset_ids"] = asset_ids.duplicate()
+	row["source"] = source
 	save()
 	return local_id
 
@@ -155,6 +183,11 @@ func apply_job(job: Dictionary, now: float) -> Dictionary:
 		row["charged_cu"] = float(job["billing"]["cuCost"])
 	if not error_text.is_empty():
 		row["error"] = error_text
+	elif job.get("awaiting_input") and state in [QUEUED, RUNNING]:
+		row["error"] = AWAITING  # a workflow step waits for a person on Scenario
+	elif row["error"] == AWAITING:
+		row["error"] = ""
+	row.erase("unread")
 	row["updated_at"] = now
 	save()
 	return row
@@ -163,33 +196,47 @@ func apply_job(job: Dictionary, now: float) -> Dictionary:
 ## Links unresolved rows to jobs found on Scenario. Returns how many were linked.
 ## Only an unambiguous match (exactly one untracked job of the same model in the
 ## window after the intent) is linked; anything else stays for the user.
-func reconcile(server_jobs: Array, now: float) -> int:
+## project_id: the project server_jobs were listed in; rows sent to another
+## project are left alone ("" with an API key, whose rows carry none).
+func reconcile(server_jobs: Array, now: float, project_id: String = "") -> int:
 	var linked := 0
 	for row in jobs:
-		if not row["state"] in UNRESOLVED_STATES:
+		if not row["state"] in UNRESOLVED_STATES or str(row.get("project_id", "")) != project_id:
 			continue
 		var candidates: Array = []
 		for job in server_jobs:
-			if not job is Dictionary or str(job.get("modelId", "")) != row["model_id"]:
-				continue
-			var job_id := str(job.get("jobId", ""))
-			if job_id.is_empty() or not find_by_job(job_id).is_empty():
-				continue
-			var created := iso_to_unix(str(job.get("createdAt", "")))
-			if created < 0.0:
-				continue
-			var delta := created - float(row["created_at"])
-			if delta >= -5.0 and delta <= RECONCILE_WINDOW_S:
+			if job is Dictionary and find_by_job(str(job.get("jobId", ""))).is_empty() and _could_be(row, job):
 				candidates.append(job)
 		if candidates.size() == 1:
 			row["job_id"] = str(candidates[0]["jobId"])
 			row["error"] = ""
 			row["state"] = state_for_status(str(candidates[0].get("status", "")), str(candidates[0].get("error", "")))
+			row["unread"] = true  # a listing has no outputs: the poll reads the job once
 			row["updated_at"] = now
 			linked += 1
 	if linked > 0:
 		save()
 	return linked
+
+
+## True when an unresolved row of this project could stand for the server job
+## (same model, created in the window after the intent). Adopting such a job
+## from History would hide it from reconcile and leave a teammate's job as the
+## only candidate, so the row is resolved first.
+func could_be_unresolved(job: Dictionary, project_id: String = "") -> bool:
+	for row in jobs:
+		if row["state"] in UNRESOLVED_STATES and str(row.get("project_id", "")) == project_id and _could_be(row, job):
+			return true
+	return false
+
+
+func _could_be(row: Dictionary, job: Dictionary) -> bool:
+	# A workflow run is listed with its workflowId, a model run with its modelId.
+	if str(job.get("jobId", "")).is_empty() or not row["model_id"] in [str(job.get("modelId", "")), str(job.get("workflowId", ""))]:
+		return false
+	var created := iso_to_unix(str(job.get("createdAt", "")))
+	var delta := created - float(row["created_at"])
+	return created >= 0.0 and delta >= -5.0 and delta <= RECONCILE_WINDOW_S
 
 
 func find(local_id: String) -> Dictionary:
@@ -208,8 +255,27 @@ func find_by_job(job_id: String) -> Dictionary:
 	return {}
 
 
+## Rows to read on Scenario: jobs still running, and an Unknown row reconcile
+## linked to a job, until one read of that job has been applied.
 func active() -> Array:
-	return jobs.filter(func(row: Dictionary) -> bool: return row["state"] in ACTIVE_STATES and not str(row["job_id"]).is_empty())
+	return jobs.filter(func(row: Dictionary) -> bool:
+		return not str(row["job_id"]).is_empty() and (row["state"] in ACTIVE_STATES or row.get("unread", false)))
+
+
+## The rows the Jobs list draws, newest first, at most limit: every row that
+## still needs an action (Cancel, Check Scenario, Dismiss) is among them, however
+## many imported rows came after it.
+func shown(limit: int = 12) -> Array:
+	var needs_action := func(row: Dictionary) -> bool: return row["state"] in ACTIVE_STATES or row["state"] in UNRESOLVED_STATES
+	var waiting: int = jobs.filter(needs_action).size()
+	var out: Array = []
+	for row in jobs:
+		if needs_action.call(row):
+			out.append(row)
+			waiting -= 1
+		elif row["state"] != DISMISSED and out.size() + waiting < limit:
+			out.append(row)
+	return out
 
 
 func unresolved() -> Array:
@@ -222,6 +288,25 @@ func blocks(fingerprint: String) -> bool:
 		if row["state"] in UNRESOLVED_STATES and row["fingerprint"] == fingerprint:
 			return true
 	return false
+
+
+## The same check across ways of signing in: a row without a project (sent with
+## an API key) cannot be told apart from a project, so it blocks the same model
+## and parameters there, and the other way round (project_id "").
+func blocks_request(model_id: String, parameters: Dictionary, project_id: String) -> bool:
+	var request := Quote.fingerprint(model_id, parameters)
+	for row in unresolved():
+		if (project_id.is_empty() or str(row.get("project_id", "")).is_empty()) \
+				and Quote.fingerprint(str(row["model_id"]), row["parameters"]) == request:
+			return true
+	return false
+
+
+## Why a failed or blocked job ended, for the dock's notice.
+static func failure_text(row: Dictionary) -> String:
+	if row["state"] == BLOCKED:
+		return Errors.message_for(Errors.MODERATED)
+	return str(row["error"]) if not str(row["error"]).is_empty() else "the job failed on Scenario."
 
 
 static func state_for_status(status: String, error_text: String) -> String:

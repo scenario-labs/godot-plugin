@@ -8,7 +8,7 @@ var config_path := ""
 
 
 func before_each() -> void:
-	config_path = "user://test_credentials_%d/credentials.json" % randi()
+	config_path = "res://tests/tmp_output/credentials-%d/credentials.json" % randi()
 	OS.unset_environment("SCENARIO_API_KEY")
 	OS.unset_environment("SCENARIO_API_SECRET")
 
@@ -24,6 +24,10 @@ func after_each() -> void:
 func test_every_lane_is_complete() -> void:
 	for id in Lanes.ids():
 		var lane := Lanes.lane(id)
+		if id == Lanes.WORKFLOW:
+			assert_true(lane["models"].is_empty(), "workflows are listed live, per project")
+			assert_eq(Lanes.default_model(id), "")
+			continue
 		assert_false(lane["models"].is_empty(), id)
 		assert_true(lane["importer"] in ["image", "model3d", "material", "skybox", "audio"], id)
 		assert_true(str(Lanes.default_model(id)).begins_with("model_"), id)
@@ -100,3 +104,152 @@ func test_error_classification() -> void:
 	assert_eq(Errors.classify("something odd"), Errors.SCENARIO)
 	assert_true(Errors.message_for(Errors.QUOTA, "need 80, have 12").contains("need 80"))
 	assert_false(Errors.message_for(Errors.TRANSPORT, "socket").contains("socket"))
+
+
+const ISSUER := "https://idp.example.test"
+
+
+func test_a_rotation_is_kept_when_the_system_store_does_not_answer() -> void:
+	var store := _store()  # use_keychain off: a store-backed record reads as "", as a dismissed keyring prompt does
+	store._write_config({"oauth": {"issuer": ISSUER, "client_id": "client_godot", "secret_store": "keychain"}})
+	assert_true(store.save_refresh_token(ISSUER, "client_godot", "rt_1", "rt_2"), "kept in the file rather than lost")
+	assert_eq(store.load_session(ISSUER, "client_godot")["refresh_token"], "rt_2")
+	store.forget_session("rt_2")
+	assert_false(store.save_refresh_token(ISSUER, "client_godot", "rt_2", "rt_3"), "a forgotten session stays forgotten")
+
+
+func test_session_round_trip_in_the_file_store() -> void:
+	var store := _store()
+	store.save_credentials("api_abc", "sec_123")
+	var saved := store.save_session(ISSUER, "client_godot", "rt_1")
+	assert_true(saved["ok"])
+	assert_eq(saved["store"], "file")
+	assert_eq(store.load_credentials()["api_key"], "", "one way of signing in at a time")
+	assert_eq(store.load_session(ISSUER, "client_godot")["refresh_token"], "rt_1")
+	assert_true(store.save_refresh_token(ISSUER, "client_godot", "rt_1", "rt_2"))
+	assert_eq(store.load_session(ISSUER, "client_godot")["refresh_token"], "rt_2")
+	assert_false(store.save_refresh_token(ISSUER, "client_godot", "rt_1", "rt_9"), "the saved token moved on: another editor's")
+	assert_false(store.save_refresh_token(ISSUER, "client_dev", "rt_2", "rt_9"), "another application's session")
+	assert_false(store.save_refresh_token("https://dev.example.test", "client_godot", "rt_2", "rt_9"), "another issuer's session")
+	assert_eq(store.load_session(ISSUER, "client_godot")["refresh_token"], "rt_2")
+	if OS.get_name() != "Windows":
+		var mode := FileAccess.get_unix_permissions(ProjectSettings.globalize_path(config_path)) & 0x1FF
+		assert_eq(mode, FileAccess.UNIX_READ_OWNER | FileAccess.UNIX_WRITE_OWNER)
+
+
+func test_session_of_another_application_is_not_resumed() -> void:
+	var store := _store()
+	store.save_session(ISSUER, "client_godot", "rt_1")
+	assert_eq(store.load_session(ISSUER, "client_other")["refresh_token"], "")
+	assert_eq(store.load_session("https://other.example.test", "client_godot")["refresh_token"], "")
+
+
+func test_workspace_stays_with_the_same_application_only() -> void:
+	var store := _store()
+	store.save_session(ISSUER, "client_godot", "rt_1")
+	var workspace := {"team_id": "team_a", "team_name": "A", "project_id": "proj_a1", "project_name": "Game"}
+	assert_true(store.save_workspace(workspace))
+	store.save_session(ISSUER, "client_godot", "rt_2")
+	assert_eq(store.load_session(ISSUER, "client_godot")["workspace"], workspace, "signing in again keeps the project")
+	store.save_session(ISSUER, "client_dev", "rt_3")
+	assert_eq(store.load_session(ISSUER, "client_dev")["workspace"], {}, "another application's ids mean nothing here")
+
+
+func test_a_session_reads_only_its_own_sign_in() -> void:
+	var store := _store()
+	store.save_session(ISSUER, "client_godot", "rt_a")
+	var first: String = store.load_session(ISSUER, "client_godot")["sign_in"]
+	assert_eq(store.session_token(ISSUER, "client_godot", first), "rt_a")
+	assert_true(store.save_refresh_token(ISSUER, "client_godot", "rt_a", "rt_a2"))
+	assert_eq(store.session_token(ISSUER, "client_godot", first), "rt_a2", "a rotation keeps the sign-in")
+	store.save_session(ISSUER, "client_godot", "rt_b")  # another editor signs in, maybe as another account
+	assert_eq(store.session_token(ISSUER, "client_godot", first), "", "the first session never adopts it")
+	assert_ne(store.load_session(ISSUER, "client_godot")["sign_in"], first)
+	store.clear()
+	assert_eq(store.session_token(ISSUER, "client_godot", first), "", "nothing saved: no token, no error")
+
+
+func test_a_refused_token_is_forgotten_but_not_a_newer_one() -> void:
+	var store := _store()
+	store.save_session(ISSUER, "client_godot", "rt_1")
+	var workspace := {"team_id": "team_a", "team_name": "A", "project_id": "proj_a1", "project_name": "Game"}
+	store.save_workspace(workspace)
+	store.forget_session("rt_0")
+	assert_eq(store.load_session(ISSUER, "client_godot")["refresh_token"], "rt_1", "a token saved since stays")
+	store.forget_session("rt_1")
+	assert_eq(store.load_session(ISSUER, "client_godot")["refresh_token"], "")
+	store.save_session(ISSUER, "client_godot", "rt_2")
+	assert_eq(store.load_session(ISSUER, "client_godot")["workspace"], workspace, "the project stays for the next sign-in")
+
+
+func test_api_key_replaces_the_session_and_clear_forgets_all() -> void:
+	var store := _store()
+	store.save_session(ISSUER, "client_godot", "rt_1")
+	store.save_credentials("api_abc", "sec_123")
+	assert_eq(store.load_session(ISSUER, "client_godot")["refresh_token"], "")
+	assert_false(store.save_workspace({"project_id": "p"}), "no project without a session")
+	store.save_session(ISSUER, "client_godot", "rt_1")
+	store.clear()
+	assert_eq(store.load_session(ISSUER, "client_godot")["refresh_token"], "")
+	assert_false(store.save_session(ISSUER, "client_godot", "")["ok"], "a session needs a refresh token")
+
+
+func test_system_store_per_platform() -> void:
+	var expected := {"macOS": Credentials.KEYCHAIN, "Windows": Credentials.CREDENTIAL_MANAGER}
+	if OS.get_name() in expected:
+		assert_eq(Credentials.detect_store(), expected[OS.get_name()])
+	else:
+		assert_true(Credentials.detect_store() in [Credentials.SECRET_SERVICE, ""])
+
+
+func test_secret_tool_never_gets_an_unsafe_account() -> void:
+	var store := _store()
+	store.use_keychain = true
+	store.store = Credentials.SECRET_SERVICE
+	var key := 'api_"$(touch x)`\\'
+	assert_false(store._store_write(key, "sec_123"), "an unsafe key stays in the file")
+	assert_eq(store._store_read(Credentials.SECRET_SERVICE, key), "")
+
+
+func test_secret_tool_never_gets_the_secret_as_an_argument() -> void:
+	assert_eq(Credentials.secret_tool_arguments("store", "oauth:client_godot"), PackedStringArray([
+		"store", "--label=Scenario Godot Plugin", "service", "Scenario Godot Plugin", "account", "oauth:client_godot"]))
+	assert_eq(Credentials.secret_tool_arguments("lookup", "api_abc"), PackedStringArray([
+		"lookup", "service", "Scenario Godot Plugin", "account", "api_abc"]))
+	assert_eq(Credentials.secret_tool_arguments("clear", "api_abc")[0], "clear")
+	var bounded := Credentials._bounded("/usr/bin/secret-tool", PackedStringArray(["lookup"]), Credentials.UNLOCK_TIMEOUT_S)
+	assert_eq(bounded, PackedStringArray([Credentials._timeout_tool(), "120", "/usr/bin/secret-tool", "lookup"]), "time to answer the unlock prompt")
+	if Credentials._timeout_tool().is_empty():
+		assert_ne(Credentials.detect_store(), Credentials.SECRET_SERVICE, "never an unbounded secret-tool call")
+
+
+func test_credential_manager_script_names_the_target_and_reads_base64() -> void:
+	var key := "api_x\u2019); Remove-Item C:\\ -Recurse; ('"  # a pasted key with a smart quote
+	var arguments := Credentials.windows_arguments(Credentials._WINDOWS_WRITE, key)
+	assert_eq(arguments[arguments.size() - 2], "-EncodedCommand")
+	var script := Marshalls.base64_to_raw(arguments[arguments.size() - 1]).get_string_from_utf16()
+	assert_false(script.contains("Remove-Item"), "the key reaches the script only as base64")
+	assert_string_contains(script, "FromBase64String('%s')" % Marshalls.raw_to_base64(("Scenario Godot Plugin/" + key).to_utf8_buffer()))
+	assert_string_contains(script, "CredWriteW")
+	assert_string_contains(script, "$credential.Persist = 3", "roams with the profile, like the settings file")
+	assert_string_contains(script, "OpenStandardInput", "the secret comes on stdin")
+	assert_eq(Credentials.windows_secret(Marshalls.raw_to_base64("sec_é1".to_utf8_buffer()) + "\r\n"), "sec_é1")
+	assert_eq(Credentials.windows_secret(""), "")
+
+
+func test_a_store_this_machine_does_not_offer_is_not_read() -> void:
+	var store := _store()
+	store.save_credentials("api_abc", "sec_123")
+	var data := JSON.parse_string(FileAccess.get_file_as_string(config_path)) as Dictionary
+	data["secret_store"] = "some-other-store"
+	data.erase("api_secret")
+	var file := FileAccess.open(config_path, FileAccess.WRITE)
+	file.store_string(JSON.stringify(data))
+	file.close()
+	assert_eq(store.load_credentials()["source"], "", "nothing to read: the dock asks to sign in again")
+
+
+func test_signed_in_messages() -> void:
+	assert_string_contains(Errors.message_for(Errors.AUTH, "", true), "Sign in again")
+	assert_string_contains(Errors.message_for(Errors.AUTH), "API key")
+	assert_string_contains(Errors.message_for(Errors.QUOTA, "", true), "Creative Units")

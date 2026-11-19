@@ -160,3 +160,86 @@ func test_intent_keeps_an_explicit_prompt_label() -> void:
 	var ledger := _ledger()
 	var local_id := ledger.add_intent("sound", "model_elevenlabs-sound-effects-v2", {"text": "coin"}, "fp", 1.0, T0, "coin")
 	assert_eq(ledger.find(local_id)["prompt"], "coin")
+
+
+func test_rows_keep_their_project_and_reconcile_only_there() -> void:
+	var ledger := _ledger()
+	var scope := {"team_id": "team_a", "project_id": "proj_a1"}
+	var local_id := ledger.add_intent("image", "model_a", {}, "fp", 2.0, T0, "", scope)
+	ledger.mark_unknown(local_id, "timeout", T0)
+	var row := _ledger().find(local_id)
+	assert_eq([row["team_id"], row["project_id"]], ["team_a", "proj_a1"])
+	var server := [{"jobId": "job_1", "modelId": "model_a", "status": "success", "createdAt": "2026-10-04T09:10:53.000Z"}]
+	assert_eq(ledger.reconcile(server, T0 + 10, "proj_other"), 0, "jobs listed in another project")
+	assert_eq(ledger.reconcile(server, T0 + 10), 0, "jobs listed with an API key")
+	assert_eq(ledger.reconcile(server, T0 + 10, "proj_a1"), 1)
+
+
+func test_an_unknown_send_blocks_across_an_api_key_and_a_sign_in() -> void:
+	var ledger := _ledger()
+	var keyed := ledger.add_intent("image", "model_a", {"prompt": "a chest", "seed": 4}, "fp_key", 2.0, T0)
+	ledger.mark_unknown(keyed, "timeout", T0)
+	assert_true(_ledger().blocks_request("model_a", {"seed": 4.0, "prompt": "a chest"}, "proj_a1"), "same request, signed in")
+	assert_false(ledger.blocks_request("model_a", {"prompt": "a chest", "seed": 5}, "proj_a1"))
+	ledger.dismiss(keyed, T0)
+	var scoped := ledger.add_intent("image", "model_a", {"prompt": "a chest"}, "fp_a1", 2.0, T0, "", {"team_id": "team_a", "project_id": "proj_a1"})
+	ledger.mark_unknown(scoped, "timeout", T0)
+	assert_true(ledger.blocks_request("model_a", {"prompt": "a chest"}, ""), "same request, with an API key")
+	assert_false(ledger.blocks_request("model_a", {"prompt": "a chest"}, "proj_b1"), "another project is told apart by its fingerprint")
+
+
+func test_a_row_linked_to_a_finished_job_is_read_for_its_outputs() -> void:
+	var ledger := _ledger()
+	var local_id := ledger.add_intent("image", "model_a", {}, "fp", 2.0, T0)
+	ledger.mark_unknown(local_id, "timeout", T0)
+	ledger.reconcile([{"jobId": "job_1", "modelId": "model_a", "status": "success", "createdAt": "2026-10-04T09:10:53.000Z"}], T0 + 10)
+	assert_eq(ledger.find(local_id)["state"], Ledger.SUCCESS)
+	assert_eq(ledger.active().size(), 1, "polled once, for the outputs")
+	ledger.apply_job({"jobId": "job_1", "status": "success", "assetIds": []}, T0 + 20)
+	assert_eq(ledger.active().size(), 0, "one read is enough, even when the job had no outputs")
+	assert_eq(_ledger().active().size(), 0, "and it stays read after a restart")
+
+
+func test_adopted_results_are_finished_and_never_added_twice() -> void:
+	var ledger := _ledger()
+	var scope := {"team_id": "team_a", "project_id": "proj_a1"}
+	var from_history := ledger.adopt("image", "model_x", "a chest", "job_9", ["asset_1", "asset_2"], T0, scope)
+	var row := _ledger().find(from_history)
+	assert_eq([row["state"], row["job_id"], row["asset_ids"], row["project_id"], row["source"]],
+		[Ledger.SUCCESS, "job_9", ["asset_1", "asset_2"], "proj_a1", "history"])
+	assert_true(ledger.unresolved().is_empty() and ledger.active().is_empty(), "nothing to poll or reconcile")
+	assert_eq(ledger.adopt("image", "model_x", "a chest", "job_9", [], T0 + 1), from_history, "the same job reuses its row")
+	var asset := ledger.adopt("image", "", "logo.png", "", ["asset_7"], T0, scope, "library")
+	assert_eq(ledger.adopt("image", "", "logo.png", "", ["asset_7"], T0 + 1, scope, "library"), asset, "the same asset too")
+	assert_ne(ledger.adopt("image", "", "icon.png", "", ["asset_8"], T0, scope, "library"), asset)
+	assert_eq(ledger.jobs.size(), 3)
+
+
+func test_a_job_an_unknown_row_may_stand_for() -> void:
+	var ledger := _ledger()
+	var local_id := ledger.add_intent("image", "model_a", {}, "fp", 2.0, T0, "", {"team_id": "team_a", "project_id": "proj_a1"})
+	ledger.mark_unknown(local_id, "timeout", T0)
+	var job := {"jobId": "job_1", "modelId": "model_a", "createdAt": "2026-10-04T09:10:53.000Z"}
+	assert_true(ledger.could_be_unresolved(job, "proj_a1"))
+	assert_false(ledger.could_be_unresolved(job, "proj_b1"), "another project")
+	assert_false(ledger.could_be_unresolved({"jobId": "job_2", "modelId": "model_b", "createdAt": job["createdAt"]}, "proj_a1"), "another model")
+	assert_false(ledger.could_be_unresolved({"jobId": "job_3", "modelId": "model_a", "createdAt": "2026-10-05T09:00:00.000Z"}, "proj_a1"), "outside the window")
+	ledger.dismiss(local_id, T0)
+	assert_false(ledger.could_be_unresolved(job, "proj_a1"), "a dismissed row stands for nothing")
+
+
+func test_rows_that_need_an_action_stay_in_the_jobs_list() -> void:
+	var ledger := _ledger()
+	var lost := ledger.add_intent("image", "model_a", {}, "fp_lost", 2.0, T0)
+	ledger.mark_unknown(lost, "timeout", T0)
+	var running := ledger.add_intent("image", "model_a", {}, "fp_run", 2.0, T0 + 1)
+	ledger.mark_submitted(running, "job_run", "queued", T0 + 1)
+	for i in 20:
+		ledger.adopt("image", "", "import %d" % i, "job_imp_%d" % i, ["asset_%d" % i], T0 + 2 + i, {}, "library")
+	var shown := ledger.shown(12)
+	assert_eq(shown.size(), 12)
+	assert_true(shown.any(func(r: Dictionary) -> bool: return r["local_id"] == lost), "Dismiss stays reachable")
+	assert_true(shown.any(func(r: Dictionary) -> bool: return r["local_id"] == running), "Cancel stays reachable")
+	assert_eq(shown[0]["state"], Ledger.SUCCESS, "newest first")
+	ledger.dismiss(lost, T0 + 30)
+	assert_false(ledger.shown(12).any(func(r: Dictionary) -> bool: return r["local_id"] == lost))
