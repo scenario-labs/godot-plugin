@@ -120,6 +120,7 @@ func run() -> Dictionary:
 
 	# A restart resumes the session and keeps the project, with a refresh.
 	var resumed := _controller(fake)
+	check("restart: the saved sign-in is read without blocking the editor", resumed.sign_in.get("state") == Controller.SIGN_IN_FINISHING)
 	await _until(func() -> bool: return not resumed.teams_loading and resumed.is_connected_account())
 	check("restart: signed in to the same project", resumed.is_oauth() and resumed.client.session.project_id == "proj_b1" and not resumed.picking)
 	check("restart: the token was refreshed", fake.oauth_requests.back()["form"].get("grant_type") == "refresh_token")

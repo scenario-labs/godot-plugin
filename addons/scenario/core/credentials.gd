@@ -170,6 +170,17 @@ func load_session(issuer: String, client_id: String) -> Dictionary:
 		"sign_in": str(oauth.get("sign_in", ""))}
 
 
+## Runs read, a lookup in the system store, on a thread and returns its
+## result: a locked keyring may wait UNLOCK_TIMEOUT_S for its prompt, and the
+## editor must not freeze meanwhile.
+static func in_background(read: Callable) -> Variant:
+	var thread := Thread.new()
+	thread.start(read)
+	while thread.is_alive():
+		await (Engine.get_main_loop() as SceneTree).process_frame
+	return thread.wait_to_finish()
+
+
 ## The id of this application's saved sign-in, from the settings file alone
 ## ("" if none). Any later sign-in, from any editor, replaces it.
 func saved_sign_in(issuer: String, client_id: String) -> String:

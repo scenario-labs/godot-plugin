@@ -324,10 +324,15 @@ func sign_out() -> void:
 
 func _resume_session() -> void:
 	var app := OAuth.selected_app()
-	if not app["ok"]:
+	if not app["ok"] or credentials.saved_sign_in(app["value"]["issuer"], app["value"]["client_id"]).is_empty():
 		return
-	var saved := credentials.load_session(app["value"]["issuer"], app["value"]["client_id"])
+	var serial := _begin_sign_in(SIGN_IN_FINISHING)  # "Signing in..." while the system store answers
+	var saved: Dictionary = await Credentials.in_background(credentials.load_session.bind(app["value"]["issuer"], app["value"]["client_id"]))
+	if serial != _sign_in_serial:
+		return  # cancelled, or a sign-in started meanwhile
+	sign_in = {"state": SIGN_IN_IDLE}
 	if saved["refresh_token"].is_empty():
+		changed.emit()
 		return
 	var session := _new_session(app["value"], {"access_token": "", "refresh_token": saved["refresh_token"], "expires_at": 0.0})
 	var workspace: Dictionary = saved["workspace"]
