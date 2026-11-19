@@ -4,11 +4,27 @@ extends RefCounted
 ## the key's project. Under a sign-in, each call names the row's project; rows
 ## sent with a key carry none, and a key belongs to one project, so they are
 ## looked up in the projects the account can open (free reads) and followed
-## there once found. The others are set aside.
+## there once found. The others are set aside. Under a key, rows sent while
+## signed in are set aside until a sign-in: their project may not be the key's.
 
 const Errors := preload("res://addons/scenario/core/errors.gd")
+const Ledger := preload("res://addons/scenario/core/job_ledger.gd")
 
 const NOTE := "Sent with an API key to a project this account cannot open. Connect that key again to follow it, or dismiss it."
+const SIGNED_IN_NOTE := "Sent while signed in with Scenario, to a project an API key cannot be told to use. Sign in again to follow it, or dismiss it."
+
+
+## A row this connection cannot follow: under a sign-in, one sent with a key
+## that locate() has not found; under a key, one sent while signed in.
+static func is_set_aside(row: Dictionary, oauth: bool) -> bool:
+	if oauth:
+		return Ledger.needs_project(row)
+	return not str(row.get("project_id", "")).is_empty() and Ledger.needs_scenario(row)
+
+
+## What the dock shows on a set-aside row: [label, note].
+static func aside_text(oauth: bool) -> Array:
+	return ["Sent with an API key", NOTE] if oauth else ["Sent while signed in", SIGNED_IN_NOTE]
 
 
 ## The scope a row's calls go to: {} with an API key.

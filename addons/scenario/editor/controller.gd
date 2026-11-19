@@ -276,7 +276,7 @@ func _locate_key_jobs() -> void:
 
 ## A row sent with an API key whose project this sign-in has not found.
 func is_set_aside(row: Dictionary) -> bool:
-	return is_oauth() and Ledger.needs_project(row)
+	return JobScopes.is_set_aside(row, is_oauth())
 
 
 ## Opens the picker on fresh teams ("Change team or project").
@@ -827,7 +827,7 @@ func import_job(local_id: String) -> Dictionary:
 	if row.is_empty() or row["state"] != Ledger.SUCCESS:
 		return {"ok": false, "message": "Only finished jobs can be imported."}
 	if is_set_aside(row):
-		return {"ok": false, "message": JobScopes.NOTE}
+		return {"ok": false, "message": JobScopes.aside_text(is_oauth())[1]}
 	_importing[local_id] = true
 	changed.emit()
 	var fetched: Dictionary = await Downloads.fetch(client, transport, row, JobScopes.of(row, is_oauth()), output_root, _model_name(str(row["model_id"])))
@@ -848,6 +848,7 @@ func import_job(local_id: String) -> Dictionary:
 			else {"ok": true, "message": "Saved %d texture maps (no color map to make a material)." % groups[place_lane].size(), "resource_paths": []}
 		placed = {"ok": placed["ok"] and one["ok"], "message": (placed["message"] + " " + one["message"]).strip_edges(),
 			"resource_paths": placed["resource_paths"] + one["resource_paths"]}
+	placed["message"] += Workflows.unplaced_note(groups)
 	if not fetched["skipped"].is_empty():
 		placed["message"] += " %d file(s) Godot cannot import stay on Scenario." % fetched["skipped"].size()
 	var paths: Array = files.map(func(f: Dictionary) -> String: return f["path"])

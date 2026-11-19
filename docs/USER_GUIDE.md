@@ -36,7 +36,7 @@ The price is checked again after each change, so the button always shows what th
 
 **Sound.** Sonilo makes short effects of an exact length (1 CU for 2 s on 2026-10-04); ElevenLabs Sound Effects 2 can loop. The sound is added as an AudioStreamPlayer3D in a 3D scene, AudioStreamPlayer2D in a 2D scene, AudioStreamPlayer otherwise. Only WAV, MP3 and OGG are offered, the formats Godot imports.
 
-**Workflow.** Runs a Scenario workflow: the picker lists the ready workflows of your project, then public ones (drafts cannot run). **Refresh** lists them again after you edit one on app.scenario.com. The form shows the workflow's inputs; one that takes a list of values or of models can only be set on Scenario, and a required one of those blocks the price. The price covers the whole run. Results are placed by type: a GLB as on the 3D lane (other images next to it are kept as files), a 360 panorama as on the Skybox lane, PBR maps as on the Material lane, other images as on the Image lane, and a sound as on the Sound lane. A run that stops at an approval or a selection step waits until you answer it on app.scenario.com; the dock says so.
+**Workflow.** Runs a Scenario workflow: the picker lists the ready workflows of your project, then public ones (drafts cannot run). **Refresh** lists them again after you edit one on app.scenario.com. The form shows the workflow's inputs; one that takes a list of values or of models can only be set on Scenario, and a required one of those blocks the price. The price covers the whole run. Results are placed by type: a GLB as on the 3D lane (other images next to it are kept as files), a 360 panorama as on the Skybox lane, PBR maps as on the Material lane, other images as on the Image lane, and a sound as on the Sound lane. One of each is placed; the others are saved next to it, and the import message says how many. A run that stops at an approval or a selection step waits until you answer it on app.scenario.com; the dock says so.
 
 ## 4. Jobs
 
@@ -54,7 +54,7 @@ Each request appears under **Jobs**, newest first. The list survives editor rest
 
 **Import** downloads the results, imports them and places them as described above. With **Auto Import** on (the default), finished jobs are imported as soon as they are done. **Re-run** puts the job's model and settings back in the form; it never sends anything by itself.
 
-Jobs sent with an API key, before you signed in with Scenario, are looked for in the projects your account can open and followed there. One in a project your account cannot open reads "Sent with an API key": connect that key again to follow it, or **Dismiss** it.
+Jobs sent with an API key, before you signed in with Scenario, are looked for in the projects your account can open and followed there. One in a project your account cannot open reads "Sent with an API key": connect that key again to follow it, or **Dismiss** it. The other way round, with an API key, jobs sent while signed in read "Sent while signed in" until you sign in again.
 
 **Unknown** jobs block the same request until resolved, so a dropped connection cannot make you pay twice. **Check Scenario** looks for the job among your recent Scenario jobs and links it when exactly one matches. **Dismiss** clears the row when you have checked yourself.
 

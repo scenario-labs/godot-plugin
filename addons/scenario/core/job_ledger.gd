@@ -274,7 +274,12 @@ func unlocated() -> Array:
 
 
 static func needs_project(row: Dictionary) -> bool:
-	return str(row.get("project_id", "")).is_empty() and not str(row["job_id"]).is_empty() \
+	return str(row.get("project_id", "")).is_empty() and needs_scenario(row)
+
+
+## A row with something left to read on Scenario: running, or finished and not imported.
+static func needs_scenario(row: Dictionary) -> bool:
+	return not str(row["job_id"]).is_empty() \
 		and (row["state"] in ACTIVE_STATES or row.get("unread", false) or (row["state"] == SUCCESS and not row["imported"]))
 
 

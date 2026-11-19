@@ -275,3 +275,18 @@ func test_a_dismissed_row_is_not_read_again() -> void:
 	ledger.dismiss(local_id, T0 + 20)
 	assert_true(ledger.active().is_empty(), "its outputs are not read, nor imported")
 	assert_false(Ledger.needs_project(ledger.find(local_id)))
+
+
+func test_rows_of_the_other_connection_method_are_set_aside() -> void:
+	const JobScopes := preload("res://addons/scenario/core/job_scopes.gd")
+	var ledger := _ledger()
+	var with_key := ledger.add_intent("image", "m", {"prompt": "p"}, "fp_k", 2.0, T0)
+	ledger.mark_submitted(with_key, "job_k", "queued", T0)
+	var signed_in := ledger.add_intent("image", "m", {"prompt": "p"}, "fp_s", 2.0, T0, "", {"team_id": "t", "project_id": "proj"})
+	ledger.mark_submitted(signed_in, "job_s", "queued", T0)
+	assert_true(JobScopes.is_set_aside(ledger.find(with_key), true), "a key's row under a sign-in, until found")
+	assert_false(JobScopes.is_set_aside(ledger.find(signed_in), true))
+	assert_true(JobScopes.is_set_aside(ledger.find(signed_in), false), "a signed-in row under a key")
+	assert_false(JobScopes.is_set_aside(ledger.find(with_key), false))
+	ledger.dismiss(signed_in, T0)
+	assert_false(JobScopes.is_set_aside(ledger.find(signed_in), false), "dismissed: nothing left to follow")

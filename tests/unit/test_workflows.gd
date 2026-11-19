@@ -224,3 +224,16 @@ func test_a_run_waiting_for_a_person_says_so_until_it_moves_on() -> void:
 	assert_eq(row["error"], Ledger.AWAITING)
 	row = ledger.apply_job({"jobId": "job_wf2", "status": "in-progress"}, 3.0)
 	assert_eq(row["error"], "", "answered on Scenario")
+
+
+func test_outputs_saved_but_not_placed_are_counted() -> void:
+	var sounds := Workflows.groups([
+		{"path": "res://scenario/workflow/a.wav", "role": "main"}, {"path": "res://scenario/workflow/b.wav", "role": "main"}])
+	assert_eq(Workflows.unplaced_note(sounds), " 1 more file(s) saved in res://scenario/workflow, not placed.")
+	var images := {"image": [{"path": "res://scenario/image/1.png", "role": "main"}, {"path": "res://scenario/image/2.png", "role": "main"},
+		{"path": "res://scenario/image/3.png", "role": "main"}]}
+	assert_eq(Workflows.unplaced_note(images), " 2 more file(s) saved in res://scenario/image, not placed.")
+	var model := Workflows.groups([{"path": "res://scenario/workflow/m.glb", "role": "main"}, {"path": "res://scenario/workflow/p.png", "role": "main"}])
+	assert_eq(Workflows.unplaced_note(model), "", "a preview next to its model is not an output left out")
+	var material := {"material": [{"path": "res://m/a.png", "role": "albedo"}, {"path": "res://m/n.png", "role": "normal"}]}
+	assert_eq(Workflows.unplaced_note(material), "", "a material's maps make one material")

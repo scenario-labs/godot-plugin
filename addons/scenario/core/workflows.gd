@@ -128,6 +128,21 @@ static func groups(files: Array) -> Dictionary:
 	return out
 
 
+## " N more files saved in <folder>." for outputs a lane saved without placing:
+## each lane places one model, panorama, image or sound. "" when none.
+static func unplaced_note(groups: Dictionary) -> String:
+	var count := 0
+	var folder := ""
+	for lane in groups:
+		var placeable: Array = groups[lane].filter(func(f: Dictionary) -> bool:
+			return lane == "sound" or (lane == "model3d" and str(f["path"]).get_extension().to_lower() in ["glb", "gltf"]) \
+				or (lane in ["skybox", "image"] and f["role"] in ["main", "base", "albedo", "panorama"]))
+		count += maxi(placeable.size() - 1, 0)
+		if placeable.size() > 1:
+			folder = str(placeable[1]["path"]).get_base_dir()
+	return "" if count == 0 else " %d more file(s) saved in %s, not placed." % [count, folder]
+
+
 ## The download format to ask for: GLB for a 3D asset, as the 3D lane does;
 ## "" keeps the original.
 static func download_format(asset: Dictionary) -> String:

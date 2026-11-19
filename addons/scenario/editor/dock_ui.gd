@@ -525,9 +525,10 @@ func _job_row(row: Dictionary) -> Control:
 	var actions := HBoxContainer.new()
 	var local_id: String = row["local_id"]
 	if controller.is_set_aside(row):
-		actions.add_child(_dim_label("Sent with an API key"))
+		var aside: Array = Controller.JobScopes.aside_text(controller.is_oauth())
+		actions.add_child(_dim_label(aside[0]))
 		actions.add_child(_action("Dismiss", controller.dismiss.bind(local_id)))
-		row = row.merged({"error": Controller.JobScopes.NOTE}, true)
+		row = row.merged({"error": aside[1]}, true)
 	else:
 		_state_actions(actions, row)
 	if not str(row["error"]).is_empty():

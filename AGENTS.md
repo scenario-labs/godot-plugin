@@ -88,7 +88,8 @@ Every change keeps them.
 3. A paid call (`model_run` without dry_run, `workflow_run`, uploads) is sent
    once. A transport failure on it marks the job Unknown, which blocks the same
    fingerprint until reconciled.
-4. The intent row is written to the ledger before the paid request.
+4. The intent row is written to the ledger before the paid request
+   (`model_run`, `workflow_run`); an upload, free, has no row.
 5. `SCENARIO_NO_SPEND=1` refuses paid calls and uploads before any request;
    `job_cancel` still goes out.
 6. Secrets (the API secret, the refresh token) never go under `res://`.
