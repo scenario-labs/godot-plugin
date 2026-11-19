@@ -121,6 +121,27 @@ func test_a_rotation_is_kept_when_the_system_store_does_not_answer() -> void:
 	assert_false(store.save_refresh_token(ISSUER, "client_godot", "rt_2", "rt_3", "s1"), "a forgotten session stays forgotten")
 
 
+class FragileStore extends "res://addons/scenario/core/credentials.gd":
+	var writable := true
+
+	func _write_config(data: Dictionary) -> bool:
+		return writable and super(data)
+
+
+func test_a_rotation_that_cannot_be_saved_is_reported() -> void:
+	var store := FragileStore.new(config_path)
+	store.use_keychain = false
+	store.save_session(ISSUER, "client_godot", "rt_1")
+	var sign_in := store.saved_sign_in(ISSUER, "client_godot")
+	var lost: Array = []
+	store.rotation_lost.connect(func(message: String) -> void: lost.append(message))
+	store.writable = false
+	assert_false(store.save_refresh_token(ISSUER, "client_godot", "rt_9", "rt_10", sign_in))
+	assert_eq(lost, [], "a token that is not this session's is no loss")
+	assert_false(store.save_refresh_token(ISSUER, "client_godot", "rt_1", "rt_2", sign_in))
+	assert_eq(lost.size(), 1, "a rotation neither the store nor the file kept")
+
+
 func test_session_round_trip_in_the_file_store() -> void:
 	var store := _store()
 	store.save_credentials("api_abc", "sec_123")

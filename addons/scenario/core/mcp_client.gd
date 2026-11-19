@@ -19,6 +19,7 @@ const Errors := preload("res://addons/scenario/core/errors.gd")
 const Sse := preload("res://addons/scenario/core/sse.gd")
 const OAuthSession := preload("res://addons/scenario/core/oauth_session.gd")
 const Workflows := preload("res://addons/scenario/core/workflows.gd")
+const JobLedger := preload("res://addons/scenario/core/job_ledger.gd")
 
 const DEFAULT_ENDPOINT := "https://mcp.scenario.com/mcp?toolsets=full"
 const PROTOCOL_VERSION := "2025-03-26"
@@ -42,6 +43,7 @@ const SUBMIT_TOOLS := [
 ]
 ## Calls that find the team and project, so they never carry one.
 const UNSCOPED_TOOLS := ["teams_list", "projects_list"]
+const UNKNOWN_STATUS := "The request status is unknown: Scenario may have accepted it. Check recent jobs before sending it again."
 
 ## Every tool call's outcome, for opt-in usage data (editor/usage_reporter.gd,
 ## which reads only the tool name, dry_run and page_size, never the result).
@@ -59,6 +61,9 @@ var spending_disabled := OS.get_environment("SCENARIO_NO_SPEND") == "1"
 var session_id := ""
 var _initialized := false
 var _next_id := 1
+## Changes with the account: a call prepared for one account is never sent
+## with another's token, nor after a sign-out.
+var _auth_generation := 0
 
 
 func _init(p_transport: Object = null, p_key: String = "", p_secret: String = "") -> void:
@@ -72,6 +77,7 @@ func set_credentials(key: String, secret: String) -> void:
 	session = null
 	session_id = ""
 	_initialized = false
+	_auth_generation += 1
 
 
 func set_session(p_session: OAuthSession) -> void:
@@ -80,6 +86,7 @@ func set_session(p_session: OAuthSession) -> void:
 	session = p_session
 	session_id = ""
 	_initialized = false
+	_auth_generation += 1
 
 
 func has_credentials() -> bool:
@@ -168,8 +175,11 @@ func submit(model_id: String, parameters: Dictionary) -> Dictionary:
 			"Scenario accepted the request but returned no job id. Check recent jobs before generating again.",
 			{"ambiguous": true})
 	var job: Variant = result["value"].get("job")  # a workflow run: {"job": {...}, "workflow": {...}}
-	var status: Variant = result["value"].get("status", job.get("status", "queued") if job is Dictionary else "queued")
-	return Errors.ok({"job_id": job_id, "status": str(status)})
+	var status := str(result["value"].get("status", job.get("status", "queued") if job is Dictionary else "queued"))
+	# A job that ended already is reported queued: the poll then reads it once, with its outputs.
+	if JobLedger.state_for_status(status, "") in JobLedger.FINAL_STATES:
+		status = "queued"
+	return Errors.ok({"job_id": job_id, "status": status})
 
 
 ## scope: {"team_id", "project_id"} of the project the job ran in, when it is
@@ -317,6 +327,7 @@ func _call_tool(tool: String, arguments: Dictionary, timeout_s: float) -> Dictio
 	if not has_credentials():
 		return Errors.fail(Errors.AUTH, "Sign in to Scenario first.")
 	var submit_call := is_submission(tool, arguments)
+	var generation := _auth_generation
 	# Cancelling can only lower spend, so the switch lets it through.
 	if submit_call and spending_disabled and tool != "job_cancel":
 		return Errors.fail(Errors.LOCAL, "Spending is turned off (SCENARIO_NO_SPEND=1), so nothing was sent.")
@@ -333,14 +344,15 @@ func _call_tool(tool: String, arguments: Dictionary, timeout_s: float) -> Dictio
 	var result: Dictionary = {}
 	var refreshed := false
 	for attempt in attempts:
-		result = await _call_once(tool, arguments, timeout_s, submit_call)
-		if not result["ok"] and result["error"].get("unauthorized", false) and session != null and not refreshed:
+		result = await _call_once(tool, arguments, timeout_s, submit_call, generation)
+		if not result["ok"] and result["error"].get("unauthorized", false) and session != null and not refreshed \
+				and _auth_generation == generation:
 			# The token was refused, so the request did not run. A read is sent
 			# again with a new token; a paid call never is: the next Generate gets it.
 			refreshed = true
 			var renewed: Dictionary = await session.refresh()
 			if renewed["ok"] and not submit_call:
-				result = await _call_once(tool, arguments, timeout_s, submit_call)
+				result = await _call_once(tool, arguments, timeout_s, submit_call, generation)
 			elif renewed["ok"]:
 				result["error"]["message"] = "Scenario refused the sign-in token, so nothing was sent. The sign-in is renewed: try again."
 		if result["ok"]:
@@ -361,12 +373,12 @@ func _call_tool(tool: String, arguments: Dictionary, timeout_s: float) -> Dictio
 	return result
 
 
-func _call_once(tool: String, arguments: Dictionary, timeout_s: float, submit_call: bool) -> Dictionary:
-	var rpc: Dictionary = await _rpc("tools/call", {"name": tool, "arguments": arguments}, timeout_s)
+func _call_once(tool: String, arguments: Dictionary, timeout_s: float, submit_call: bool, generation: int) -> Dictionary:
+	var rpc: Dictionary = await _rpc("tools/call", {"name": tool, "arguments": arguments}, timeout_s, generation)
 	if not rpc["ok"]:
 		if submit_call and rpc["error"]["kind"] in Errors.AMBIGUOUS_KINDS and not rpc["error"].get("not_sent", false):
 			rpc["error"]["ambiguous"] = true
-			rpc["error"]["message"] = "The request status is unknown: Scenario may have accepted it. Check recent jobs before sending it again."
+			rpc["error"]["message"] = UNKNOWN_STATUS
 		return rpc
 	var result: Dictionary = rpc["value"]
 	var structured: Variant = result.get("structuredContent")
@@ -377,10 +389,12 @@ func _call_once(tool: String, arguments: Dictionary, timeout_s: float, submit_ca
 		if structured is Dictionary and not structured.is_empty():
 			detail = JSON.stringify(structured)
 		var kind := Errors.classify(detail, parsed["status"])
-		var message := Errors.message_for(kind, detail, signed_in())
+		# A paid call's server error may come after Scenario started the job.
+		var ambiguous: bool = submit_call and kind in Errors.AMBIGUOUS_KINDS
+		var message := UNKNOWN_STATUS if ambiguous else Errors.message_for(kind, detail, signed_in())
 		if not parsed["trace_id"].is_empty():
 			message += " Trace id: %s." % parsed["trace_id"]
-		return Errors.fail(kind, message, {"detail": detail, "trace_id": parsed["trace_id"]})
+		return Errors.fail(kind, message, {"detail": detail, "trace_id": parsed["trace_id"], "ambiguous": ambiguous})
 	if structured is Dictionary:
 		if submit_call and structured.is_empty():
 			return Errors.fail(Errors.PROTOCOL, "Scenario returned an empty reply.", {"ambiguous": true})
@@ -398,22 +412,22 @@ func _call_once(tool: String, arguments: Dictionary, timeout_s: float, submit_ca
 
 ## One JSON-RPC request. Initializes the MCP session first, and once more if the
 ## server reports the session expired (the request was not dispatched then).
-func _rpc(method: String, params: Dictionary, timeout_s: float) -> Dictionary:
+func _rpc(method: String, params: Dictionary, timeout_s: float, generation: int) -> Dictionary:
 	if not _initialized:
-		var init: Dictionary = await _initialize(timeout_s)
+		var init: Dictionary = await _initialize(timeout_s, generation)
 		if not init["ok"]:
 			init["error"]["not_sent"] = true
 			return init
 	var request_id := _take_id()
-	var reply: Dictionary = await _post(method, params, request_id, timeout_s)
+	var reply: Dictionary = await _post(method, params, request_id, timeout_s, generation)
 	if not reply["ok"] and reply["error"].get("session_expired", false):
 		session_id = ""
 		_initialized = false
-		var again: Dictionary = await _initialize(timeout_s)
+		var again: Dictionary = await _initialize(timeout_s, generation)
 		if not again["ok"]:
 			again["error"]["not_sent"] = true
 			return again
-		reply = await _post(method, params, request_id, timeout_s)
+		reply = await _post(method, params, request_id, timeout_s, generation)
 	if not reply["ok"]:
 		return reply
 	var envelope: Dictionary = reply["value"]
@@ -427,26 +441,28 @@ func _rpc(method: String, params: Dictionary, timeout_s: float) -> Dictionary:
 	return Errors.ok(envelope["result"])
 
 
-func _initialize(timeout_s: float) -> Dictionary:
+func _initialize(timeout_s: float, generation: int) -> Dictionary:
 	var reply: Dictionary = await _post("initialize", {
 		"protocolVersion": PROTOCOL_VERSION,
 		"capabilities": {},
 		"clientInfo": {"name": "scenario-godot-plugin", "version": VERSION},
-	}, _take_id(), timeout_s, false)
+	}, _take_id(), timeout_s, generation, false)
 	if not reply["ok"]:
 		return reply
 	if reply["value"].has("error"):
 		var detail := JSON.stringify(reply["value"]["error"])
 		var kind := Errors.classify(detail)
 		return Errors.fail(kind, Errors.message_for(kind, detail, signed_in()))
-	var notified: Dictionary = await _post("notifications/initialized", {}, null, timeout_s, false)
+	var notified: Dictionary = await _post("notifications/initialized", {}, null, timeout_s, generation, false)
 	if not notified["ok"]:
 		return notified
 	_initialized = true
 	return Errors.ok()
 
 
-func _post(method: String, params: Dictionary, request_id: Variant, timeout_s: float, allow_session_signal: bool = true) -> Dictionary:
+## generation: the account the call was prepared for; nothing is sent once it changed.
+func _post(method: String, params: Dictionary, request_id: Variant, timeout_s: float, generation: int,
+		allow_session_signal: bool = true) -> Dictionary:
 	var payload := {"jsonrpc": "2.0", "method": method}
 	if request_id != null:
 		payload["id"] = request_id
@@ -459,6 +475,8 @@ func _post(method: String, params: Dictionary, request_id: Variant, timeout_s: f
 			bearer["error"]["not_sent"] = true
 			return bearer
 		authorization = bearer["value"]
+	if _auth_generation != generation:
+		return Errors.fail(Errors.LOCAL, "The Scenario account changed, so nothing was sent.", {"not_sent": true})
 	var headers := PackedStringArray([
 		"Authorization: " + authorization,
 		"Content-Type: application/json",
@@ -479,7 +497,7 @@ func _post(method: String, params: Dictionary, request_id: Variant, timeout_s: f
 	var response_headers: Dictionary = response.get("headers", {})
 	var body := str(response.get("body", ""))
 	var new_session := str(response_headers.get("mcp-session-id", ""))
-	if not new_session.is_empty():
+	if not new_session.is_empty() and _auth_generation == generation:
 		session_id = new_session
 	if status < 200 or status >= 300:
 		if allow_session_signal and (status == 400 or status == 404):
