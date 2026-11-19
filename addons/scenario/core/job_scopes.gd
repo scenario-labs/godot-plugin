@@ -29,28 +29,38 @@ static func of_unresolved(rows: Array, oauth: bool) -> Dictionary:
 	return scopes
 
 
+## Lists the jobs of each project unresolved rows of ledger were sent to and
+## links the ones that match. Returns how many were linked, or -1 when the
+## session changed meanwhile (is_current is false).
+static func reconcile(client, ledger, oauth: bool, now: float, is_current: Callable) -> int:
+	var linked := 0
+	var scopes := of_unresolved(ledger.unresolved(), oauth)
+	for project_id in scopes:
+		var result: Dictionary = await client.list_jobs(50, scopes[project_id])
+		if not is_current.call():
+			return -1
+		if result["ok"]:
+			linked += ledger.reconcile(result["value"], now, project_id)
+	return linked
+
+
 ## Looks each unlocated row of ledger up in teams' projects. Returns how many
 ## were found, or -1 when the session changed meanwhile (is_current is false).
+## A row not found stays set aside; the dock shows NOTE on it, not saved, so
+## the note goes once the key is connected again.
 static func locate(client, ledger, teams: Array, now: float, is_current: Callable) -> int:
 	var found := 0
 	for row in ledger.unlocated():
-		var scope := {}
-		var unsure := false
 		for project in _projects(teams):
 			var result: Dictionary = await client.get_job(row["job_id"], project)
 			if not is_current.call():
 				return -1
 			if result["ok"]:
-				scope = project
+				ledger.set_scope(row["local_id"], project["team_id"], project["project_id"], now)
+				found += 1
 				break
 			if result["error"]["kind"] in Errors.RETRYABLE_KINDS:
-				unsure = true  # asked again at the next teams load
-				break
-		if not scope.is_empty():
-			ledger.set_scope(row["local_id"], scope["team_id"], scope["project_id"], now)
-			found += 1
-		elif not unsure:
-			ledger.set_error(row["local_id"], NOTE, now)
+				break  # asked again at the next teams load
 	return found
 
 

@@ -159,6 +159,15 @@ func run() -> Dictionary:
 	check("above threshold asks first", asked.has("needs_confirm") and fake.paid_calls.size() == paid_before_confirm)
 	var confirmed: Dictionary = await controller.generate(true)
 	check("confirmed run is sent once", confirmed.get("ok", false) and fake.paid_calls.size() == paid_before_confirm + 1)
+	# The intent cannot be saved: the paid request is not sent.
+	await controller.estimate_now()
+	var ledger_path := controller.ledger.path
+	controller.ledger.path = run_dir + "/locked/jobs.json"
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(controller.ledger.path + ".tmp"))  # a folder where the file goes
+	var unsaved: Dictionary = await controller.generate(true)
+	controller.ledger.path = ledger_path
+	check("no intent on disk: nothing is sent", not unsaved.get("ok", true) and fake.paid_calls.size() == paid_before_confirm + 1
+		and str(unsaved.get("message", "")).contains("nothing was sent"))
 
 	check("six paid calls in total", fake.paid_calls.size() == 6)
 	check("every paid call used wait=false", fake.paid_calls.all(func(a: Dictionary) -> bool: return a.get("wait") == false))
@@ -203,7 +212,13 @@ func run() -> Dictionary:
 	check("mixed output: import stops at the GLB", not mixed_placed.get("ok", true)
 		and str(mixed_placed.get("message", "")).contains("returned a GLB file, which the Image lane cannot place"))
 	check("mixed output: the PNG moved first is removed", not "-mixed-output-" in " ".join(DirAccess.get_files_at(controller.output_root + "/image")))
-	check("mixed output: the GLB download is removed", not FileAccess.file_exists("res://.godot/scenario/downloads/asset_glb001.download"))
+	check("mixed output: the GLB download is removed", not FileAccess.file_exists("res://.godot/scenario/downloads/%s-asset_glb001.download" % mixed.get("local_id", "")))
+	# A file at the same name, from an earlier import, is replaced but never removed by a failed one.
+	var earlier := Controller.Files.base_path("image", "mixed output", "asset_glbprv", "main", Controller.Files.today(), controller.output_root) + ".png"
+	FileAccess.open(earlier, FileAccess.WRITE).store_string("earlier import")
+	await controller.import_job(mixed.get("local_id", ""))
+	check("mixed output: a file an earlier import left stays", FileAccess.file_exists(earlier))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(earlier))
 	# Lay the results out side by side and save the scratch scene for a windowed capture.
 	if sprite != null:
 		sprite.position = Vector3(-2.2, 1.0, 0.0)

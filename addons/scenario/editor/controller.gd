@@ -235,9 +235,9 @@ func load_teams() -> void:
 	teams_error = ""
 	changed.emit()
 	var result: Dictionary = await client.list_teams()
-	teams_loading = false
 	if client.session != session:
-		return  # signed out meanwhile
+		return  # signed out or in again meanwhile: the flag is the new session's
+	teams_loading = false
 	if not result["ok"]:
 		teams_error = result["error"]["message"]
 		picking = picking or not session.has_project()
@@ -380,27 +380,27 @@ func _finish_sign_in(serial: int, app: Dictionary, tokens: Dictionary) -> void:
 func _new_session(app: Dictionary, tokens: Dictionary) -> OAuthSession:
 	var session := OAuthSession.new(OAuth.new(transport, app["issuer"], app["client_id"]), tokens)
 	var sign_in_id := credentials.saved_sign_in(app["issuer"], app["client_id"])
-	session.on_rotate = _save_rotated.bind(session, sign_in_id)
+	# Named by its id: a session bound into its own callbacks would never be freed.
+	session.on_rotate = _save_rotated.bind(session.get_instance_id(), sign_in_id)
 	session.load_saved = func() -> String: return credentials.session_token(app["issuer"], app["client_id"], sign_in_id)
-	session.ended.connect(_on_session_ended.bind(session))
+	session.ended.connect(_on_session_ended.bind(session.get_instance_id()))
 	return session
 
 
 ## Saves a rotated token only for the session in use, not after a sign-out or another sign-in.
-func _save_rotated(previous: String, refresh_token: String, session: OAuthSession, sign_in_id: String) -> void:
-	if client.session == session:
-		credentials.save_refresh_token(session.oauth.issuer, session.oauth.client_id, previous, refresh_token, sign_in_id)
+func _save_rotated(previous: String, refresh_token: String, session_id: int, sign_in_id: String) -> void:
+	if _is_session(session_id):
+		credentials.save_refresh_token(client.session.oauth.issuer, client.session.oauth.client_id, previous, refresh_token, sign_in_id)
+
+
+func _is_session(session_id: int) -> bool:
+	return client.session != null and client.session.get_instance_id() == session_id
 
 
 func _use_session(session: OAuthSession, source: String) -> void:
 	client.set_session(session)
 	account = {"api_key": "", "source": source, "method": "oauth"}
-	teams = []
-	teams_error = ""
-	picking = false
-	quotes.clear()
-	_forget_project_models()
-	_forget_workflows()
+	_forget_account()
 	changed.emit()
 	if session.has_project():
 		_start_work()
@@ -408,8 +408,8 @@ func _use_session(session: OAuthSession, source: String) -> void:
 
 ## The provider refused the refresh token: it is forgotten, so the next start
 ## does not resume it. The saved team and project stay for the next sign-in.
-func _on_session_ended(dead_token: String, session: OAuthSession) -> void:
-	if client.session != session:
+func _on_session_ended(dead_token: String, session_id: int) -> void:
+	if not _is_session(session_id):
 		return
 	credentials.forget_session(dead_token)
 	client.set_credentials("", "")
@@ -429,14 +429,23 @@ func _set_workspace(team: Dictionary, project: Dictionary) -> void:
 func _reset_account() -> void:
 	account = {"api_key": "", "source": "", "method": ""}
 	sign_in = {"state": SIGN_IN_IDLE}
-	teams = []
-	teams_error = ""
-	picking = false
-	quotes.clear()
-	_forget_project_models()
-	_forget_workflows()
+	_forget_account()
 	_set_price(PRICE_IDLE, -1.0, "")
 	changed.emit()
+
+
+## What belongs to the account before a switch: its teams, quotes and price
+## checks under way, references (assets of its project), models and workflows.
+func _forget_account() -> void:
+	teams = []
+	teams_error = ""
+	teams_loading = false  # a load still under way belongs to the earlier account
+	picking = false
+	quotes.clear()
+	_estimate_serial += 1  # a price check under way was made for the earlier account
+	_drop_references()
+	_forget_project_models()
+	_forget_workflows()
 
 
 ## Workflows belong to the account and project: another one lists them again,
@@ -491,11 +500,7 @@ func _use_account(key: String, secret: String, source: String) -> void:
 	client.set_credentials(key, secret)
 	account = {"api_key": key, "source": source, "method": "api_key"}
 	sign_in = {"state": SIGN_IN_IDLE}
-	teams = []
-	picking = false
-	quotes.clear()
-	_forget_project_models()
-	_forget_workflows()
+	_forget_account()
 	changed.emit()
 	_start_work()
 
@@ -704,6 +709,11 @@ func generate(confirmed: bool = false) -> Dictionary:
 	var label := prompt_text() if not prompt_text().is_empty() else _model_name(model_id)
 	var scope: Dictionary = client.session.workspace() if is_oauth() else {}
 	var local_id := ledger.add_intent(lane_id, model_id, request, fp, float(quote["cu"]), _now(), label, scope)
+	if local_id.is_empty():  # no intent on disk: the paid request is not sent
+		var unsaved := "Could not save the job list (%s), so nothing was sent. Check that the project folder can be written." % ledger.path
+		notified.emit(unsaved, "error")
+		schedule_estimate()
+		return {"ok": false, "message": unsaved}
 	submitting = true
 	_set_price(PRICE_IDLE, -1.0, "Sending...")
 	changed.emit()
@@ -734,7 +744,7 @@ func poll() -> void:
 	for row in ledger.active():
 		if is_set_aside(row):
 			continue
-		var result: Dictionary = await client.get_job(row["job_id"], _row_scope(row))
+		var result: Dictionary = await client.get_job(row["job_id"], JobScopes.of(row, is_oauth()))
 		if result["ok"]:
 			var was_waiting: bool = row["error"] == Ledger.AWAITING
 			var updated := ledger.apply_job(result["value"], _now())
@@ -754,7 +764,7 @@ func cancel(local_id: String) -> void:
 	var row := ledger.find(local_id)
 	if row.is_empty() or str(row["job_id"]).is_empty() or is_set_aside(row):
 		return
-	var result: Dictionary = await client.cancel_job(row["job_id"], _row_scope(row))
+	var result: Dictionary = await client.cancel_job(row["job_id"], JobScopes.of(row, is_oauth()))
 	if result["ok"]:
 		ledger.mark_cancel_requested(local_id, _now())
 		notified.emit("Cancel requested. The job stops when Scenario confirms it.", "info")
@@ -790,14 +800,9 @@ func check_unresolved() -> void:
 	if ledger.unresolved().is_empty() or not is_connected_account():
 		return
 	var session := client.session
-	var scopes := JobScopes.of_unresolved(ledger.unresolved(), is_oauth())
-	var linked := 0
-	for project_id in scopes:
-		var result: Dictionary = await client.list_jobs(50, scopes[project_id])
-		if client.session != session:
-			return  # signed out or in again meanwhile
-		if result["ok"]:
-			linked += ledger.reconcile(result["value"], _now(), project_id)
+	var linked: int = await JobScopes.reconcile(client, ledger, is_oauth(), _now(), func() -> bool: return client.session == session)
+	if linked < 0:
+		return  # signed out or in again meanwhile
 	if linked > 0:
 		notified.emit("Found %d job(s) that were sent before the connection dropped." % linked, "info")
 		_poll.start()
@@ -822,7 +827,7 @@ func import_job(local_id: String) -> Dictionary:
 		return {"ok": false, "message": JobScopes.NOTE}
 	_importing[local_id] = true
 	changed.emit()
-	var fetched: Dictionary = await Downloads.fetch(client, transport, row, _row_scope(row), output_root, _model_name(str(row["model_id"])))
+	var fetched: Dictionary = await Downloads.fetch(client, transport, row, JobScopes.of(row, is_oauth()), output_root, _model_name(str(row["model_id"])))
 	var files: Array = fetched["files"]
 	if not fetched["problem"].is_empty():
 		_importing.erase(local_id)
@@ -960,11 +965,6 @@ func _forget_project_models() -> void:
 		trained = {}
 		model_id = ""  # _start_work picks the lane's default model
 	project_models.clear()
-
-
-## The team and project a row's job ran in, for its reads and cancel ({} with an API key).
-func _row_scope(row: Dictionary) -> Dictionary:
-	return JobScopes.of(row, is_oauth())
 
 
 func _set_price(state: String, cu: float, message: String) -> void:

@@ -140,10 +140,15 @@ func poll_device(device_code: String) -> Dictionary:
 ## another sign-in started).
 func wait_device(device: Dictionary, is_current: Callable) -> Dictionary:
 	var interval: float = device["interval"]
-	while _now() < float(device["expires_at"]):
-		await (Engine.get_main_loop() as SceneTree).create_timer(interval).timeout
+	var expires_at := float(device["expires_at"])
+	while _now() < expires_at:
+		# Wakes at the expiry at the latest, and sends no poll after it.
+		var wait := minf(interval, expires_at - _now())
+		await (Engine.get_main_loop() as SceneTree).create_timer(wait).timeout
 		if not is_current.call():
 			return {}
+		if wait < interval:
+			break  # waited out the code's lifetime
 		var polled: Dictionary = await poll_device(device["device_code"])
 		if not is_current.call():
 			return {}

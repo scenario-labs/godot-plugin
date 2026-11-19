@@ -118,6 +118,15 @@ func test_device_grant_start_and_polls() -> void:
 	assert_eq(_form(1)["grant_type"], "urn:ietf:params:oauth:grant-type:device_code")
 
 
+func test_device_wait_ends_at_the_expiry_without_a_late_poll() -> void:
+	var device := {"device_code": "dc", "interval": 30.0, "expires_at": Time.get_unix_time_from_system() + 0.2}
+	var started := Time.get_ticks_msec()
+	var result: Dictionary = await oauth.wait_device(device, func() -> bool: return true)
+	assert_lt(Time.get_ticks_msec() - started, 5000, "woke at the expiry, not after the interval")
+	assert_string_contains(result["error"]["message"], "expired")
+	assert_eq(fake.requests.size(), 0, "no poll sent after the expiry")
+
+
 func test_device_grant_off_and_plain_http_link() -> void:
 	fake.replies.append(_json(400, {"error": "unauthorized_client"}))
 	var off: Dictionary = await oauth.start_device()
