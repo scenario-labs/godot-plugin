@@ -19,13 +19,7 @@ func before_each() -> void:
 	fake = FakeTransport.new()
 	client = Client.new(fake, "api_key_1", "secret_1")
 	client.spending_disabled = false
-	ledger_path = "user://test_workflow_jobs_%d.json" % randi()
-
-
-func after_each() -> void:
-	for suffix in ["", ".tmp"]:
-		if FileAccess.file_exists(ledger_path + suffix):
-			DirAccess.remove_absolute(ledger_path + suffix)
+	ledger_path = "res://tests/tmp_output/workflows-%d/jobs.json" % randi()
 
 
 func _arguments(index: int = 0) -> Dictionary:
