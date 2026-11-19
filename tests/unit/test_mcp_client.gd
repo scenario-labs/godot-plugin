@@ -192,6 +192,31 @@ func test_tool_error_shows_the_reason_after_the_banner() -> void:
 	var one_text := Errors.tool_error("⚠ Scenario error (trace_id: mcpt_Z9).\nError: 404 {\"message\":\"Model not found\"}")
 	assert_eq([one_text["status"], one_text["detail"], one_text["trace_id"]], [404, "Model not found", "mcpt_Z9"])
 	assert_eq(Errors.tool_error("Error: The prompt was flagged.")["detail"], "The prompt was flagged.")
+	var formatted := Errors.tool_error("Error: 400 {\n  \"reason\": \"Blocked by content policy\"\n}")
+	assert_eq([formatted["status"], formatted["detail"]], [400, "Blocked by content policy"], "a JSON body over several lines")
+	assert_eq(Errors.tool_error("Error: 400 bad input\nsee the docs")["detail"], "bad input", "plain text keeps its first line")
+
+
+func test_a_paid_call_with_a_server_error_in_the_tool_reply_is_unknown() -> void:
+	fake.replies.append(Fake.tool_error("⚠ Scenario error (trace_id: mcpt_Q1).\nError: 502 bad gateway"))
+	var result: Dictionary = await client.submit("m", {"prompt": "p"})
+	assert_eq(result["error"]["kind"], Errors.HTTP_5XX)
+	assert_true(result["error"]["ambiguous"], "Scenario may have started the job")
+	assert_string_contains(result["error"]["message"], "unknown")
+	assert_string_contains(result["error"]["message"], "mcpt_Q1")
+	assert_eq(fake.tool_calls().size(), 1)
+	fake.replies.append(Fake.tool_error("Error: 502 bad gateway"))
+	var read: Dictionary = await client.call_tool("model_schema_get", {"model_id": "m"})
+	assert_false(read["error"]["ambiguous"], "a read is never unknown")
+
+
+func test_a_workflow_that_ended_while_it_was_sent_is_read_once() -> void:
+	fake.replies.append(Fake.tool_result({"job": {"id": "job_w", "status": "completed"}, "workflow": {"id": "wflow_x"}}))
+	var result: Dictionary = await client.submit("wflow_x", {})
+	assert_eq(result["value"], {"job_id": "job_w", "status": "queued"}, "the poll reads its outputs")
+	fake.replies.append(Fake.tool_result({"job": {"id": "job_r", "status": "in-progress"}}))
+	var running: Dictionary = await client.submit("wflow_x", {})
+	assert_eq(running["value"]["status"], "in-progress")
 
 
 func test_auth_errors() -> void:
@@ -337,6 +362,33 @@ func test_an_ended_session_sends_nothing() -> void:
 	assert_eq(result["error"]["kind"], Errors.AUTH)
 	assert_false(result["error"]["ambiguous"])
 	assert_eq(fake.tool_calls().size(), 0)
+
+
+func test_a_paid_call_is_not_sent_once_another_account_replaced_its_own() -> void:
+	_sign_in(120.0)  # the paid call renews the token first
+	var other := OAuthSession.new(OAuth.new(fake, "https://idp.example.test", "client_godot"),
+		{"access_token": "at_b", "refresh_token": "rt_b", "expires_at": Time.get_unix_time_from_system() + 3600.0})
+	other.set_workspace({"id": "team_b"}, {"id": "proj_b1"})
+	fake.on_request = func(payload: Dictionary) -> void:
+		if payload.has("form"):
+			client.set_session(other)  # signed in as another account meanwhile
+	fake.replies.append(_token_reply("at_2"))
+	var result: Dictionary = await client.submit("model_a", {"prompt": "p"})
+	assert_eq(result["error"]["kind"], Errors.LOCAL)
+	assert_false(result["error"]["ambiguous"], "nothing was sent")
+	assert_eq(fake.tool_calls().size(), 0)
+
+
+func test_a_call_waiting_for_its_token_sends_nothing_after_a_sign_out() -> void:
+	_sign_in(30.0)  # the bearer is renewed before the request
+	fake.on_request = func(payload: Dictionary) -> void:
+		if payload.has("form"):
+			client.set_credentials("", "")
+	fake.replies.append(_token_reply("at_2"))
+	var result: Dictionary = await client.get_job("job_1")
+	assert_false(result["ok"])
+	assert_eq(fake.requests.filter(func(r: Dictionary) -> bool: return r["payload"].has("method")).size(), 0,
+		"not even the MCP session setup")
 
 
 func test_signed_in_errors_speak_of_the_account() -> void:

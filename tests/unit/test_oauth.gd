@@ -84,6 +84,14 @@ func test_refused_refresh_ends_the_session() -> void:
 	assert_true(result["error"]["session_ended"])
 
 
+func test_a_client_error_on_refresh_keeps_the_session() -> void:
+	for code in ["invalid_client", "unauthorized_client"]:
+		fake.replies.append(_json(401, {"error": code}))
+		var result: Dictionary = await oauth.refresh("rt_1")
+		assert_false(result["ok"])
+		assert_false(result["error"].get("session_ended", false), "%s says nothing of the refresh token" % code)
+
+
 func test_refresh_without_rotation_keeps_the_token() -> void:
 	fake.replies.append(_json(200, {"access_token": "at_2", "expires_in": 60}))
 	var result: Dictionary = await oauth.refresh("rt_1")

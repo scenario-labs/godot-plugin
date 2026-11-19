@@ -189,7 +189,9 @@ func _tokens(reply: Dictionary, what: String) -> Dictionary:
 	var status: int = reply["value"]["status"]
 	var data: Dictionary = reply["value"]["data"]
 	if status != 200 or str(data.get("access_token", "")).is_empty():
-		if status in [400, 401] and str(data.get("error", "")) in ["invalid_grant", "invalid_client", "unauthorized_client"]:
+		# Only invalid_grant refuses the grant itself; client errors (RFC 6749 5.2)
+		# leave the saved refresh token for a later try.
+		if status in [400, 401] and str(data.get("error", "")) == "invalid_grant":
 			return Errors.fail(Errors.AUTH, "%s was refused (%s). Sign in again." % [what, _oauth_error(data)], {"session_ended": true})
 		return Errors.fail(Errors.PROTOCOL, "%s failed (HTTP %d, %s)." % [what, status, _oauth_error(data)])
 	var expires_in := float(data.get("expires_in", 0))

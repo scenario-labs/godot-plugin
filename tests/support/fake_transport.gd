@@ -18,12 +18,16 @@ var replies: Array = []
 var requests: Array = []
 var sleeps: Array = []
 var init_count := 0
+## Called with each request's payload before it is answered: (payload: Dictionary) -> void
+var on_request := Callable()
 
 
 func post(url: String, headers: PackedStringArray, body: String, timeout_s: float) -> Dictionary:
 	var json := JSON.new()
 	var payload: Variant = json.data if json.parse(body) == OK else {"form": body}  # a form: an OAuth request
 	requests.append({"url": url, "headers": headers, "payload": payload, "timeout": timeout_s})
+	if on_request.is_valid():
+		on_request.call(payload)
 	var method := str(payload.get("method", ""))
 	if auto_init and method == "initialize":
 		init_count += 1

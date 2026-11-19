@@ -112,11 +112,16 @@ static func tool_error(text: String) -> Dictionary:
 	out["status"] = int(line.get_string(1)) if not line.get_string(1).is_empty() else 0
 	out["detail"] = line.get_string(2).strip_edges()
 	var json := JSON.new()
-	if json.parse(out["detail"]) == OK and json.data is Dictionary:
+	# A JSON body may span several lines: the rest of the text first, then its first line.
+	for body in [text.substr(line.get_start(2)).strip_edges(), out["detail"]]:
+		if json.parse(body) != OK or not json.data is Dictionary:
+			continue
+		out["detail"] = body
 		for key in ["reason", "message", "error"]:
 			if json.data.get(key) is String and not str(json.data[key]).is_empty():
 				out["detail"] = json.data[key]
 				break
+		break
 	return out
 
 

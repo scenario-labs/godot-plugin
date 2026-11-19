@@ -13,6 +13,11 @@ extends RefCounted
 ## config file records which store holds it. One way of signing in is kept at
 ## a time.
 
+## A rotated refresh token reached neither the store nor the settings file
+## (save_refresh_token): the provider spent the saved one. Not emitted when the
+## saved sign-in is another editor's.
+signal rotation_lost(message: String)
+
 const KEYCHAIN_SERVICE := "Scenario Godot Plugin"
 const SECURITY := "/usr/bin/security"
 ## Characters that survive security -i double-quoted tokens without escaping.
@@ -251,6 +256,8 @@ func save_refresh_token(issuer: String, client_id: String, previous: String, ref
 	var ok := _write_config(data)
 	if ok and in_store:
 		_delete_accounts([account])
+	if not ok:
+		rotation_lost.emit("Could not save the renewed Scenario sign-in, so the next start will ask you to sign in again.")
 	return ok
 
 
