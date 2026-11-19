@@ -370,17 +370,17 @@ func _finish_sign_in(serial: int, app: Dictionary, tokens: Dictionary) -> void:
 
 func _new_session(app: Dictionary, tokens: Dictionary) -> OAuthSession:
 	var session := OAuthSession.new(OAuth.new(transport, app["issuer"], app["client_id"]), tokens)
-	session.on_rotate = _save_rotated.bind(session)
-	var sign_in_id: String = credentials.load_session(app["issuer"], app["client_id"])["sign_in"]
+	var sign_in_id := credentials.saved_sign_in(app["issuer"], app["client_id"])
+	session.on_rotate = _save_rotated.bind(session, sign_in_id)
 	session.load_saved = func() -> String: return credentials.session_token(app["issuer"], app["client_id"], sign_in_id)
 	session.ended.connect(_on_session_ended.bind(session))
 	return session
 
 
 ## Saves a rotated token only for the session in use, not after a sign-out or another sign-in.
-func _save_rotated(previous: String, refresh_token: String, session: OAuthSession) -> void:
+func _save_rotated(previous: String, refresh_token: String, session: OAuthSession, sign_in_id: String) -> void:
 	if client.session == session:
-		credentials.save_refresh_token(session.oauth.issuer, session.oauth.client_id, previous, refresh_token)
+		credentials.save_refresh_token(session.oauth.issuer, session.oauth.client_id, previous, refresh_token, sign_in_id)
 
 
 func _use_session(session: OAuthSession, source: String) -> void:

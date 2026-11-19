@@ -111,11 +111,14 @@ const ISSUER := "https://idp.example.test"
 
 func test_a_rotation_is_kept_when_the_system_store_does_not_answer() -> void:
 	var store := _store()  # use_keychain off: a store-backed record reads as "", as a dismissed keyring prompt does
-	store._write_config({"oauth": {"issuer": ISSUER, "client_id": "client_godot", "secret_store": "keychain"}})
-	assert_true(store.save_refresh_token(ISSUER, "client_godot", "rt_1", "rt_2"), "kept in the file rather than lost")
+	store._write_config({"oauth": {"issuer": ISSUER, "client_id": "client_godot", "secret_store": "keychain", "sign_in": "s1"}})
+	assert_eq(store.saved_sign_in(ISSUER, "client_godot"), "s1")
+	assert_false(store.save_refresh_token(ISSUER, "client_godot", "rt_1", "rt_2", "s0"), "another editor's sign-in is not overwritten")
+	assert_false(store.save_refresh_token(ISSUER, "client_godot", "rt_1", "rt_2"), "nor by a session that cannot tell")
+	assert_true(store.save_refresh_token(ISSUER, "client_godot", "rt_1", "rt_2", "s1"), "kept in the file rather than lost")
 	assert_eq(store.load_session(ISSUER, "client_godot")["refresh_token"], "rt_2")
 	store.forget_session("rt_2")
-	assert_false(store.save_refresh_token(ISSUER, "client_godot", "rt_2", "rt_3"), "a forgotten session stays forgotten")
+	assert_false(store.save_refresh_token(ISSUER, "client_godot", "rt_2", "rt_3", "s1"), "a forgotten session stays forgotten")
 
 
 func test_session_round_trip_in_the_file_store() -> void:

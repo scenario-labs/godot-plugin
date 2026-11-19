@@ -170,6 +170,15 @@ func load_session(issuer: String, client_id: String) -> Dictionary:
 		"sign_in": str(oauth.get("sign_in", ""))}
 
 
+## The id of this application's saved sign-in, from the settings file alone
+## ("" if none). Any later sign-in, from any editor, replaces it.
+func saved_sign_in(issuer: String, client_id: String) -> String:
+	var oauth: Variant = _read_config().get("oauth")
+	if not oauth is Dictionary or oauth.get("issuer") != issuer or oauth.get("client_id") != client_id:
+		return ""
+	return str(oauth.get("sign_in", ""))
+
+
 ## The saved refresh token if it still belongs to that sign-in, else "".
 func session_token(issuer: String, client_id: String, sign_in: String) -> String:
 	var saved := load_session(issuer, client_id)
@@ -205,18 +214,20 @@ func save_session(issuer: String, client_id: String, refresh_token: String) -> D
 ## Saves the refresh token the provider rotated from previous, where the
 ## session keeps it. Only over that same token of the same application: another
 ## editor may have signed in since (to another instance, or another account),
-## and its session must not receive this one.
-func save_refresh_token(issuer: String, client_id: String, previous: String, refresh_token: String) -> bool:
+## and its session must not receive this one. sign_in is the session's own
+## sign-in id (saved_sign_in when it started).
+func save_refresh_token(issuer: String, client_id: String, previous: String, refresh_token: String, sign_in: String = "") -> bool:
 	var data := _read_config()
 	var oauth: Variant = data.get("oauth")
 	if not oauth is Dictionary or refresh_token.is_empty():
 		return false
 	var saved: String = load_session(issuer, client_id)["refresh_token"]
 	# A system store that does not answer (a keyring prompt dismissed) reads as
-	# "": the rotated token is kept rather than lost. Another editor's token
-	# reads as itself, and a forgotten one leaves no store behind.
-	var unreadable: bool = saved.is_empty() and oauth.get("issuer") == issuer and oauth.get("client_id") == client_id \
-		and oauth.get("secret_store", FILE) != FILE
+	# "": the rotated token is kept rather than lost, but only while the saved
+	# sign-in is still this session's. Another editor's sign-in changes its id,
+	# and a forgotten one leaves no store behind.
+	var unreadable: bool = saved.is_empty() and not sign_in.is_empty() and str(oauth.get("sign_in", "")) == sign_in \
+		and oauth.get("issuer") == issuer and oauth.get("client_id") == client_id and oauth.get("secret_store", FILE) != FILE
 	if saved != previous and not unreadable:
 		return false
 	var account := _session_account(str(oauth.get("client_id", "")))
