@@ -109,6 +109,16 @@ func run() -> Dictionary:
 	library.use_as_reference(_asset(library, "asset_gen04"), "referenceImages")
 	check("references set without uploading", controller.values.get("referenceImages") == ["asset_gen03", "asset_gen04"] and fake.uploads == 0)
 	check("audio is never a reference", not library.use_as_reference(_asset(library, "asset_snd001"), "mask"))
+	var form_fields: Array = controller.fields
+	ui._show_view("library")
+	controller.fields = []
+	controller.changed.emit()
+	await wait_frames(1)
+	check("cards drop Reference when the form has no file field", not _has_button(library_ui._cards, "Reference"))
+	controller.fields = form_fields
+	controller.changed.emit()
+	await wait_frames(1)
+	check("cards offer Reference again when the form gets one", _has_button(library_ui._cards, "Reference"))
 
 	# History: pages of the project's jobs, import a finished one once.
 	var now := Time.get_unix_time_from_system()

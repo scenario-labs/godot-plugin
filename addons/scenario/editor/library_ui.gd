@@ -26,6 +26,7 @@ var _history_status: Label
 var _history_rows: VBoxContainer
 var _older_button: Button
 var _thumbnail_rects := {}  # asset id -> TextureRect
+var _shown_targets: Array = []  # the reference fields the cards were drawn with
 
 
 func bind(p_library: Library) -> void:
@@ -33,7 +34,14 @@ func bind(p_library: Library) -> void:
 	_build()
 	library.changed.connect(_refresh)
 	library.thumbnail_ready.connect(_on_thumbnail)
+	# The form's fields change with the model: the cards' Reference actions follow them.
+	library.controller.changed.connect(_on_controller_changed)
 	_refresh()
+
+
+func _on_controller_changed() -> void:
+	if view == "library" and library.reference_fields() != _shown_targets:
+		_refresh_library()
 
 
 ## Shows one view; its first page is read when it opens.
@@ -114,6 +122,7 @@ func _refresh_library() -> void:
 	for child in _cards.get_children():
 		child.queue_free()
 	_thumbnail_rects = {}
+	_shown_targets = library.reference_fields()
 	if library.loading and library.assets.is_empty():
 		_library_status.text = "Reading the project's assets..."
 	elif not library.error.is_empty():
