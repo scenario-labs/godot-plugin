@@ -135,6 +135,26 @@ func poll_device(device_code: String) -> Dictionary:
 	return _tokens(reply, "Sign in on another device")
 
 
+## Polls the device grant until it is approved, refused or expired:
+## ok(tokens) or a failure; {} once is_current() turns false (cancelled, or
+## another sign-in started).
+func wait_device(device: Dictionary, is_current: Callable) -> Dictionary:
+	var interval: float = device["interval"]
+	while _now() < float(device["expires_at"]):
+		await (Engine.get_main_loop() as SceneTree).create_timer(interval).timeout
+		if not is_current.call():
+			return {}
+		var polled: Dictionary = await poll_device(device["device_code"])
+		if not is_current.call():
+			return {}
+		var error: Dictionary = polled.get("error", {})
+		if polled["ok"] or not (error.get("pending", false) or error["kind"] in [Errors.TRANSPORT, Errors.TIMEOUT]):
+			return polled
+		if error.get("slow_down", false):
+			interval += 5.0
+	return Errors.fail(Errors.AUTH, "The sign-in code expired. Start again.")
+
+
 ## Best effort: offline, sign-out still forgets the token.
 func revoke(token: String) -> bool:
 	if token.is_empty():

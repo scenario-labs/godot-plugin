@@ -524,6 +524,20 @@ func _job_row(row: Dictionary) -> Control:
 	box.add_child(top)
 	var actions := HBoxContainer.new()
 	var local_id: String = row["local_id"]
+	if controller.is_set_aside(row):
+		actions.add_child(_dim_label("Sent with an API key"))
+		actions.add_child(_action("Dismiss", controller.dismiss.bind(local_id)))
+		row = row.merged({"error": Controller.JobScopes.NOTE}, true)
+	else:
+		_state_actions(actions, row)
+	if not str(row["error"]).is_empty():
+		box.tooltip_text = str(row["error"])
+	box.add_child(actions)
+	return box
+
+
+func _state_actions(actions: HBoxContainer, row: Dictionary) -> void:
+	var local_id: String = row["local_id"]
 	match row["state"]:
 		Ledger.SUCCESS:
 			if controller.is_importing(local_id):
@@ -541,10 +555,6 @@ func _job_row(row: Dictionary) -> Control:
 			actions.add_child(_action("Dismiss", controller.dismiss.bind(local_id)))
 		_:
 			actions.add_child(_action("Re-run", controller.rerun.bind(local_id)))
-	if not str(row["error"]).is_empty():
-		box.tooltip_text = str(row["error"])
-	box.add_child(actions)
-	return box
 
 
 # --- Fields -------------------------------------------------------------------

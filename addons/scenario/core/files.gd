@@ -129,6 +129,15 @@ static func extension_for_mime(mime: String) -> String:
 
 
 ## MIME type and Scenario asset kind for a file to upload as a reference.
+## A reference file to upload: {"type", "bytes", "problem"}.
+static func read_reference(path: String) -> Dictionary:
+	var type := upload_type(path)
+	if type.is_empty():
+		return {"type": type, "bytes": PackedByteArray(), "problem": "This file type cannot be used as a reference: " + path.get_file()}
+	var bytes := FileAccess.get_file_as_bytes(path)
+	return {"type": type, "bytes": bytes, "problem": "Could not read " + path if bytes.is_empty() else ""}
+
+
 static func upload_type(path: String) -> Dictionary:
 	match path.get_extension().to_lower():
 		"png":

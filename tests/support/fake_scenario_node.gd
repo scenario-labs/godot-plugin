@@ -132,6 +132,8 @@ var listed := {}
 ## (see library_asset).
 var library := {}
 var _jobs := {}
+## Jobs that job_get finds only in one project: {job_id: project_id}.
+var job_projects := {}
 
 
 func post(url: String, headers: PackedStringArray, body: String, _timeout_s: float) -> Dictionary:
@@ -192,6 +194,8 @@ func post(url: String, headers: PackedStringArray, body: String, _timeout_s: flo
 			return _reply(payload["id"], _tool({"job": {"jobId": run_id, "status": "queued", "workflowId": args["workflow_id"]},
 				"workflow": {"id": args["workflow_id"]}}))
 		"job_get":
+			if job_projects.has(str(args["job_id"])) and job_projects[str(args["job_id"])] != str(args.get("project_id", "")):
+				return _reply(payload["id"], {"content": [{"type": "text", "text": "Job not found."}], "isError": true})
 			if int(awaiting.get(str(args["job_id"]), 0)) > 0:
 				awaiting[str(args["job_id"])] -= 1
 				return _reply(payload["id"], _tool({"job": {"jobId": args["job_id"], "status": "in-progress", "progress": 0.5,

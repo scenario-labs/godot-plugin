@@ -32,6 +32,15 @@ func start(p_state: String) -> int:
 	return _server.get_local_port()
 
 
+## Polls until the redirect came back, timeout_s passed or is_current() turns
+## false, then stops listening.
+func wait(timeout_s: float, is_current: Callable) -> void:
+	var deadline := Time.get_ticks_msec() + int(timeout_s * 1000.0)
+	while not poll() and is_current.call() and Time.get_ticks_msec() < deadline:
+		await (Engine.get_main_loop() as SceneTree).create_timer(0.1).timeout
+	stop()
+
+
 ## Accepts and answers what has arrived. True once the redirect came back.
 func poll() -> bool:
 	while not done and _server.is_listening() and _server.is_connection_available():

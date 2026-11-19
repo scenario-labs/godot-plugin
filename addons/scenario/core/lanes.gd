@@ -111,6 +111,17 @@ static func default_model(lane_id: String) -> String:
 	return item["models"][0]["id"] if not item.is_empty() and not item["models"].is_empty() else ""
 
 
+## The models of a recommend reply, the specialist first, for the picker.
+static func recommended(reply: Dictionary) -> Array:
+	var models: Array = []
+	for entry in reply.get("ranked", []):
+		models.append({"id": entry["model_id"], "name": entry.get("name", entry["model_id"]), "note": str(entry.get("cost_summary", ""))})
+	var specialty: Variant = reply.get("specialty")
+	if specialty is Dictionary and specialty.has("model_id"):
+		models.push_front({"id": specialty["model_id"], "name": specialty.get("name", specialty["model_id"]), "note": "specialist"})
+	return models
+
+
 static func presets(model_id: String) -> Dictionary:
 	return PRESETS.get(model_id, {}).duplicate(true)
 

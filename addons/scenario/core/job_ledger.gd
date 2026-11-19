@@ -262,6 +262,30 @@ func active() -> Array:
 		return not str(row["job_id"]).is_empty() and (row["state"] in ACTIVE_STATES or row.get("unread", false)))
 
 
+## Rows of jobs sent with an API key (no project) that still need Scenario:
+## running, or finished and not imported. A key belongs to one project, which
+## a signed-in session has to find before it can follow them.
+func unlocated() -> Array:
+	return jobs.filter(needs_project)
+
+
+static func needs_project(row: Dictionary) -> bool:
+	return str(row.get("project_id", "")).is_empty() and not str(row["job_id"]).is_empty() \
+		and (row["state"] in ACTIVE_STATES or row.get("unread", false) or (row["state"] == SUCCESS and not row["imported"]))
+
+
+## Records the project a row's job was found in.
+func set_scope(local_id: String, team_id: String, project_id: String, now: float) -> void:
+	var row := find(local_id)
+	if row.is_empty():
+		return
+	row["team_id"] = team_id
+	row["project_id"] = project_id
+	row["error"] = ""
+	row["updated_at"] = now
+	save()
+
+
 ## The rows the Jobs list draws, newest first, at most limit: every row that
 ## still needs an action (Cancel, Check Scenario, Dismiss) is among them, however
 ## many imported rows came after it.

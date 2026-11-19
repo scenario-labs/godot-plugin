@@ -28,6 +28,8 @@ In `addons/scenario/`:
     quote store.
   - `job_ledger.gd`: durable job list (`res://.godot/scenario/jobs.json`),
     states, reconciles Unknown rows with `jobs_list`.
+  - `job_scopes.gd`: the project each row is followed in; under a sign-in,
+    finds the project of jobs sent with an API key.
   - `schema_form.gd`: model schema to form fields, validation, payload;
     `prompt_name()` finds the prompt field by its flag.
   - `lanes.gd`: the six lanes, their models, presets and restrictions.

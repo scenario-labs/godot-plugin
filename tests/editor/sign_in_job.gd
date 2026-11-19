@@ -145,6 +145,34 @@ func run() -> Dictionary:
 	await _until(func() -> bool: return solo.is_connected_account())
 	check("only project taken", solo.client.session.project_id == "proj_solo" and not solo.picking)
 
+	# Jobs sent with an API key before signing in: looked up in the account's
+	# projects and followed there, or set aside when out of reach.
+	fake.job_projects = {"job_key_here": "proj_solo", "job_key_away": "proj_elsewhere"}
+	var key_rows := {}
+	for job_id in fake.job_projects:
+		key_rows[job_id] = solo.ledger.add_intent("image", "model_openai-gpt-image-2-5-flare", {"prompt": "a key job"}, "fp_" + job_id, 2.0, 1.0)
+		solo.ledger.mark_submitted(key_rows[job_id], job_id, "queued", 1.0)
+	await solo._locate_key_jobs()
+	var here := solo.ledger.find(key_rows["job_key_here"])
+	var away := solo.ledger.find(key_rows["job_key_away"])
+	check("a key job found in the account's projects is followed there", here["project_id"] == "proj_solo" and here["team_id"] == "team_solo" and not solo.is_set_aside(here))
+	check("a key job out of reach is set aside with a note", away["project_id"] == "" and solo.is_set_aside(away) and away["error"] == Controller.JobScopes.NOTE)
+	var asked := fake.calls.size()
+	await solo.poll()
+	var polled: Dictionary = {}  # job_id -> project_id of each job_get the poll sent
+	for call in fake.calls.slice(asked).filter(func(c: Dictionary) -> bool: return c["tool"] == "job_get"):
+		polled[call["arguments"]["job_id"]] = call["arguments"].get("project_id", "")
+	check("the found key job is polled in its project, the other not at all", polled.get("job_key_here") == "proj_solo" and not polled.has("job_key_away"))
+	var aside_ui := DockUI.new()
+	root.add_child(aside_ui)
+	aside_ui.bind(solo)
+	var aside_row: Control = aside_ui._job_row(away)
+	check("the dock offers Dismiss on a set-aside row", aside_row.find_children("*", "Button", true, false).map(func(b: Button) -> String: return b.text) == ["Dismiss"])
+	aside_row.free()
+	aside_ui.queue_free()
+	solo.dismiss(key_rows["job_key_away"])
+	check("dismissed: no longer set aside", not solo.is_set_aside(solo.ledger.find(key_rows["job_key_away"])))
+
 	# Sign out forgets everything locally and revokes the refresh token.
 	var token := solo.client.session.refresh_token()
 	await solo.sign_out()

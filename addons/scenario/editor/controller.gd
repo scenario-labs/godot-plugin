@@ -21,6 +21,7 @@ const ProjectModels := preload("res://addons/scenario/core/project_models.gd")
 const Placer := preload("res://addons/scenario/editor/placer.gd")
 const Workflows := preload("res://addons/scenario/core/workflows.gd")
 const Downloads := preload("res://addons/scenario/editor/downloads.gd")
+const JobScopes := preload("res://addons/scenario/core/job_scopes.gd")
 
 const ESTIMATE_DEBOUNCE_S := 0.6
 const POLL_INTERVAL_S := 3.0
@@ -93,6 +94,7 @@ var _reference_serial := 0
 var _debounce: Timer
 var _poll: Timer
 var _polling := false
+var _locating := false
 var _importing := {}
 var _sign_in_serial := 0
 var _receiver: Loopback
@@ -161,12 +163,7 @@ func sign_in_browser() -> void:
 		return
 	var redirect := OAuth.redirect_uri(port)
 	open_url.call(oauth.authorize_url(redirect, state, pkce["challenge"]))
-	var deadline := _now() + SIGN_IN_TIMEOUT_S
-	while not receiver.poll():
-		if serial != _sign_in_serial or _now() > deadline:
-			break
-		await get_tree().create_timer(0.1).timeout
-	receiver.stop()
+	await receiver.wait(SIGN_IN_TIMEOUT_S, func() -> bool: return serial == _sign_in_serial)
 	if serial != _sign_in_serial:
 		return  # cancelled, or another sign-in started
 	if not receiver.done:
@@ -200,26 +197,15 @@ func sign_in_device() -> void:
 		"verification_uri": device["verification_uri"], "verification_uri_complete": device["verification_uri_complete"],
 	}
 	changed.emit()
-	var interval: float = device["interval"]
-	while _now() < float(device["expires_at"]):
-		await get_tree().create_timer(interval).timeout
-		if serial != _sign_in_serial:
-			return
-		var polled: Dictionary = await oauth.poll_device(device["device_code"])
-		if serial != _sign_in_serial:
-			return
-		if polled["ok"]:
-			sign_in = {"state": SIGN_IN_FINISHING}
-			changed.emit()
-			await _finish_sign_in(serial, app["value"], polled)
-			return
-		var error: Dictionary = polled["error"]
-		if error.get("slow_down", false):
-			interval += 5.0
-		if not error.get("pending", false) and not error["kind"] in [Errors.TRANSPORT, Errors.TIMEOUT]:
-			_fail_sign_in(serial, error["message"])
-			return
-	_fail_sign_in(serial, "The sign-in code expired. Start again.")
+	var polled: Dictionary = await oauth.wait_device(device, func() -> bool: return serial == _sign_in_serial)
+	if polled.is_empty():
+		return
+	if not polled["ok"]:
+		_fail_sign_in(serial, polled["error"]["message"])
+		return
+	sign_in = {"state": SIGN_IN_FINISHING}
+	changed.emit()
+	await _finish_sign_in(serial, app["value"], polled)
 
 
 ## Opens the device sign-in page here, with the code filled in when the provider allows it.
@@ -272,6 +258,24 @@ func load_teams() -> void:
 		else:
 			choose_project(str(only["team"]["id"]), str(only["project"]["id"]))
 	changed.emit()
+	_locate_key_jobs()
+
+
+## Follows the jobs sent with an API key in the project they are found in.
+func _locate_key_jobs() -> void:
+	if _locating or not is_oauth() or ledger.unlocated().is_empty():
+		return
+	_locating = true
+	var session := client.session
+	if await JobScopes.locate(client, ledger, teams, _now(), func() -> bool: return client.session == session) > 0:
+		_poll.start()
+	_locating = false
+	changed.emit()
+
+
+## A row sent with an API key whose project this sign-in has not found.
+func is_set_aside(row: Dictionary) -> bool:
+	return is_oauth() and Ledger.needs_project(row)
 
 
 ## Opens the picker on fresh teams ("Change team or project").
@@ -723,6 +727,8 @@ func poll() -> void:
 		return
 	_polling = true
 	for row in ledger.active():
+		if is_set_aside(row):
+			continue
 		var result: Dictionary = await client.get_job(row["job_id"], _row_scope(row))
 		if result["ok"]:
 			var was_waiting: bool = row["error"] == Ledger.AWAITING
@@ -734,14 +740,14 @@ func poll() -> void:
 			elif updated.get("error") == Ledger.AWAITING and not was_waiting:
 				notified.emit("%s: %s" % [_model_name(updated["model_id"]), Ledger.AWAITING], "warning")
 	_polling = false
-	if ledger.active().is_empty():
+	if ledger.active().all(is_set_aside):
 		_poll.stop()
 	changed.emit()
 
 
 func cancel(local_id: String) -> void:
 	var row := ledger.find(local_id)
-	if row.is_empty() or str(row["job_id"]).is_empty():
+	if row.is_empty() or str(row["job_id"]).is_empty() or is_set_aside(row):
 		return
 	var result: Dictionary = await client.cancel_job(row["job_id"], _row_scope(row))
 	if result["ok"]:
@@ -779,12 +785,7 @@ func check_unresolved() -> void:
 	if ledger.unresolved().is_empty() or not is_connected_account():
 		return
 	var session := client.session
-	var scopes := {}  # project_id ("" with an API key) -> the scope to list it in
-	for row in ledger.unresolved():
-		var scope := _row_scope(row)
-		if is_oauth() and scope.is_empty():
-			continue  # sent with an API key: its project is unknown here
-		scopes[str(scope.get("project_id", ""))] = scope
+	var scopes := JobScopes.of_unresolved(ledger.unresolved(), is_oauth())
 	var linked := 0
 	for project_id in scopes:
 		var result: Dictionary = await client.list_jobs(50, scopes[project_id])
@@ -812,6 +813,8 @@ func import_job(local_id: String) -> Dictionary:
 	var row := ledger.find(local_id)
 	if row.is_empty() or row["state"] != Ledger.SUCCESS:
 		return {"ok": false, "message": "Only finished jobs can be imported."}
+	if is_set_aside(row):
+		return {"ok": false, "message": JobScopes.NOTE}
 	_importing[local_id] = true
 	changed.emit()
 	var fetched: Dictionary = await Downloads.fetch(client, transport, row, _row_scope(row), output_root, _model_name(str(row["model_id"])))
@@ -856,18 +859,14 @@ func attach_file(field_name: String, path: String) -> void:
 	var field := _field(field_name)
 	if field.is_empty():
 		return
-	var type := Files.upload_type(path)
-	if type.is_empty():
-		notified.emit("This file type cannot be used as a reference: " + path.get_file(), "error")
-		return
-	var bytes := FileAccess.get_file_as_bytes(path)
-	if bytes.is_empty():
-		notified.emit("Could not read " + path, "error")
+	var file := Files.read_reference(path)
+	if not file["problem"].is_empty():
+		notified.emit(file["problem"], "error")
 		return
 	uploads[field_name] = "uploading"
 	schedule_estimate()
 	var serial := _reference_serial
-	var sent: Dictionary = await Downloads.upload(client, transport, path.get_file(), type, bytes)
+	var sent: Dictionary = await Downloads.upload(client, transport, path.get_file(), file["type"], file["bytes"])
 	var asset_id: String = sent["asset_id"]
 	var problem: String = sent["problem"]
 	if serial != _reference_serial:
@@ -920,13 +919,7 @@ func load_recommendations() -> void:
 	if not result["ok"]:
 		notified.emit(result["error"]["message"], "error")
 		return
-	var extra: Array = []
-	for entry in result["value"].get("ranked", []):
-		extra.append({"id": entry["model_id"], "name": entry.get("name", entry["model_id"]), "note": str(entry.get("cost_summary", ""))})
-	var specialty: Variant = result["value"].get("specialty")
-	if specialty is Dictionary and specialty.has("model_id"):
-		extra.push_front({"id": specialty["model_id"], "name": specialty.get("name", specialty["model_id"]), "note": "specialist"})
-	recommended[lane_id] = extra
+	recommended[lane_id] = Lanes.recommended(result["value"])
 	notified.emit("Added Scenario's recommendations for this prompt.", "info")
 	changed.emit()
 
@@ -966,9 +959,7 @@ func _forget_project_models() -> void:
 
 ## The team and project a row's job ran in, for its reads and cancel ({} with an API key).
 func _row_scope(row: Dictionary) -> Dictionary:
-	if not is_oauth() or str(row.get("project_id", "")).is_empty():
-		return {}
-	return {"team_id": str(row.get("team_id", "")), "project_id": str(row["project_id"])}
+	return JobScopes.of(row, is_oauth())
 
 
 func _set_price(state: String, cu: float, message: String) -> void:

@@ -54,6 +54,8 @@ Each request appears under **Jobs**, newest first. The list survives editor rest
 
 **Import** downloads the results, imports them and places them as described above. With **Auto Import** on (the default), finished jobs are imported as soon as they are done. **Re-run** puts the job's model and settings back in the form; it never sends anything by itself.
 
+Jobs sent with an API key, before you signed in with Scenario, are looked for in the projects your account can open and followed there. One in a project your account cannot open reads "Sent with an API key": connect that key again to follow it, or **Dismiss** it.
+
 **Unknown** jobs block the same request until resolved, so a dropped connection cannot make you pay twice. **Check Scenario** looks for the job among your recent Scenario jobs and links it when exactly one matches. **Dismiss** clears the row when you have checked yourself.
 
 ### Library and History
