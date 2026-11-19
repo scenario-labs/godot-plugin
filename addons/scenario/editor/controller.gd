@@ -335,7 +335,7 @@ func _resume_session() -> void:
 	if saved["refresh_token"].is_empty():
 		changed.emit()
 		return
-	var session := _new_session(app["value"], {"access_token": "", "refresh_token": saved["refresh_token"], "expires_at": 0.0})
+	var session := _new_session(app["value"], {"access_token": "", "refresh_token": saved["refresh_token"], "expires_at": 0.0}, saved["sign_in"])
 	var workspace: Dictionary = saved["workspace"]
 	session.set_workspace({"id": workspace.get("team_id", ""), "name": workspace.get("team_name", "")},
 		{"id": workspace.get("project_id", ""), "name": workspace.get("project_name", "")})
@@ -378,9 +378,11 @@ func _finish_sign_in(serial: int, app: Dictionary, tokens: Dictionary) -> void:
 	await load_teams()
 
 
-func _new_session(app: Dictionary, tokens: Dictionary) -> OAuthSession:
+## sign_in_id: the id saved with the token, read with it ("" to read it now).
+func _new_session(app: Dictionary, tokens: Dictionary, sign_in_id: String = "") -> OAuthSession:
 	var session := OAuthSession.new(OAuth.new(transport, app["issuer"], app["client_id"]), tokens)
-	var sign_in_id := credentials.saved_sign_in(app["issuer"], app["client_id"])
+	if sign_in_id.is_empty():
+		sign_in_id = credentials.saved_sign_in(app["issuer"], app["client_id"])
 	# Named by its id: a session bound into its own callbacks would never be freed.
 	session.on_rotate = _save_rotated.bind(session.get_instance_id(), sign_in_id)
 	session.load_saved = func() -> String: return credentials.session_token(app["issuer"], app["client_id"], sign_in_id)

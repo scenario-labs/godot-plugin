@@ -181,6 +181,7 @@ func load_session(issuer: String, client_id: String) -> Dictionary:
 static func in_background(read: Callable) -> Variant:
 	var thread := Thread.new()
 	thread.start(read)
+	await (Engine.get_main_loop() as SceneTree).process_frame  # always later, however fast the read
 	while thread.is_alive():
 		await (Engine.get_main_loop() as SceneTree).process_frame
 	return thread.wait_to_finish()
