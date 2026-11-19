@@ -22,6 +22,14 @@ static func is_set_aside(row: Dictionary, oauth: bool) -> bool:
 	return not str(row.get("project_id", "")).is_empty() and not row.get("sent_with_key", false) and Ledger.needs_scenario(row)
 
 
+## Whether this connection can read a row's assets, whatever its job state:
+## under a sign-in, rows that name their project; under a key, rows of the
+## key's project (no project, or found there by a sign-in).
+static func can_import(row: Dictionary, oauth: bool) -> bool:
+	var scoped := not str(row.get("project_id", "")).is_empty()
+	return scoped if oauth else (not scoped or row.get("sent_with_key", false))
+
+
 ## What the dock shows on a set-aside row: [label, note].
 static func aside_text(oauth: bool) -> Array:
 	return ["Sent with an API key", NOTE] if oauth else ["Sent while signed in", SIGNED_IN_NOTE]

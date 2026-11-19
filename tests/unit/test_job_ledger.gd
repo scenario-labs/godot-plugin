@@ -293,3 +293,7 @@ func test_rows_of_the_other_connection_method_are_set_aside() -> void:
 	assert_false(JobScopes.is_set_aside(ledger.find(with_key), false), "a key's row found by a sign-in: the key still follows it")
 	ledger.dismiss(signed_in, T0)
 	assert_false(JobScopes.is_set_aside(ledger.find(signed_in), false), "dismissed: nothing left to follow")
+	var library := ledger.adopt("image", "", "a library image", "", ["asset_1"], T0, {"team_id": "t", "project_id": "proj"}, "library")
+	assert_false(JobScopes.can_import(ledger.find(library), false), "a signed-in Library row is not read in a key's project")
+	assert_true(JobScopes.can_import(ledger.find(library), true))
+	assert_true(JobScopes.can_import(ledger.find(with_key), false), "a key's row found by a sign-in")

@@ -826,7 +826,7 @@ func import_job(local_id: String) -> Dictionary:
 	var row := ledger.find(local_id)
 	if row.is_empty() or row["state"] != Ledger.SUCCESS:
 		return {"ok": false, "message": "Only finished jobs can be imported."}
-	if is_set_aside(row):
+	if not JobScopes.can_import(row, is_oauth()):
 		return {"ok": false, "message": JobScopes.aside_text(is_oauth())[1]}
 	_importing[local_id] = true
 	changed.emit()
