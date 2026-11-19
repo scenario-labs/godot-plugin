@@ -7,7 +7,8 @@ var path := ""
 
 
 func before_each() -> void:
-	path = "user://test_ledger_%d.json" % randi()
+	path = "res://tests/tmp_output/ledger-%d/jobs.json" % randi()
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(path.get_base_dir()))
 
 
 func after_each() -> void:

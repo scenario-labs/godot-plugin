@@ -89,6 +89,12 @@ func set_session(p_session: OAuthSession) -> void:
 	_auth_generation += 1
 
 
+## Changes with every key, sign-in or sign-out: work started under one
+## account checks it before applying its result.
+func auth_generation() -> int:
+	return _auth_generation
+
+
 func has_credentials() -> bool:
 	return session != null or (not api_key.is_empty() and not api_secret.is_empty())
 

@@ -94,7 +94,7 @@ var _reference_serial := 0
 var _debounce: Timer
 var _poll: Timer
 var _polling := false
-var _locating := false
+var _locating := -1  # the auth generation whose key jobs are being looked up
 var _importing := {}
 var _sign_in_serial := 0
 var _receiver: Loopback
@@ -264,13 +264,13 @@ func load_teams() -> void:
 
 ## Follows the jobs sent with an API key in the project they are found in.
 func _locate_key_jobs() -> void:
-	if _locating or not is_oauth() or ledger.unlocated().is_empty():
+	var generation := client.auth_generation()
+	if _locating == generation or not is_oauth() or ledger.unlocated().is_empty():
 		return
-	_locating = true
-	var session := client.session
-	if await JobScopes.locate(client, ledger, teams, _now(), func() -> bool: return client.session == session) > 0:
+	_locating = generation
+	if await JobScopes.locate(client, ledger, teams, _now(), func() -> bool: return client.auth_generation() == generation) > 0:
 		_poll.start()
-	_locating = false
+	_locating = -1 if _locating == generation else _locating  # a later account's lookup keeps its own
 	changed.emit()
 
 
@@ -802,8 +802,8 @@ func rerun(local_id: String) -> void:
 func check_unresolved() -> void:
 	if ledger.unresolved().is_empty() or not is_connected_account():
 		return
-	var session := client.session
-	var linked: int = await JobScopes.reconcile(client, ledger, is_oauth(), _now(), func() -> bool: return client.session == session)
+	var generation := client.auth_generation()  # a key has no session to compare: the generation tells accounts apart
+	var linked: int = await JobScopes.reconcile(client, ledger, is_oauth(), _now(), func() -> bool: return client.auth_generation() == generation)
 	if linked < 0:
 		return  # signed out or in again meanwhile
 	if linked > 0:

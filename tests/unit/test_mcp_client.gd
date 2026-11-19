@@ -423,3 +423,13 @@ func test_each_call_reports_its_tool_and_outcome_only() -> void:
 	fake.replies.append({"http": 403, "body": "forbidden"})
 	await client.get_job("job_1")
 	assert_eq(seen, [["model_run", true, true, "", true], ["job_get", false, false, Errors.FORBIDDEN, true]])
+
+
+func test_every_account_change_moves_the_auth_generation() -> void:
+	var c := Client.new(Fake.new(), "api_a", "sec_a")
+	var first := c.auth_generation()
+	c.set_credentials("api_b", "sec_b")
+	var second := c.auth_generation()
+	assert_ne(second, first, "another key, though neither has a session")
+	c.set_session(null)
+	assert_ne(c.auth_generation(), second)
