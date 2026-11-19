@@ -165,6 +165,8 @@ func _on_changed() -> void:
 	_connected = connected
 	for row in controller.ledger.jobs:
 		var id: String = row["local_id"]
+		if row.has("source"):
+			continue  # brought in from the Library or History: not a generation sent here
 		if not _rows.has(id):
 			_rows[id] = true
 			usage.record("generation_sent", {"lane": row["lane"], "cu": row.get("quoted_cu", -1)})

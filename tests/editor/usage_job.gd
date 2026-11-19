@@ -112,6 +112,10 @@ func run() -> Dictionary:
 	var finished: Array = reporter.usage.queue.filter(func(e: Dictionary) -> bool: return e["event"] == "generation_finished")
 	check("generation_finished has the lane, state and CU", finished.size() == 1
 		and finished[0]["properties"] == {"lane": "image", "state": "success", "cu": 2.0})
+	var queued := reporter.usage.queue.size()
+	controller.ledger.adopt("image", "", "a library image", "", ["asset_lib1"], 1.0, {}, "library")
+	controller.changed.emit()
+	check("a Library import is not counted as a generation", reporter.usage.queue.size() == queued)
 	var price: Array = reporter.usage.queue.filter(func(e: Dictionary) -> bool:
 		return e["event"] == "scenario_request" and e["properties"]["request"] == "price_check")
 	check("a price check is told apart from a generation", not price.is_empty() and price[0]["properties"]["outcome"] == "ok")
