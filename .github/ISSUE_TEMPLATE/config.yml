@@ -1,5 +1,8 @@
 blank_issues_enabled: true
 contact_links:
+  - name: Private support
+    url: https://github.com/scenario-labs/godot-plugin/blob/main/SUPPORT.md#account-billing-credits-api-keys-and-security
+    about: Send the report to support@scenario.com instead when it should not be public, for example when it needs team or project ids.
   - name: Account, billing, credits or a security report
     url: https://app.scenario.com
     about: Anything tied to your account is private. Use in-app support or support@scenario.com, not a public issue.
@@ -9,3 +12,6 @@ contact_links:
   - name: Scenario Knowledge Base
     url: https://help.scenario.com
     about: How the platform, models and credits work.
+  - name: Scenario developer documentation
+    url: https://docs.scenario.com
+    about: The Scenario API and its models, for questions beyond the plugin.

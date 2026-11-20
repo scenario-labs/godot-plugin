@@ -1,19 +1,25 @@
-# Code owners: requested reviewers for release files, repository automation,
-# licence and security texts. Paths are root-anchored; the last match wins.
-# A team can be added once it has write access to this repository.
+# Code owners: the reviewers GitHub requests on a pull request. The maintainer
+# reviews every path; the platform team joins on release files, repository
+# automation, licence and security texts. Paths are root-anchored and the last
+# matching line wins, so a path line names every owner it needs.
+
+# Every path
+*                                   @hervenivon
 
 # Release version and changelog files
-/CHANGELOG.md                       @hervenivon
-/addons/scenario/plugin.cfg         @hervenivon
+/CHANGELOG.md                       @hervenivon @scenario-labs/platform
+/.release-please-manifest.json      @hervenivon @scenario-labs/platform
+/addons/scenario/plugin.cfg         @hervenivon @scenario-labs/platform
 
 # Release machinery and repository automation
-/.github/workflows/                 @hervenivon
-/.github/actions/                   @hervenivon
-/.github/dependabot.yml             @hervenivon
-/.github/CODEOWNERS                 @hervenivon
-/tools/toolkit.py                   @hervenivon
+/release-please-config.json         @hervenivon @scenario-labs/platform
+/.github/workflows/                 @hervenivon @scenario-labs/platform
+/.github/actions/                   @hervenivon @scenario-labs/platform
+/.github/dependabot.yml             @hervenivon @scenario-labs/platform
+/.github/CODEOWNERS                 @hervenivon @scenario-labs/platform
+/tools/toolkit.py                   @hervenivon @scenario-labs/platform
 
 # Licence and security texts
-/LICENSE                            @hervenivon
-/addons/scenario/LICENSE            @hervenivon
-/SECURITY.md                        @hervenivon
+/LICENSE                            @hervenivon @scenario-labs/platform
+/addons/scenario/LICENSE            @hervenivon @scenario-labs/platform
+/SECURITY.md                        @hervenivon @scenario-labs/platform
