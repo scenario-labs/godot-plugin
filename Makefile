@@ -51,9 +51,9 @@ toolkit:
 	python3 tools/toolkit.py fetch
 	python3 tools/toolkit.py check
 
-# Tests of the Python tools themselves (release draft recovery).
+# Tests of the Python tools themselves (release draft recovery, workflow policy, house rules). Requires uv.
 tools-test:
-	python3 -m unittest discover -s tools
+	uv run --no-project --with pyyaml==6.0.3 python -m unittest discover -s tools
 
 # GDScript and Python lint, the same versions as CI, then the house rules. Requires uv.
 lint:
