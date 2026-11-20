@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# CodeRabbit configuration for godot-plugin. It adds to the organization's central CodeRabbit
+# configuration: with inheritance on, lists are combined and a value set here wins over the
+# central one. Keep here only what is specific to this repository.
+#
+# Which copy of this file a review reads: for a pull request from a branch of this repository,
+# opened by an organization member or a collaborator with write access, the one on the pull
+# request branch; for any other pull request, forks included, the one on its base commit. A
+# branch created before a change picks it up once it includes that change.
+#
+# To see the settings in force and where each comes from, comment
+# "@coderabbitai configuration" on any pull request.
+
+inheritance: true
+
+reviews:
+  profile: assertive
+  path_instructions:
+    - path: "addons/scenario/**/*.gd"
+      instructions: >-
+        Godot editor plugin. Beyond the editor plugin rules in the baseline: switching between API
+        key and account sign in must never leave a request without credentials or send a paid
+        request twice; a rotated refresh token shared between editors must be persisted before the
+        old one is dropped, and a dismissed keyring prompt or a roaming profile must not silently
+        lose it; a paid call stays bound to the authentication context that prepared it, and a price
+        is refreshed before Generate; outputs for the 3D lane must be saved in the format the lane
+        imports (GLB). Godot .uid files are excluded from review by the baseline.
