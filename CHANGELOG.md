@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.3.0](https://github.com/scenario-labs/godot-plugin/compare/godot-plugin-v0.2.1...godot-plugin-v0.3.0) (2026-11-20)
+
+
+### Features
+
+* **core:** keep secrets in the Windows and Linux credential stores ([#83](https://github.com/scenario-labs/godot-plugin/issues/83)) ([5a3c979](https://github.com/scenario-labs/godot-plugin/commit/5a3c979d9a95dda1d6793c616d2441c30fc8e472))
+* **core:** sign in with Scenario and choose the team and project ([#82](https://github.com/scenario-labs/godot-plugin/issues/82)) ([5a3c979](https://github.com/scenario-labs/godot-plugin/commit/5a3c979d9a95dda1d6793c616d2441c30fc8e472))
+* **lanes:** list the project's trained models and run LoRAs ([#84](https://github.com/scenario-labs/godot-plugin/issues/84)) ([5a3c979](https://github.com/scenario-labs/godot-plugin/commit/5a3c979d9a95dda1d6793c616d2441c30fc8e472))
+* **lanes:** run the project's Scenario workflows from a Workflow lane ([#86](https://github.com/scenario-labs/godot-plugin/issues/86)) ([5a3c979](https://github.com/scenario-labs/godot-plugin/commit/5a3c979d9a95dda1d6793c616d2441c30fc8e472))
+* **ui:** browse the project's assets and earlier jobs from the dock ([#87](https://github.com/scenario-labs/godot-plugin/issues/87)) ([5a3c979](https://github.com/scenario-labs/godot-plugin/commit/5a3c979d9a95dda1d6793c616d2441c30fc8e472))
+* **ui:** send feedback and share opt-in anonymous usage data ([#85](https://github.com/scenario-labs/godot-plugin/issues/85)) ([5a3c979](https://github.com/scenario-labs/godot-plugin/commit/5a3c979d9a95dda1d6793c616d2441c30fc8e472))
+
+
+### Bug Fixes
+
+* **editor:** stop an import whose file the lane cannot place ([#68](https://github.com/scenario-labs/godot-plugin/issues/68)) ([4f4684f](https://github.com/scenario-labs/godot-plugin/commit/4f4684f9a7a8fafc4515efaf9af037935853481d))
+
+
+### Documentation
+
+* **docs:** publish godot.scenario.com as a handbook from the docs ([#88](https://github.com/scenario-labs/godot-plugin/issues/88)) ([5a3c979](https://github.com/scenario-labs/godot-plugin/commit/5a3c979d9a95dda1d6793c616d2441c30fc8e472))
+
+
+### Miscellaneous Chores
+
+* **deps:** Bump the node group with 2 updates ([#78](https://github.com/scenario-labs/godot-plugin/issues/78)) ([4d4f240](https://github.com/scenario-labs/godot-plugin/commit/4d4f2403ab42113adbd53d54146ca0719d0bbe7d))
+* **repo:** add code owners, platform reviewers and shared issue fields ([#75](https://github.com/scenario-labs/godot-plugin/issues/75)) ([72e9760](https://github.com/scenario-labs/godot-plugin/commit/72e976042a469780d91fd24bde77e4e05a146339))
+* **repo:** add CodeRabbit's configuration for this repository ([#90](https://github.com/scenario-labs/godot-plugin/issues/90)) ([243dbff](https://github.com/scenario-labs/godot-plugin/commit/243dbff7e86e573e7e4a9125d7aa815b3a77fb29))
+* **repo:** ignore Vercel CLI project links ([#71](https://github.com/scenario-labs/godot-plugin/issues/71)) ([ed24f62](https://github.com/scenario-labs/godot-plugin/commit/ed24f6209b7e2ef828d1c98ddcd65546264ddcb4))
+* **tools:** check em dashes and action pins in make lint ([#72](https://github.com/scenario-labs/godot-plugin/issues/72)) ([dd3798a](https://github.com/scenario-labs/godot-plugin/commit/dd3798af8f289ca31bc4a03fa6308d8b24d02465))
+
+
+### Continuous Integration
+
+* **ci:** test workflow permissions, pull request secrets and the CI gate ([#74](https://github.com/scenario-labs/godot-plugin/issues/74)) ([75b5280](https://github.com/scenario-labs/godot-plugin/commit/75b5280aa2963bf5310e76c45e026bf0af9b337f))
+* **deps:** Bump the actions group across 1 directory with 6 updates ([#81](https://github.com/scenario-labs/godot-plugin/issues/81)) ([47a92c4](https://github.com/scenario-labs/godot-plugin/commit/47a92c4becd3f8f70fc1ad1662b5b7ee46c8310d))
+
+
+### Tests
+
+* **tests:** clear earlier runs' output so a repeat make test passes ([#70](https://github.com/scenario-labs/godot-plugin/issues/70)) ([6ac375a](https://github.com/scenario-labs/godot-plugin/commit/6ac375a2576302153df847855f9c0672d8dffb44)), closes [#69](https://github.com/scenario-labs/godot-plugin/issues/69)
+
 ## [0.2.1](https://github.com/scenario-labs/godot-plugin/compare/godot-plugin-v0.2.0...godot-plugin-v0.2.1) (2026-10-16)
 
 
