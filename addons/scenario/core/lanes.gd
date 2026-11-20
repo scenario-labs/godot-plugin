@@ -7,6 +7,9 @@ extends RefCounted
 ## are applied on top of the schema defaults; "restrict" limits a field to
 ## values Godot can import. "recommend": false hides "More" where a general
 ## model for the capability would not fit the importer (PBR maps, 360 skies).
+## The workflow lane lists the project's ready workflows instead of models.
+
+const WORKFLOW := "workflow"
 
 const LANES := [
 	{
@@ -57,6 +60,11 @@ const LANES := [
 			{"id": "model_mm-audio-2-t2a", "name": "MM Audio 2", "note": "negative prompt"},
 		],
 	},
+	{
+		"id": WORKFLOW, "title": "Workflow", "importer": "workflow", "recommend": false,
+		"hint": "Runs one of this project's Scenario workflows. Each result is placed as its own lane would: image, 3D model, material, sky or sound.",
+		"models": [],
+	},
 ]
 
 ## Values set on top of the schema defaults, per model.
@@ -75,6 +83,7 @@ const ACCEPTS := {
 	"material": ["png", "jpg", "webp", "exr"],
 	"skybox": ["png", "jpg", "webp", "exr", "hdr"],
 	"audio": ["wav", "mp3", "ogg"],
+	"workflow": ["png", "jpg", "webp", "exr", "hdr", "glb", "gltf", "wav", "mp3", "ogg"],
 }
 
 ## Field values Godot can import (it has no AAC or FLAC importer).
@@ -99,7 +108,18 @@ static func ids() -> PackedStringArray:
 
 static func default_model(lane_id: String) -> String:
 	var item := lane(lane_id)
-	return item["models"][0]["id"] if not item.is_empty() else ""
+	return item["models"][0]["id"] if not item.is_empty() and not item["models"].is_empty() else ""
+
+
+## The models of a recommend reply, the specialist first, for the picker.
+static func recommended(reply: Dictionary) -> Array:
+	var models: Array = []
+	for entry in reply.get("ranked", []):
+		models.append({"id": entry["model_id"], "name": entry.get("name", entry["model_id"]), "note": str(entry.get("cost_summary", ""))})
+	var specialty: Variant = reply.get("specialty")
+	if specialty is Dictionary and specialty.has("model_id"):
+		models.push_front({"id": specialty["model_id"], "name": specialty.get("name", specialty["model_id"]), "note": "specialist"})
+	return models
 
 
 static func presets(model_id: String) -> Dictionary:

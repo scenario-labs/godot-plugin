@@ -1,84 +1,82 @@
 name: pages
 
-# Publishes the website to GitHub Pages: docs/USER_GUIDE.md as one page, and
-# the latest release zip once it has a SHA256SUMS and build provenance from
-# release-please.yml, both verified here. Until then the page links to the
-# GitHub releases. Repository settings must use "GitHub Actions" as the Pages source.
+# Publishes https://godot.scenario.com to GitHub Pages: the handbook built from
+# the docs (handbook.config.json) at the root, and the latest release's zip
+# under /download/, by scenario-labs/components, the site tooling the Scenario
+# plug-ins share. Runs after each release, on every push to main that changes
+# the docs, and by hand. The handbook comes from the newest published release,
+# so the site never describes a feature people cannot download yet, and the
+# zip is served once the release's SHA256SUMS and build attestation verify.
+# The Vercel project on tools/site_proxy holds godot.scenario.com and forwards
+# every path here. Repository settings must use "GitHub Actions" as the Pages source.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "docs/**"
-      - "addons/scenario/plugin.cfg"
-      - "tools/build_site.py"
-      - ".github/workflows/pages.yml"
-  # After each release-please run on main, whose publish job releases the zip.
-  # Not the release event: its ref is the tag, and the github-pages
-  # environment only accepts deployments from main.
+  # workflow_run is safe here: the build checks out main, never the
+  # triggering run's head_sha, uses none of its artifacts, keeps no
+  # credentials, and runs only after a successful push run on main.
   workflow_run:
     workflows: [release-please]
     types: [completed]
     branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - "README.md"
+      - "CHANGELOG.md"
+      - "docs/**"
+      - "handbook.config.json"
+      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions: {}
 
-# Hold the lock through discovery, build and deployment, so the newest run wins.
+# Hold the lock through the build and the deployment, so the newest run wins.
 concurrency:
   group: pages
   cancel-in-progress: false
 
 jobs:
-  publish:
+  build:
+    # Only this repository publishes, and only after a release run that
+    # succeeded on a push to main.
     if: >-
       github.repository == 'scenario-labs/godot-plugin' &&
-      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+      (github.event_name != 'workflow_run' ||
+       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+    timeout-minutes: 10
     permissions:
       contents: read
       attestations: read
-      pages: write
-      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
+          fetch-depth: 0
           persist-credentials: false
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-      - name: Download and verify the latest release
-        id: release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          dir="$RUNNER_TEMP/release"
-          mkdir -p "$dir"
-          tag="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
-          assets="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
-          if ! grep -qx SHA256SUMS <<<"$assets" || ! grep -qE '^scenario-godot-plugin-[0-9]+\.[0-9]+\.[0-9]+\.zip$' <<<"$assets"; then
-            echo "::notice::$tag has no checksummed zip: the page links to the GitHub releases instead"
-            exit 0
-          fi
-          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir "$dir" --pattern SHA256SUMS --pattern 'scenario-godot-plugin-*.zip'
-          (cd "$dir" && sha256sum -c SHA256SUMS)
-          # Built by this repository's release workflow from the tagged commit.
-          gh attestation verify "$dir"/scenario-godot-plugin-*.zip --repo "$GITHUB_REPOSITORY" \
-            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release-please.yml"
-          echo "dir=$dir" >> "$GITHUB_OUTPUT"
-      - name: Build the site
-        env:
-          RELEASE_DIR: ${{ steps.release.outputs.dir }}
-        run: |
-          args=(--output "$RUNNER_TEMP/site")
-          if [ -n "$RELEASE_DIR" ]; then args+=(--release "$RELEASE_DIR"); fi
-          uv run --no-project --with markdown==3.10.3 python tools/build_site.py "${args[@]}"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      # The handbook from the newest release's docs, and its zip once the
+      # release's SHA256SUMS and build attestation verify.
+      - id: site
+        uses: scenario-labs/components@dc4d1c4246a992432bd64af4f093e2558a6ca9b1 # v0.1.0
+        with:
+          download: scenario-godot-plugin-{version}.zip
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
-          path: ${{ runner.temp }}/site
-      - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
-        id: deploy
+          path: ${{ steps.site.outputs.path }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

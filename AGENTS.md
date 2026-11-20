@@ -8,8 +8,8 @@ Root `AGENTS.md` is the repository rulebook; `.claude/CLAUDE.md` links here.
 A Godot 4.7 editor plugin, GDScript only, in `addons/scenario/`. It generates
 images, 3D models, PBR materials, skyboxes and sound effects through the
 Scenario MCP server (`https://mcp.scenario.com/mcp`: JSON-RPC 2.0 over HTTP,
-SSE replies, Basic auth with an API key and secret) and places them in the open
-scene. The repository root is a small demo project that hosts the addon and its
+SSE replies; a Bearer token from Sign in with Scenario, or Basic auth with an
+API key and secret) and places them in the open scene. The repository root is a small demo project that hosts the addon and its
 tests. `addons/gut/` (GUT) and `addons/agentkit/` (from the toolkit below) serve
 the tests only: the release zip holds `addons/scenario/` alone.
 
@@ -17,31 +17,60 @@ the tests only: the release zip holds `addons/scenario/` alone.
 
 In `addons/scenario/`:
 
-- `plugin.gd`: the `EditorPlugin`; editor settings `scenario/confirm_above_cu`
-  and `scenario/auto_import`; creates the controller and the dock.
+- `plugin.gd`: the `EditorPlugin`; editor settings `scenario/confirm_above_cu`,
+  `scenario/auto_import` and `scenario/share_anonymous_usage_data`; creates the
+  controller, the usage reporter and the dock.
 - `core/` (no editor API, unit-tested):
   - `mcp_client.gd`: Scenario MCP calls, session init and re-init, error kinds,
     retry policy (reads only), estimate and submit.
   - `sse.gd`: parses SSE or JSON replies, keeps the message matching the request id.
-  - `quote.gd`: canonical JSON, fingerprint (model + parameters), single-use
+  - `quote.gd`: canonical JSON, fingerprint (model, project, parameters), single-use
     quote store.
   - `job_ledger.gd`: durable job list (`res://.godot/scenario/jobs.json`),
     states, reconciles Unknown rows with `jobs_list`.
+  - `job_scopes.gd`: the project each row is followed in; under a sign-in,
+    finds the project of jobs sent with an API key.
   - `schema_form.gd`: model schema to form fields, validation, payload;
     `prompt_name()` finds the prompt field by its flag.
-  - `lanes.gd`: the five lanes, their models, presets and restrictions.
-  - `credentials.gd`: environment, macOS Keychain (`security -i` over stdin),
-    or a 0600 file in the editor config folder.
-  - `files.gd`: output names, roles from asset metadata, file type from bytes.
+  - `lanes.gd`: the six lanes, their models, presets and restrictions.
+  - `project_models.gd`: the project's trained models per lane; a LoRA or a
+    composition runs on the base `model_schema_get` names (`run_with`).
+  - `workflows.gd`: Scenario workflows in the workflow lane: list rows to
+    picker entries, `workflow_get` inputs to a form schema, outputs to the
+    lane that places them.
+  - `oauth.gd`: Sign in with Scenario as Godot's registered OAuth application
+    on `clerk.scenario.com`: PKCE with a loopback redirect, device grant,
+    refresh, revoke.
+  - `loopback.gd`: one-shot listener on a free 127.0.0.1 port for the redirect.
+  - `oauth_session.gd`: access token in memory, one refresh at a time, the
+    chosen team and project that every MCP call carries.
+  - `credentials.gd`: environment, the system store (macOS Keychain, Windows
+    Credential Manager, Linux `secret-tool`; secrets over stdin), or a 0600
+    file in the editor config folder.
+  - `files.gd`: output names, roles from asset metadata, file type from bytes,
+    the `.scenario.json` provenance.
   - `errors.gd`: error kinds and user messages.
+  - `library_query.gd`: Library `assets_list` arguments, asset and History
+    rows and their filters, the lane that places an asset.
+  - `usage.gd`: opt-in usage data: install ID, allowlisted events, batches.
+  - `feedback.gd`: the feedback form's checks and payload.
 - `editor/`:
   - `controller.gd`: state and actions (price, generate, poll, import,
     references, recommendations); emits `changed`.
+  - `downloads.gd`: a finished job's outputs into the project, named and
+    typed, for the controller's import; a reference file's upload.
   - `dock_ui.gd`: the dock, built in code, no logic.
+  - `library.gd`, `library_ui.gd`: the Library and History views (the
+    project's assets and jobs, cached per project), imports through the
+    controller.
   - `placer.gd`: import with `.import` sidecars, then placement per lane
     through `EditorUndoRedoManager`.
   - `http_transport.gd`: `HTTPRequest` wrapper; uploads only to
     `*.amazonaws.com`, downloads only from Scenario CDN hosts.
+  - `usage_reporter.gd`: records usage events from the controller and the
+    client while sharing is on, sends batches and feedback to the site relay;
+    never from a headless editor.
+  - `feedback_dialog.gd`: the Send feedback dialog.
 
 Tests: GUT unit tests in `tests/unit/`, the headless editor test
 `tests/editor/editor_flow_job.gd`, both against the fake backend
@@ -51,17 +80,19 @@ Tests: GUT unit tests in `tests/unit/`, the headless editor test
 
 Every change keeps them.
 
-1. A price check is `model_run` with `dry_run: true`; if it returns a job id,
-   automatic checks stop.
+1. A price check is `model_run` (or `workflow_run`) with `dry_run: true`; if
+   it returns a job id, automatic checks stop. A workflow price check is never
+   retried.
 2. Generate needs an unused quote whose fingerprint matches the form now; it
    consumes it.
 3. A paid call (`model_run` without dry_run, `workflow_run`, uploads) is sent
    once. A transport failure on it marks the job Unknown, which blocks the same
    fingerprint until reconciled.
-4. The intent row is written to the ledger before the paid request.
+4. The intent row is written to the ledger before the paid request
+   (`model_run`, `workflow_run`); an upload, free, has no row.
 5. `SCENARIO_NO_SPEND=1` refuses paid calls and uploads before any request;
    `job_cancel` still goes out.
-6. The secret never goes under `res://`.
+6. Secrets (the API secret, the refresh token) never go under `res://`.
 
 ## Commands
 
@@ -83,6 +114,11 @@ CI (`.github/workflows/ci.yml`) runs them on Linux, with `make tools-test`;
 `SCENARIO_API_KEY` and `SCENARIO_API_SECRET`. `make smoke`
 (`tools/smoke.py`) spends Creative Units: never run it without
 explicit authorization for the project and budget.
+
+For Scenario developers, read when Godot starts: `SCENARIO_OAUTH_ISSUER` and
+`SCENARIO_OAUTH_CLIENT_ID` (together) and `SCENARIO_MCP_URL` sign in to a
+development instance; `SCENARIO_TELEMETRY_URL` sends usage data and feedback to
+another relay. The user guide leaves them out.
 
 ## Scheduled and manual checks
 
@@ -161,7 +197,7 @@ blank project, attaches the zip, `SHA256SUMS` and a provenance bundle, publishes
 the draft, and `publish-changelog.yml` posts the notes to scenario.com.
 
 - Never edit versions or `CHANGELOG.md` by hand: release-please bumps
-  `plugin.cfg`, `mcp_client.gd`, `README.md` and `docs/USER_GUIDE.md` (the
+  `plugin.cfg`, `mcp_client.gd` and `docs/USER_GUIDE.md` (the
   `x-release-please` markers) and writes the changelog from the squashed PR
   titles.
 - The source archive (GitHub downloads, the Godot Asset Library) holds
@@ -170,16 +206,24 @@ the draft, and `publish-changelog.yml` posts the notes to scenario.com.
 
 ## Website and download counts
 
-`pages.yml` publishes `docs/USER_GUIDE.md` as one page (`tools/build_site.py`,
-`docs/site/template.html`; `make site` builds it into `dist/site`) to GitHub
-Pages, with the latest release zip once its checksum and build provenance
-verify. The page has the look of the Blender plugin's site: `docs/site/site.css`
-and the guide search `docs/site/handbook-search.js` come from there, so restyle
-both sites together. `tools/site_proxy/` is a Vercel project in front of Pages
-that counts zip downloads in PostHog (anonymous; `plugin: "godot"`, the Godot
-version and OS from the editor's User-Agent); its Vercel Web Analytics counts
-page visits and Download clicks, without cookies, from the script in
-`docs/site/template.html`, served at a path of ours (`vercel.json`) because
-blocker lists block Vercel's own. `make site-test` type-checks and
-tests the proxy and the search. The page content comes from the guide: change
-the guide, not the site.
+`pages.yml` publishes godot.scenario.com to GitHub Pages with
+[scenario-labs/components](https://github.com/scenario-labs/components), the
+site tooling the Scenario plug-ins share, pinned by commit (there and as
+`COMPONENTS` in the Makefile: bump both): the handbook built
+from the newest release's README, user guide and changelog (chapters in
+`handbook.config.json`; the hero `docs/images/hero.jpg`, a scene made from
+plugin results, with a shaded copy for the link-preview card,
+`docs/images/og.jpg`; the dock picture `docs/images/dock.png`),
+and that release's zip under `/download/` once its checksum and build
+provenance verify. `make site` builds the handbook from the checkout into
+`dist/site`. `tools/site_proxy/` is a Vercel project in front of Pages that
+answers `/download/latest` with the latest zip, counts zip downloads in PostHog
+(anonymous; `plugin: "godot"`, the Godot version and OS from the editor's
+User-Agent) and relays the plugin's opt-in usage events and feedback
+(`/telemetry/v1/`, allowlisted to the same events as `core/usage.gd`; env
+`POSTHOG_PROJECT_TOKEN`, `POSTHOG_HOST`, `POSTHOG_FEEDBACK_SURVEY_ID`); its
+Vercel Web Analytics counts page visits without cookies, from the script the
+handbook loads at `/page.js` (`analytics`), served there by `vercel.json`
+because blocker lists block Vercel's own path. `make site-test` type-checks and
+tests the proxy. The page content comes from the docs: change the docs, not the
+site.

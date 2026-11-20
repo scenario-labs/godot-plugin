@@ -129,6 +129,15 @@ static func extension_for_mime(mime: String) -> String:
 
 
 ## MIME type and Scenario asset kind for a file to upload as a reference.
+## A reference file to upload: {"type", "bytes", "problem"}.
+static func read_reference(path: String) -> Dictionary:
+	var type := upload_type(path)
+	if type.is_empty():
+		return {"type": type, "bytes": PackedByteArray(), "problem": "This file type cannot be used as a reference: " + path.get_file()}
+	var bytes := FileAccess.get_file_as_bytes(path)
+	return {"type": type, "bytes": bytes, "problem": "Could not read " + path if bytes.is_empty() else ""}
+
+
 static func upload_type(path: String) -> Dictionary:
 	match path.get_extension().to_lower():
 		"png":
@@ -146,6 +155,31 @@ static func upload_type(path: String) -> Dictionary:
 		"ogg":
 			return {"mime": "audio/ogg", "kind": "audio"}
 	return {}
+
+
+## The first bytes of a file, for sniff_extension.
+static func head(path: String) -> PackedByteArray:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return PackedByteArray()
+	var bytes := file.get_buffer(16)
+	file.close()
+	return bytes
+
+
+## Writes the .scenario.json next to an import: which job, model and settings made it.
+static func write_provenance(row: Dictionary, assets: Array, path: String, generator: String) -> void:
+	var record := {
+		"generator": generator,
+		"job_id": row["job_id"], "model_id": row["model_id"], "lane": row["lane"],
+		"prompt": row["prompt"], "parameters": row["parameters"],
+		"quoted_cu": row["quoted_cu"], "charged_cu": row["charged_cu"],
+		"assets": assets, "imported_at": Time.get_datetime_string_from_system(true) + "Z",
+	}
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file != null:
+		file.store_string(JSON.stringify(record, "\t"))
+		file.close()
 
 
 static func today() -> String:
