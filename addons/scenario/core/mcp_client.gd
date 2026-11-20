@@ -23,7 +23,7 @@ const JobLedger := preload("res://addons/scenario/core/job_ledger.gd")
 
 const DEFAULT_ENDPOINT := "https://mcp.scenario.com/mcp?toolsets=full"
 const PROTOCOL_VERSION := "2025-03-26"
-const VERSION := "0.2.1"  # x-release-please-version
+const VERSION := "0.3.0"  # x-release-please-version
 const READ_ATTEMPTS := 3
 const MAX_RETRY_AFTER_S := 30.0
 const DEFAULT_TIMEOUT_S := 60.0
